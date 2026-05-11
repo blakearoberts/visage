@@ -43,6 +43,7 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
       env: {
         ...process.env,
         COMPOSE_PROJECT_NAME: appComposeProject,
+        XDG_CACHE_HOME: testInfo.outputPath('xdg-cache'),
       },
     });
 

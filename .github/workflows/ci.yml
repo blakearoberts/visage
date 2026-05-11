@@ -71,12 +71,10 @@ jobs:
       - name: Install external IdP example app
         run: npm install --prefix examples/external-idp --package-lock=false --no-save ./package/*.tgz
 
-      - name: Install Playwright browser
-        timeout-minutes: 1
-        run: npx playwright install --only-shell chromium
-
       - name: Test
         timeout-minutes: 3
+        env:
+          PLAYWRIGHT_BROWSER_CHANNEL: chrome
         run: npm run test:e2e
 
   release:

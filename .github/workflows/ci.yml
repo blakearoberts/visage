@@ -71,11 +71,26 @@ jobs:
       - name: Install external IdP example app
         run: npm install --prefix examples/external-idp --package-lock=false --no-save ./package/*.tgz
 
+      - name: Pull e2e Docker images
+        run: |
+          docker pull ghcr.io/dexidp/dex:v2.45.1
+          docker pull nginx:1.30.0-alpine
+          docker pull quay.io/oauth2-proxy/oauth2-proxy:v7.15.2
+          docker pull traefik/whoami
+
       - name: Test
         timeout-minutes: 3
         env:
           PLAYWRIGHT_BROWSER_CHANNEL: chrome
         run: npm run test:e2e
+
+      - name: Upload e2e logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-logs
+          path: test-results
+          retention-days: 1
 
   release:
     name: Release

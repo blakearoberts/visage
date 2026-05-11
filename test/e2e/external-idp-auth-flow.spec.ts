@@ -51,6 +51,11 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
   });
 
   test.afterAll(async () => {
+    writeDockerComposeLogs(
+      appComposeProject,
+      'node_modules/.vite/visage/compose.yaml',
+    );
+    writeDockerComposeLogs(externalDexProject, 'compose.idp.yaml');
     await stopVite();
     dockerCompose(['down', '--remove-orphans']);
   });
@@ -246,6 +251,19 @@ function dockerCompose(args: string[]): void {
   writeLog(result.stderr);
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('External IdP Docker Compose failed');
+}
+
+function writeDockerComposeLogs(project: string, file: string): void {
+  const result = spawnSync(
+    'docker',
+    ['compose', '-p', project, '-f', file, 'logs', '--no-color'],
+    {
+      cwd: example,
+      encoding: 'utf8',
+    },
+  );
+  writeLog(result.stdout);
+  writeLog(result.stderr);
 }
 
 function isTargetAppUrl(url: URL): boolean {

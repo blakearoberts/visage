@@ -1,6 +1,7 @@
 import { expect, request, test, type Locator, type Page } from '@playwright/test';
 import {
   spawn,
+  spawnSync,
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -56,6 +57,7 @@ test.describe('Visage authenticated upstream flow', () => {
   });
 
   test.afterAll(async () => {
+    writeDockerComposeLogs();
     await stopVite();
   });
 
@@ -259,6 +261,27 @@ function normalizePath(pathname: string): string {
 
 function projectName(name: string, workerIndex: number): string {
   return `visage_e2e_${name}_${process.pid}_${workerIndex}`;
+}
+
+function writeDockerComposeLogs(): void {
+  if (!appComposeProject) return;
+
+  const result = spawnSync(
+    'docker',
+    [
+      'compose',
+      '-p',
+      appComposeProject,
+      '-f',
+      join(example, 'node_modules/.vite/visage/compose.yaml'),
+      'logs',
+      '--no-color',
+    ],
+    { encoding: 'utf8' },
+  );
+
+  writeLog(result.stdout);
+  writeLog(result.stderr);
 }
 
 function writeLog(chunk: Uint8Array | string): void {

@@ -20,14 +20,16 @@ export async function ensureCerts({
   if (existsSync(cert) && existsSync(key)) return;
 
   const mkcert = await ensureMkCert(bin);
+  const env = {
+    ...process.env,
+    CAROOT: join(bin, 'ca'),
+    TRUST_STORES: process.env.TRUST_STORES ?? 'system',
+  };
 
   // install CA
   {
     const result = spawnSync(mkcert, ['-install'], {
-      env: {
-        ...process.env,
-        TRUST_STORES: process.env.TRUST_STORES ?? 'system',
-      },
+      env,
       stdio: [process.stdin.isTTY ? 'inherit' : 'ignore', 'inherit', 'inherit'],
     });
     if (result.error) throw result.error;
@@ -40,7 +42,7 @@ export async function ensureCerts({
   mkdirSync(certs, { recursive: true });
   const names = [...new Set([hostname, 'localhost', '127.0.0.1', '::1'])];
   const args = ['-cert-file', cert, '-key-file', key, ...names];
-  const result = spawnSync(mkcert, args, { stdio: 'inherit' });
+  const result = spawnSync(mkcert, args, { env, stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error('Failed to generate TLS certificates');

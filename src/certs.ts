@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { chmodSync, createWriteStream, existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -22,11 +23,16 @@ export async function ensureCerts({
   const mkcert = await ensureMkCert(bin);
   const env = {
     ...process.env,
-    CAROOT: join(bin, 'ca'),
+    CAROOT: join(
+      process.env.XDG_CACHE_HOME || join(homedir(), '.cache'),
+      'visage/ca',
+    ),
     TRUST_STORES: process.env.TRUST_STORES ?? 'system',
   };
 
-  // install CA
+  mkdirSync(env.CAROOT, { recursive: true });
+
+  // mkcert -install is idempotent; CA files alone do not prove trust-store state.
   {
     const result = spawnSync(mkcert, ['-install'], {
       env,

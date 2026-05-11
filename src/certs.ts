@@ -48,7 +48,8 @@ async function ensureMkCert(bin: string): Promise<string> {
   mkdirSync(bin, { recursive: true });
 
   const base = 'https://dl.filippo.io/mkcert/latest';
-  const params = `?for=${process.platform}/${process.arch}`;
+  const arch = process.arch === 'x64' ? 'amd64' : process.arch;
+  const params = `?for=${process.platform}/${arch}`;
   const url = new URL(params, base);
 
   const response = await fetch(url);

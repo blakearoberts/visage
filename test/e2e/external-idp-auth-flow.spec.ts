@@ -1,4 +1,10 @@
-import { expect, request, test, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  request,
+  test,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import {
   spawn,
   spawnSync,
@@ -250,7 +256,8 @@ function dockerCompose(args: string[]): void {
   writeLog(result.stdout);
   writeLog(result.stderr);
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error('External IdP Docker Compose failed');
+  if (result.status !== 0)
+    throw new Error('External IdP Docker Compose failed');
 }
 
 function writeDockerComposeLogs(project: string, file: string): void {

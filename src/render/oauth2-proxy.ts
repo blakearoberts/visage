@@ -10,7 +10,10 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
   writeFileSync(file, render, 'utf-8');
 
   if (config.oauth2.public) {
-    writeFileSync(join(config.cache, config.files.oauth2ProxyClientSecret[0]), '');
+    writeFileSync(
+      join(config.cache, config.files.oauth2ProxyClientSecret[0]),
+      '',
+    );
   }
 }
 

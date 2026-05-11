@@ -46,12 +46,15 @@
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "test": "npm run test:unit",
     "test:e2e": "playwright test test/e2e",
-    "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts"
+    "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts",
+    "format": "prettier --write \"{docs,examples,src,test}/**/*.{ts,tsx,js,jsx,json,css,html,md}\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"{docs,examples,src,test}/**/*.{ts,tsx,js,jsx,json,css,html,md}\" \"*.{json,md}\""
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@rollup/plugin-typescript": "^12.3.0",
     "@types/node": "^25.6.2",
+    "prettier": "^3.8.3",
     "rollup": "^4.60.3",
     "tslib": "^2.8.1",
     "typescript": "^5.9.3",

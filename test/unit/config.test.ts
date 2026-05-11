@@ -323,10 +323,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
     forward: false,
     redirect: true,
   });
-  assert.equal(
-    config.upstreams.vite.locations['/app/'].headers.Cookie,
-    '""',
-  );
+  assert.equal(config.upstreams.vite.locations['/app/'].headers.Cookie, '""');
   assert.equal(
     config.upstreams.vite.locations['/app/'].headers.Upgrade,
     '$http_upgrade',

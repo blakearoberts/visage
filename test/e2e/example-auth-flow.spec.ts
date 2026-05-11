@@ -1,4 +1,10 @@
-import { expect, request, test, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  request,
+  test,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import {
   spawn,
   spawnSync,

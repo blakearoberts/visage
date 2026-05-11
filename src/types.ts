@@ -70,6 +70,7 @@ export type VisageService = {
   readonly image: string;
   readonly command?: readonly string[];
   readonly depends_on?: readonly string[];
+  readonly extra_hosts?: readonly string[];
 };
 
 export type VisageUpstream = {

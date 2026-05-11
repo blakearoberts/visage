@@ -95,9 +95,15 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     './dex.yml:/etc/dex/dex.yml:ro',
   ]);
   assert.deepEqual(compose.services.nginx.ports, ['9443:9443']);
+  assert.deepEqual(compose.services.nginx.extra_hosts, [
+    'host.docker.internal:host-gateway',
+  ]);
   assert.deepEqual(compose.services.nginx.volumes, [
     './certs:/etc/nginx/certs:ro',
     './nginx.conf:/etc/nginx/nginx.conf:ro',
+  ]);
+  assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
+    'host.docker.internal:host-gateway',
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',

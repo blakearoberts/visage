@@ -114,11 +114,13 @@ const BaseServices = {
   nginx: {
     image: 'nginx:1.30.0-alpine',
     depends_on: ['oauth2_proxy', 'dex'],
+    extra_hosts: ['host.docker.internal:host-gateway'],
   },
   oauth2_proxy: {
     image: 'quay.io/oauth2-proxy/oauth2-proxy:v7.15.2',
     command: ['--config', '/etc/oauth2-proxy/config.yml'],
     depends_on: ['dex'],
+    extra_hosts: ['host.docker.internal:host-gateway'],
   },
 } as const satisfies VisageConfig['services'];
 

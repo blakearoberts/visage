@@ -7,7 +7,7 @@ Visage (`/vit·ɛdʒ/`) is a Vite plugin for local development with HMR and OIDC
 Install Visage from npm:
 
 ```console
-npm install @blakearoberts/visage
+npm install @blakearoberts/visage@next
 ```
 
 Add the plugin to `vite.config.ts`:

@@ -84,19 +84,31 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
-      packages: write
+      id-token: write
     steps:
+      - uses: actions/checkout@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version: 26
-          registry-url: https://npm.pkg.github.com
+          registry-url: https://registry.npmjs.org
 
       - uses: actions/download-artifact@v6
         with:
           name: package
           path: package
 
+      - name: Resolve npm dist tag
+        id: dist-tag
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$version" == *-* ]]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
-        run: npm publish ./package/*.tgz
+        run: npm publish ./package/*.tgz --access public --tag "${{ steps.dist-tag.outputs.tag }}" --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

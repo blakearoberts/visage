@@ -1,6 +1,6 @@
 {
   "name": "@blakearoberts/visage",
-  "version": "0.0.1",
+  "version": "0.0.1-rc.0",
   "description": "Vite plugin for local development with HMR and OIDC session cookie lifecycle semantics.",
   "type": "module",
   "author": "Blake Roberts",
@@ -38,10 +38,13 @@
     "node": ">=20"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "scripts": {
-    "build": "rollup -c",
+    "build": "npm run clean && rollup -c",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "test": "npm run test:unit",
     "test:e2e": "playwright test test/e2e",
     "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts"
   },

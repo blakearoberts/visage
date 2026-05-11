@@ -24,6 +24,10 @@ export async function ensureCerts({
   // install CA
   {
     const result = spawnSync(mkcert, ['-install'], {
+      env: {
+        ...process.env,
+        TRUST_STORES: process.env.TRUST_STORES ?? 'system',
+      },
       stdio: [process.stdin.isTTY ? 'inherit' : 'ignore', 'inherit', 'inherit'],
     });
     if (result.error) throw result.error;

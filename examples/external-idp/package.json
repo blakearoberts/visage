@@ -7,7 +7,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@blakearoberts/visage": "0.0.1-rc.0",
+    "@blakearoberts/visage": "0.0.1-rc.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

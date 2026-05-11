@@ -98,7 +98,7 @@ jobs:
     needs: [ci, e2e]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v6
@@ -127,3 +127,19 @@ jobs:
         run: npm publish ./package/*.tgz --access public --tag "${{ steps.dist-tag.outputs.tag }}" --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NPM_DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          args=()
+          if [[ "$version" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            "${args[@]}" \
+            --notes "Published [@blakearoberts/visage@$version](https://www.npmjs.com/package/@blakearoberts/visage/v/$version) to npm with the \`$NPM_DIST_TAG\` dist-tag."

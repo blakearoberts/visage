@@ -122,7 +122,6 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 
 ## TO-DO
 
-- [ ] Promote a stable release.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.local.vite.app`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

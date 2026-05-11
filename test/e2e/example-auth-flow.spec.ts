@@ -32,6 +32,7 @@ test.describe('Visage authenticated upstream flow', () => {
   test.setTimeout(90_000);
 
   test.beforeAll(async ({}, testInfo) => {
+    test.setTimeout(90_000);
     appComposeProject = projectName('managed_service', testInfo.workerIndex);
     logFile = testInfo.outputPath('managed-service.log');
     mkdirSync(dirname(logFile), { recursive: true });

@@ -25,6 +25,7 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
   test.setTimeout(120_000);
 
   test.beforeAll(async ({}, testInfo) => {
+    test.setTimeout(120_000);
     logFile = testInfo.outputPath('external-idp.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');

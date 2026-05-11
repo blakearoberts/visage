@@ -1,0 +1,8 @@
+services:
+  idp:
+    image: ghcr.io/dexidp/dex:v2.45.1
+    command: ['dex', 'serve', '/etc/dex/dex.yml']
+    ports:
+      - '5557:5557'
+    volumes:
+      - './dex.yml:/etc/dex/dex.yml:ro'

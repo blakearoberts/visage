@@ -1,0 +1,62 @@
+{
+  "name": "@blakearoberts/visage",
+  "version": "0.0.1",
+  "description": "Vite plugin for local development with HMR and OIDC session cookie lifecycle semantics.",
+  "type": "module",
+  "author": "Blake Roberts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blakearoberts/visage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/blakearoberts/visage/issues"
+  },
+  "homepage": "https://github.com/blakearoberts/visage#readme",
+  "keywords": [
+    "vite",
+    "plugin",
+    "oidc",
+    "hmr",
+    "session",
+    "cookie",
+    "lifecycle",
+    "development"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "test:e2e": "playwright test test/e2e",
+    "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/node": "^25.6.2",
+    "rollup": "^4.60.3",
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "eta": "^4.6.0",
+    "yaml": "^2.8.4"
+  }
+}

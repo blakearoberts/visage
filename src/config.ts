@@ -63,6 +63,10 @@ type ResolvedOAuth2Client = {
   readonly public: boolean;
 };
 
+type ResolvedUpstream = VisageUpstream & {
+  readonly scheme: NonNullable<VisageUpstream['scheme']>;
+};
+
 type ResolvedVisageOptions = {
   readonly host: string;
   readonly port: number;
@@ -70,7 +74,7 @@ type ResolvedVisageOptions = {
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
   readonly services?: Record<string, VisageService>;
-  readonly upstreams?: Record<string, VisageUpstream>;
+  readonly upstreams?: Record<string, ResolvedUpstream>;
 };
 
 export type VisageConfig = {
@@ -91,7 +95,7 @@ export type VisageConfig = {
   };
 
   readonly services: Readonly<Record<string, VisageService>>;
-  readonly upstreams: Readonly<Record<string, VisageUpstream>>;
+  readonly upstreams: Readonly<Record<string, ResolvedUpstream>>;
 };
 
 const BaseFiles = {
@@ -126,12 +130,14 @@ const BaseServices = {
 
 const BaseDexUpstream = {
   host: 'dex',
+  scheme: 'http',
   port: 5556,
   locations: { '/dex/': { auth: { enabled: false } } },
-} as const satisfies VisageUpstream;
+} as const satisfies ResolvedUpstream;
 
 const BaseOauth2ProxyUpstream = {
   host: 'oauth2_proxy',
+  scheme: 'http',
   port: 4180,
   locations: {
     '/oauth2/': {
@@ -146,10 +152,11 @@ const BaseOauth2ProxyUpstream = {
       },
     },
   },
-} as const satisfies VisageUpstream;
+} as const satisfies ResolvedUpstream;
 
 const BaseViteUpstream = {
   host: 'host.docker.internal',
+  scheme: 'http',
   locations: {
     '/': {
       auth: { forward: false, redirect: true },
@@ -159,7 +166,7 @@ const BaseViteUpstream = {
       },
     },
   },
-} as const satisfies Omit<VisageUpstream, 'port'>;
+} as const satisfies Omit<ResolvedUpstream, 'port'>;
 
 const DefaultCookiePolicy = {
   cookie_expire: '8h',
@@ -201,16 +208,20 @@ const DefaultProxyPolicy = {
   },
 } as const satisfies VisageProxyPolicy;
 
-export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
-  const cookie = options.cookie ?? {};
+export function resolveOptions({
+  host = 'local.vite.app',
+  port = 9001,
+  cookie = {},
+  idp,
+  oauth2 = {},
+  services,
+  upstreams,
+}: VisageOptions): ResolvedVisageOptions {
   const cookieName = cookie.name ?? 'session';
-  const oauth2 = options.oauth2 ?? {};
   const publicClient = oauth2.clientSecret === null;
-
   return {
-    ...options,
-    host: options.host ?? 'local.vite.app',
-    port: options.port ?? 9001,
+    host,
+    port,
     cookie: {
       ...DefaultCookiePolicy,
       cookie_name:
@@ -228,7 +239,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         : { cookie_domains: cookie.domains }),
       ...(cookie.path === undefined ? {} : { cookie_path: cookie.path }),
     },
-    idp: resolveIdpOption(options.idp),
+    idp: resolveIdpOption(idp),
     oauth2: {
       id: oauth2.clientId ?? DefaultOAuth2Client.id,
       ...(publicClient
@@ -237,6 +248,17 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
       scopes: oauth2.scopes ?? DefaultOAuth2Client.scopes,
       public: publicClient,
     },
+    ...(services === undefined ? {} : { services }),
+    ...(upstreams === undefined
+      ? {}
+      : {
+          upstreams: Object.fromEntries(
+            Object.entries(upstreams).map(([name, upstream]) => [
+              name,
+              { ...upstream, scheme: upstream.scheme ?? 'http' },
+            ]),
+          ),
+        }),
   };
 }
 
@@ -272,15 +294,19 @@ export function resolveConfig(
   config: ResolvedConfig,
   vitePort: number,
 ): VisageConfig {
-  const upstreams: Record<string, VisageUpstream> = {
+  const upstreams: Record<string, ResolvedUpstream> = {
     oauth2_proxy: BaseOauth2ProxyUpstream,
     vite: { ...BaseViteUpstream, port: vitePort },
     ...(options.idp.kind === 'dex' ? { dex: BaseDexUpstream } : {}),
     ...options.upstreams,
   };
-  const { host: idpHost, port: idpPort } = upstreams[options.idp.upstream];
+  const {
+    host: idpHost,
+    port: idpPort,
+    scheme: idpScheme,
+  } = upstreams[options.idp.upstream];
   const origin = `https://${options.host}:${options.port}`;
-  const idpOrigin = `http://${idpHost}:${idpPort}`;
+  const idpOrigin = `${idpScheme}://${idpHost}:${idpPort}`;
   const idpBase = {
     upstream: options.idp.upstream,
     issuer: options.idp.issuer ?? `${origin}${options.idp.path}`,

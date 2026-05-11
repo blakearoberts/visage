@@ -217,6 +217,33 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
 });
 
+test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
+  const config = resolvedConfig(t, {
+    upstreams: {
+      api: {
+        host: 'api.example.test',
+        scheme: 'https',
+        port: 443,
+        locations: {
+          '/api/': {},
+        },
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  assert.match(nginx, /upstream api \{\s+server api\.example\.test:443;\s+\}/);
+
+  const api = locationBlock(nginx, '/api/');
+  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
+  assert.match(api, /proxy_ssl_server_name on;/);
+  assert.match(api, /proxy_ssl_name api\.example\.test;/);
+  assert.match(api, /proxy_pass https:\/\/api;/);
+});
+
 test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) => {
   const config = resolvedConfig(t);
 

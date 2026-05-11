@@ -44,7 +44,11 @@ http {
             <%_ if (location.auth?.enabled && location.auth.forward) { %>
             proxy_set_header Authorization "Bearer $access_token";
             <%_ } %>
-            proxy_pass http://<%~ name %>;
+            <%_ if (upstream.scheme === 'https') { %>
+            proxy_ssl_server_name on;
+            proxy_ssl_name <%~ upstream.host %>;
+            <%_ } %>
+            proxy_pass <%~ upstream.scheme %>://<%~ name %>;
         }
             <%_ } %>
 

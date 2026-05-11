@@ -269,6 +269,12 @@ export type VisageUpstream = {
    */
   readonly host: string;
   /**
+   * URL scheme NGINX should use when proxying to this upstream.
+   *
+   * @defaultValue `'http'`
+   */
+  readonly scheme?: 'http' | 'https';
+  /**
    * Port NGINX should proxy to on {@link VisageUpstream.host}.
    */
   readonly port: number;

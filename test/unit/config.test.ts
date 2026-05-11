@@ -180,6 +180,25 @@ test('resolveOptions applies IdP overrides', () => {
   });
 });
 
+test('resolveOptions applies upstream scheme defaults', () => {
+  const options = resolveOptions({
+    upstreams: {
+      api: {
+        host: 'api',
+        port: 8080,
+      },
+      secure: {
+        host: 'secure',
+        scheme: 'https',
+        port: 443,
+      },
+    },
+  });
+
+  assert.equal(options.upstreams.api.scheme, 'http');
+  assert.equal(options.upstreams.secure.scheme, 'https');
+});
+
 test('resolveOptions supports OAuth2 public PKCE clients', () => {
   const options = resolveOptions({
     oauth2: {
@@ -233,6 +252,34 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   );
 });
 
+test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: {
+      kind: 'external',
+      path: '/idp',
+      upstream: 'idp',
+    },
+    upstreams: {
+      idp: {
+        host: 'idp.example.test',
+        scheme: 'https',
+        port: 443,
+        locations: { '/idp/': { auth: { enabled: false } } },
+      },
+    },
+  });
+
+  assert.equal(config.upstreams.idp.scheme, 'https');
+  assert.equal(
+    config.idp.tokenEndpoint,
+    'https://idp.example.test:443/idp/token',
+  );
+  assert.equal(
+    config.idp.jwksEndpoint,
+    'https://idp.example.test:443/idp/keys',
+  );
+});
+
 test('resolveConfig applies defaults and normalizes upstream locations', (t) => {
   const { cacheDir, config } = resolveForTest(t, {
     upstreams: {
@@ -260,7 +307,9 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.port, 9443);
   assert.equal(config.cache, join(cacheDir, 'visage'));
   assert.equal(config.services.dex.image, 'ghcr.io/dexidp/dex:v2.45.1');
+  assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);
+  assert.equal(config.upstreams.dex.scheme, 'http');
 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
     enabled: true,
@@ -276,6 +325,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     'X-Service': 'api',
   });
   assert.deepEqual(config.upstreams.metrics.locations, {});
+  assert.equal(config.upstreams.metrics.scheme, 'http');
 });
 
 test('resolveConfig lets named services and upstreams override base entries', (t) => {

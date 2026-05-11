@@ -353,7 +353,7 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   assert.equal(oauth2Proxy.cookie_samesite, 'lax');
   assert.equal(oauth2Proxy.cookie_path, '/');
   assert.deepEqual(oauth2Proxy.email_domains, ['*']);
-  assert.equal(oauth2Proxy.scope, 'openid email profile');
+  assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
   assert.deepEqual(oauth2Proxy.upstreams, ['static://202']);
 });
 

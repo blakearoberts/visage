@@ -186,7 +186,7 @@ const DefaultIdpConfig = {
 const DefaultOAuth2Client = {
   id: 'visage',
   secret: 'visage-secret',
-  scopes: ['openid', 'email', 'profile'],
+  scopes: ['openid', 'email', 'profile', 'offline_access'],
   public: false,
 } as const satisfies ResolvedOAuth2Client;
 

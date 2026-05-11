@@ -306,12 +306,13 @@ export function resolveConfig(
       ...(options.idp.kind === 'dex'
         ? BaseServices
         : {
-            nginx: {
-              ...BaseServices.nginx,
-              depends_on: ['oauth2_proxy'],
-            },
+          nginx: {
+            ...BaseServices.nginx,
+            depends_on: ['oauth2_proxy'],
+          },
             oauth2_proxy: {
               command: BaseServices.oauth2_proxy.command,
+              extra_hosts: BaseServices.oauth2_proxy.extra_hosts,
               image: BaseServices.oauth2_proxy.image,
             },
           }),

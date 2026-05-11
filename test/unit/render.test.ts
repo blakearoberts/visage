@@ -151,6 +151,9 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   assert.equal(compose.services.dex, undefined);
   assert.deepEqual(compose.services.nginx.depends_on, ['oauth2_proxy']);
   assert.equal(compose.services.oauth2_proxy.depends_on, undefined);
+  assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
+    'host.docker.internal:host-gateway',
+  ]);
 });
 
 test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => {

@@ -23,7 +23,9 @@ export async function ensureCerts({
 
   // install CA
   {
-    const result = spawnSync(mkcert, ['-install'], { stdio: 'inherit' });
+    const result = spawnSync(mkcert, ['-install'], {
+      stdio: [process.stdin.isTTY ? 'inherit' : 'ignore', 'inherit', 'inherit'],
+    });
     if (result.error) throw result.error;
     if (result.status !== 0) {
       throw new Error('Failed to install CA');

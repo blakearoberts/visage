@@ -44,10 +44,14 @@ export function ensureHostEntry(hostname: string): void {
     // Fall through to sudo tee.
   }
 
-  const result = spawnSync('sudo', ['tee', '-a', HOSTS_FILE], {
-    input: entry,
-    stdio: ['pipe', 'ignore', 'inherit'],
-  });
+  const result = spawnSync(
+    'sudo',
+    [...(process.stdin.isTTY ? [] : ['-n']), 'tee', '-a', HOSTS_FILE],
+    {
+      input: entry,
+      stdio: ['pipe', 'ignore', 'inherit'],
+    },
+  );
 
   if (result.error) {
     throw result.error;

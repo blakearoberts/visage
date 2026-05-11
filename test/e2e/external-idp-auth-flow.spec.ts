@@ -12,9 +12,9 @@ import {
 } from 'node:child_process';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const repo = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+import { e2eEnv, repo } from './environment';
+
 const example = join(repo, 'examples/external-idp');
 const appUrl = 'https://localhost:9002/';
 const targetUrl = new URL(appUrl);
@@ -40,11 +40,9 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
 
     vite = spawn('npm', ['run', 'dev'], {
       cwd: example,
-      env: {
-        ...process.env,
+      env: e2eEnv({
         COMPOSE_PROJECT_NAME: appComposeProject,
-        XDG_CACHE_HOME: testInfo.outputPath('xdg-cache'),
-      },
+      }),
     });
 
     vite.stdout.on('data', (chunk) => {

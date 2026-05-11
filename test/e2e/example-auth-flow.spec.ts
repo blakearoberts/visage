@@ -12,9 +12,9 @@ import {
 } from 'node:child_process';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const repo = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+import { e2eEnv, repo } from './environment';
+
 const example = join(repo, 'examples/managed-service');
 const appUrl = process.env.VISAGE_E2E_URL ?? 'https://localhost:9001/';
 const dexEmail = process.env.VISAGE_E2E_EMAIL ?? 'user@example.com';
@@ -46,11 +46,9 @@ test.describe('Visage authenticated upstream flow', () => {
 
     vite = spawn('npm', ['run', 'dev'], {
       cwd: example,
-      env: {
-        ...process.env,
+      env: e2eEnv({
         COMPOSE_PROJECT_NAME: appComposeProject,
-        XDG_CACHE_HOME: testInfo.outputPath('xdg-cache'),
-      },
+      }),
     });
 
     vite.stdout.on('data', (chunk) => {

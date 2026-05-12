@@ -132,7 +132,6 @@ test('writeComposeConfig mounts empty OAuth2 client secret file for public clien
 test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   const config = resolvedConfig(t, {
     idp: {
-      kind: 'external',
       issuer: 'http://idp.localhost:5557/idp',
     },
   });
@@ -247,7 +246,6 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
 test('writeNginxConfig does not duplicate root locations for root external IdP issuers', (t) => {
   const config = resolvedConfig(t, {
     idp: {
-      kind: 'external',
       issuer: 'https://idp.example.test',
       authorization: '/oauth2/v2/authorize?prompt=login',
       token: '/oauth2/v2/token',
@@ -265,7 +263,6 @@ test('writeNginxConfig does not duplicate root locations for root external IdP i
 test('writeNginxConfig does not render external IdP upstream locations', (t) => {
   const config = resolvedConfig(t, {
     idp: {
-      kind: 'external',
       issuer: 'https://idp.example.test/idp',
     },
   });
@@ -443,7 +440,6 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
 test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => {
   const config = resolvedConfig(t, {
     idp: {
-      kind: 'external',
       issuer: 'http://idp.localhost:5557/idp',
     },
   });

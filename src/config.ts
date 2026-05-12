@@ -24,7 +24,6 @@ type ResolvedCookiePolicy = {
 
 type ResolvedIdpOption =
   | {
-      readonly kind: 'dex';
       readonly dex: VisageDexOptions;
     }
   | VisageExternalIdpOptions;
@@ -62,14 +61,13 @@ type ResolvedBaseIdpConfig = {
   readonly jwks: string;
 };
 type ResolvedDexIdpConfig = ResolvedBaseIdpConfig & {
-  readonly kind: 'dex';
   readonly dex: {
     readonly expiry?: VisageDexExpiry;
     readonly users: readonly VisageDexUser[];
   };
 };
 type ResolvedExternalIdpConfig = ResolvedBaseIdpConfig & {
-  readonly kind: 'external';
+  readonly dex?: never;
 };
 type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
 
@@ -271,9 +269,8 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
 function resolveIdpOption(
   idp: VisageDexOptions | VisageExternalIdpOptions | undefined,
 ): ResolvedIdpOption {
-  if (idp?.kind === 'external') {
+  if (idp && 'issuer' in idp) {
     return {
-      kind: 'external',
       issuer: idp.issuer,
       authorization: idp.authorization ?? '/auth',
       token: idp.token ?? '/token',
@@ -281,7 +278,6 @@ function resolveIdpOption(
     };
   }
   return {
-    kind: 'dex',
     dex: {
       ...(idp?.expiry ? { expiry: idp.expiry } : {}),
       users: (idp?.users ?? DefaultDexUsers).map((user) => ({
@@ -299,11 +295,10 @@ function resolveIdpConfig({
   port,
   idp,
 }: ResolvedVisageOptions): ResolvedIdpConfig {
-  if (idp.kind === 'dex') {
+  if ('dex' in idp) {
     const issuer = `https://${host}:${port}/dex`;
     const upstream = `http://dex:5556/dex`;
     return {
-      kind: 'dex',
       upstream: 'dex',
       issuer,
       authorization: `${issuer}/auth`,
@@ -321,7 +316,6 @@ function resolveIdpConfig({
     };
   }
   return {
-    kind: 'external',
     upstream: 'idp',
     issuer: idp.issuer,
     authorization: idp.issuer + (idp.authorization ?? '/auth'),
@@ -350,9 +344,9 @@ export function resolveConfig(
   const upstreams: Record<string, ResolvedUpstream> = {
     oauth2_proxy: BaseOauth2ProxyUpstream,
     vite: { ...BaseViteUpstream, port: vitePort },
-    ...(idp.kind === 'dex'
-      ? { dex: BaseDexUpstream }
-      : { idp: resolveExternalIdpUpstream(idp) }),
+    ...(idp.dex === undefined
+      ? { idp: resolveExternalIdpUpstream(idp) }
+      : { dex: BaseDexUpstream }),
     ...options.upstreams,
   };
   return {
@@ -364,8 +358,9 @@ export function resolveConfig(
     cache: join(config.cacheDir, 'visage'),
     files: { ...BaseFiles },
     services: {
-      ...(idp.kind === 'dex'
-        ? {
+      ...(idp.dex === undefined
+        ? BaseServices
+        : {
             dex: BaseDexService,
             nginx: {
               ...BaseServices.nginx,
@@ -377,8 +372,7 @@ export function resolveConfig(
               image: BaseServices.oauth2_proxy.image,
               depends_on: ['dex'],
             },
-          }
-        : BaseServices),
+          }),
       ...options.services,
     },
     upstreams: Object.fromEntries(

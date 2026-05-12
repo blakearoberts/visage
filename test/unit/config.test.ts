@@ -40,7 +40,6 @@ test('resolveOptions applies public defaults', () => {
     cookie_path: '/',
   });
   assert.deepEqual(options.idp, {
-    kind: 'dex',
     dex: {
       users: [
         {
@@ -114,7 +113,6 @@ test('resolveOptions applies Dex overrides', () => {
   });
 
   assert.deepEqual(options.idp, {
-    kind: 'dex',
     dex: {
       expiry: {
         idTokens: '10m',
@@ -163,13 +161,11 @@ test('resolveOptions applies OAuth2 client overrides', () => {
 test('resolveOptions applies IdP overrides', () => {
   const options = resolveOptions({
     idp: {
-      kind: 'external',
       issuer: 'http://idp.localhost:5557/idp',
     },
   });
 
   assert.deepEqual(options.idp, {
-    kind: 'external',
     issuer: 'http://idp.localhost:5557/idp',
     authorization: '/auth',
     token: '/token',
@@ -215,7 +211,6 @@ test('resolveOptions supports OAuth2 public PKCE clients', () => {
 test('resolveConfig supports external IdP upstreams', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
-      kind: 'external',
       issuer: 'http://idp.localhost:5557/idp',
     },
   });
@@ -234,7 +229,6 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.equal(config.upstreams.idp.scheme, 'http');
   assert.equal(config.upstreams.idp.port, 5557);
   assert.deepEqual(config.upstreams.idp.locations, {});
-  assert.equal(config.idp.kind, 'external');
   assert.equal(config.idp.upstream, 'idp');
   assert.equal(config.idp.issuer, 'http://idp.localhost:5557/idp');
   assert.equal(config.idp.authorization, 'http://idp.localhost:5557/idp/auth');
@@ -245,7 +239,6 @@ test('resolveConfig supports external IdP upstreams', (t) => {
 test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
-      kind: 'external',
       issuer: 'https://idp.example.test/idp',
     },
   });
@@ -260,7 +253,6 @@ test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t
 test('resolveConfig omits external IdP upstream locations for root issuer paths', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
-      kind: 'external',
       issuer: 'https://idp.example.test',
       authorization: '/oauth2/v2/authorize?prompt=login',
       token: '/oauth2/v2/token',
@@ -283,7 +275,6 @@ test('resolveConfig omits external IdP upstream locations for root issuer paths'
 test('resolveConfig preserves managed service defaults for partial service overrides', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
-      kind: 'external',
       issuer: 'http://idp.localhost:5557/idp',
     },
     services: {

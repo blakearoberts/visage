@@ -12,15 +12,16 @@ export function writeDexConfig(config: VisageConfig): void {
 }
 
 function renderDexConfig(config: VisageConfig): string {
-  if (config.idp.kind !== 'dex') {
+  const { idp } = config;
+  if (idp.dex === undefined) {
     throw new Error('Dex config is required to render Dex');
   }
 
   const origin = `https://${config.host}:${config.port}`;
   const redirect = `${origin}/oauth2/callback`;
-  const upstream = config.upstreams[config.idp.upstream];
+  const upstream = config.upstreams[idp.upstream];
   return stringify({
-    issuer: config.idp.issuer,
+    issuer: idp.issuer,
     storage: { type: 'memory' },
     web: { http: `0.0.0.0:${upstream.port}` },
     oauth2: { skipApprovalScreen: true },
@@ -35,10 +36,8 @@ function renderDexConfig(config: VisageConfig): string {
       },
     ],
     enablePasswordDB: true,
-    ...(config.idp.dex.expiry === undefined
-      ? {}
-      : { expiry: config.idp.dex.expiry }),
-    staticPasswords: config.idp.dex.users.map(({ password, ...user }) => ({
+    ...(idp.dex.expiry === undefined ? {} : { expiry: idp.dex.expiry }),
+    staticPasswords: idp.dex.users.map(({ password, ...user }) => ({
       ...user,
       hash: hashSync(password, 10),
     })),

@@ -81,11 +81,6 @@ export type VisageCookiePolicy = {
  */
 export type VisageDexOptions = {
   /**
-   * Selects the managed Dex provider. Omit this for the default managed Dex
-   * provider.
-   */
-  readonly kind?: 'dex';
-  /**
    * Token expiration and rotation settings rendered into the Dex config.
    */
   readonly expiry?: VisageDexExpiry;
@@ -170,10 +165,6 @@ export type VisageDexUser = {
  * External OpenID Connect identity provider options.
  */
 export type VisageExternalIdpOptions = {
-  /**
-   * Selects the external IdP flow.
-   */
-  readonly kind: 'external';
   /**
    * OIDC issuer URL used by OAuth2 Proxy.
    */

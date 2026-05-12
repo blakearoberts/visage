@@ -6,7 +6,7 @@ import { writeOauth2ProxyConfig } from './oauth2-proxy';
 
 export function render(config: VisageConfig): void {
   writeComposeConfig(config);
-  if (config.idp.kind === 'dex') {
+  if (config.idp.dex !== undefined) {
     writeDexConfig(config);
   }
   writeNginxConfig(config);

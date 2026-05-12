@@ -24,10 +24,12 @@ jobs:
     needs: checks
     if: github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(release):')
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v6
         with:
@@ -67,6 +69,7 @@ jobs:
 
           echo "package-name=$package_name" >> "$GITHUB_OUTPUT"
           echo "version=$rc_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$rc_version" >> "$GITHUB_OUTPUT"
 
       - name: Build RC package
         run: |
@@ -89,6 +92,43 @@ jobs:
           fi
 
           npm dist-tag add "$PACKAGE_NAME@$PACKAGE_VERSION" next
+
+      - name: Publish GitHub RC release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_NAME: ${{ steps.rc-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.rc-version.outputs.version }}
+          RELEASE_TAG: ${{ steps.rc-version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
+            tag_commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
+            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+              echo "Tag $RELEASE_TAG already exists at $tag_commit, expected $GITHUB_SHA." >&2
+              exit 1
+            fi
+          elif git ls-remote --exit-code --tags origin "$RELEASE_TAG" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+            tag_commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
+            if [[ "$tag_commit" != "$GITHUB_SHA" ]]; then
+              echo "Tag $RELEASE_TAG already exists on origin at $tag_commit, expected $GITHUB_SHA." >&2
+              exit 1
+            fi
+          else
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+            git push origin "$RELEASE_TAG"
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub release $RELEASE_TAG already exists."
+          else
+            gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --prerelease \
+              --title "$RELEASE_TAG" \
+              --notes "Published [$PACKAGE_NAME@$PACKAGE_VERSION](https://www.npmjs.com/package/$PACKAGE_NAME/v/$PACKAGE_VERSION) to npm with the \`next\` dist-tag."
+          fi
 
   delete-merged-codex:
     name: Delete merged codex branch

@@ -417,7 +417,9 @@ export function resolveConfig(
     },
     upstreams: Object.fromEntries(
       Object.entries(upstreams).map(([name, upstream]) => {
-        const external = options.services[name] === undefined;
+        const external =
+          options.upstreams?.[name] !== undefined &&
+          options.services[name] === undefined;
         return [
           name,
           {

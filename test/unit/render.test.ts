@@ -221,6 +221,18 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
 });
 
+test('writeNginxConfig preserves browser host for the built-in Vite upstream', (t) => {
+  const config = resolvedConfig(t);
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const root = locationBlock(nginx, '/');
+
+  assert.match(root, /proxy_set_header Host \$host;/);
+  assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
+});
+
 test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {

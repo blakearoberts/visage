@@ -303,12 +303,13 @@ function resolveUpstream(
   name: string,
   upstream: VisageUpstream,
 ): ResolvedUpstream {
+  const scheme = upstream.scheme ?? 'http';
   return {
     ...upstream,
     host: upstream.host ?? name,
     locations: upstream.locations ?? { [`/${name}/`]: {} },
-    port: upstream.port ?? 80,
-    scheme: upstream.scheme ?? 'http',
+    port: upstream.port ?? (scheme === 'https' ? 443 : 80),
+    scheme,
   };
 }
 

@@ -179,7 +179,6 @@ test('resolveOptions applies upstream defaults', () => {
       api: {},
       secure: {
         scheme: 'https',
-        port: 443,
       },
     },
   });
@@ -207,11 +206,20 @@ test('resolveOptions derives upstreams from services', () => {
       whoami: {
         image: 'traefik/whoami',
       },
+      secure: {
+        image: 'example/secure:test',
+        upstream: {
+          scheme: 'https',
+        },
+      },
     },
     upstreams: {
       api: {
         host: 'api.local.test',
         port: 9000,
+      },
+      external: {
+        scheme: 'https',
       },
     },
   });
@@ -223,6 +231,12 @@ test('resolveOptions derives upstreams from services', () => {
   assert.equal(options.upstreams.whoami.host, 'whoami');
   assert.deepEqual(options.upstreams.whoami.locations, { '/whoami/': {} });
   assert.equal(options.upstreams.whoami.port, 80);
+  assert.equal(options.upstreams.secure.host, 'secure');
+  assert.equal(options.upstreams.secure.scheme, 'https');
+  assert.equal(options.upstreams.secure.port, 443);
+  assert.equal(options.upstreams.external.host, 'external');
+  assert.equal(options.upstreams.external.scheme, 'https');
+  assert.equal(options.upstreams.external.port, 443);
 });
 
 test('resolveOptions supports OAuth2 public PKCE clients', () => {

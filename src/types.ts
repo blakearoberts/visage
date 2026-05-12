@@ -268,7 +268,7 @@ export type VisageUpstream = {
   /**
    * Port NGINX should proxy to on {@link VisageUpstream.host}.
    *
-   * @defaultValue `80`
+   * @defaultValue `80`, or `443` when {@link VisageUpstream.scheme} is `'https'`.
    */
   readonly port?: number;
   /**

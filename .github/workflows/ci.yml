@@ -175,6 +175,36 @@ jobs:
 
           npm dist-tag add "$PACKAGE_NAME@$PACKAGE_VERSION" next
 
+  delete-merged-codex:
+    name: Delete merged codex branch
+    runs-on: ubuntu-latest
+    needs: [ci, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Delete merged codex branch
+        run: |
+          set -euo pipefail
+
+          if ! git ls-remote --exit-code --heads origin codex >/dev/null 2>&1; then
+            echo "No remote codex branch to delete."
+            exit 0
+          fi
+
+          git fetch origin codex:refs/remotes/origin/codex
+
+          if ! git merge-base --is-ancestor refs/remotes/origin/codex HEAD; then
+            echo "Remote codex branch is not merged into this main commit."
+            exit 0
+          fi
+
+          git push origin --delete codex
+
   release:
     name: Release
     runs-on: ubuntu-latest

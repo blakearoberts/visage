@@ -13,7 +13,7 @@ export type {
   VisageDexExpiry,
   VisageDexOptions,
   VisageDexUser,
-  VisageIdpOptions,
+  VisageExternalIdpOptions,
   VisageOAuth2Client,
   VisageOptions,
   VisageProxyPolicy,

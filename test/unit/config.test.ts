@@ -41,8 +41,6 @@ test('resolveOptions applies public defaults', () => {
   });
   assert.deepEqual(options.idp, {
     kind: 'dex',
-    path: '/dex',
-    upstream: 'dex',
     dex: {
       users: [
         {
@@ -117,8 +115,6 @@ test('resolveOptions applies Dex overrides', () => {
 
   assert.deepEqual(options.idp, {
     kind: 'dex',
-    path: '/dex',
-    upstream: 'dex',
     dex: {
       expiry: {
         idTokens: '10m',
@@ -168,15 +164,16 @@ test('resolveOptions applies IdP overrides', () => {
   const options = resolveOptions({
     idp: {
       kind: 'external',
-      path: 'idp/',
-      upstream: 'idp',
+      issuer: 'http://idp.localhost:5557/idp',
     },
   });
 
   assert.deepEqual(options.idp, {
     kind: 'external',
-    path: '/idp',
-    upstream: 'idp',
+    issuer: 'http://idp.localhost:5557/idp',
+    authorization: '/auth',
+    token: '/token',
+    jwks: '/keys',
   });
 });
 
@@ -219,65 +216,70 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
       kind: 'external',
-      path: '/idp',
-      upstream: 'idp',
-    },
-    upstreams: {
-      idp: {
-        host: 'host.docker.internal',
-        port: 5557,
-        locations: { '/idp/': { auth: { enabled: false } } },
-      },
+      issuer: 'http://idp.localhost:5557/idp',
     },
   });
 
   assert.equal(config.services.dex, undefined);
   assert.deepEqual(config.services.nginx.depends_on, ['oauth2_proxy']);
+  assert.deepEqual(config.services.nginx.extra_hosts, [
+    'host.docker.internal:host-gateway',
+  ]);
   assert.equal(config.services.oauth2_proxy.depends_on, undefined);
+  assert.deepEqual(config.services.oauth2_proxy.extra_hosts, [
+    'host.docker.internal:host-gateway',
+  ]);
   assert.equal(config.upstreams.dex, undefined);
+  assert.equal(config.upstreams.idp.host, 'idp.localhost');
+  assert.equal(config.upstreams.idp.scheme, 'http');
+  assert.equal(config.upstreams.idp.port, 5557);
+  assert.deepEqual(config.upstreams.idp.locations['/idp'].auth, {
+    enabled: false,
+    forward: true,
+    redirect: false,
+  });
   assert.equal(config.idp.kind, 'external');
   assert.equal(config.idp.upstream, 'idp');
-  assert.equal(config.idp.issuer, 'https://app.local.test:9443/idp');
-  assert.equal(
-    config.idp.authorizationEndpoint,
-    'https://app.local.test:9443/idp/auth',
-  );
-  assert.equal(
-    config.idp.tokenEndpoint,
-    'http://host.docker.internal:5557/idp/token',
-  );
-  assert.equal(
-    config.idp.jwksEndpoint,
-    'http://host.docker.internal:5557/idp/keys',
-  );
+  assert.equal(config.idp.issuer, 'http://idp.localhost:5557/idp');
+  assert.equal(config.idp.authorization, 'http://idp.localhost:5557/idp/auth');
+  assert.equal(config.idp.token, 'http://idp.localhost:5557/idp/token');
+  assert.equal(config.idp.jwks, 'http://idp.localhost:5557/idp/keys');
 });
 
 test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
       kind: 'external',
-      path: '/idp',
-      upstream: 'idp',
-    },
-    upstreams: {
-      idp: {
-        host: 'idp.example.test',
-        scheme: 'https',
-        port: 443,
-        locations: { '/idp/': { auth: { enabled: false } } },
-      },
+      issuer: 'https://idp.example.test/idp',
     },
   });
 
   assert.equal(config.upstreams.idp.scheme, 'https');
-  assert.equal(
-    config.idp.tokenEndpoint,
-    'https://idp.example.test:443/idp/token',
-  );
-  assert.equal(
-    config.idp.jwksEndpoint,
-    'https://idp.example.test:443/idp/keys',
-  );
+  assert.equal(config.upstreams.idp.port, 443);
+  assert.equal(config.idp.token, 'https://idp.example.test/idp/token');
+  assert.equal(config.idp.jwks, 'https://idp.example.test/idp/keys');
+});
+
+test('resolveConfig preserves managed service defaults for partial service overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: {
+      kind: 'external',
+      issuer: 'http://idp.localhost:5557/idp',
+    },
+    services: {
+      oauth2_proxy: {
+        extra_hosts: ['idp.localhost:host-gateway'],
+      },
+    },
+  });
+
+  assert.deepEqual(config.services.oauth2_proxy.command, [
+    '--config',
+    '/etc/oauth2-proxy/config.yml',
+  ]);
+  assert.deepEqual(config.services.oauth2_proxy.extra_hosts, [
+    'idp.localhost:host-gateway',
+  ]);
 });
 
 test('resolveConfig applies defaults and normalizes upstream locations', (t) => {
@@ -359,6 +361,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
   assert.deepEqual(config.services.nginx, {
     image: 'custom-nginx:test',
     depends_on: ['api'],
+    extra_hosts: ['host.docker.internal:host-gateway'],
   });
   assert.deepEqual(config.services.api, {
     image: 'example/api:test',

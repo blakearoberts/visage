@@ -28,7 +28,7 @@ let vite: ChildProcessWithoutNullStreams | undefined;
 let viteOutput = '';
 
 test.describe('Visage external IdP authenticated upstream flow', () => {
-  test.setTimeout(120_000);
+  test.setTimeout(30_000);
 
   test.beforeAll(async ({}, testInfo) => {
     logFile = testInfo.outputPath('external-idp.log');

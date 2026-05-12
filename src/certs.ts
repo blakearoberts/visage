@@ -30,7 +30,8 @@ export async function ensureCerts({
     TRUST_STORES: process.env.TRUST_STORES ?? 'system',
   };
 
-  mkdirSync(env.CAROOT, { recursive: true });
+  mkdirSync(env.CAROOT, { recursive: true, mode: 0o700 });
+  chmodSync(env.CAROOT, 0o700);
 
   // mkcert -install is idempotent; CA files alone do not prove trust-store state.
   {

@@ -8,28 +8,20 @@ export default defineConfig({
     visage({
       host: 'localhost',
       port: 9002,
-      idp: {
-        kind: 'external',
-        path: '/idp',
-        upstream: 'idp',
+      idp: { kind: 'external', issuer: 'http://idp.localhost:5557/idp' },
+      oauth2: { clientSecret: null },
+      services: {
+        whoami: { image: 'traefik/whoami' },
+
+        // Note: the following extra_hosts overrides are only required for this
+        // example because the "external" IdP is a container inside docker where
+        // nginx and oauth2_proxy need to reach it without hitting their own
+        // loopback interfaces.
+        nginx: { extra_hosts: ['idp.localhost:host-gateway'] },
+        oauth2_proxy: { extra_hosts: ['idp.localhost:host-gateway'] },
       },
-      oauth2: {
-        clientId: 'visage-external-idp',
-        clientSecret: null,
-        scopes: ['openid', 'email', 'profile', 'offline_access'],
-      },
-      services: { whoami: { image: 'traefik/whoami' } },
       upstreams: {
-        idp: {
-          host: 'host.docker.internal',
-          port: 5557,
-          locations: { '/idp/': { auth: { enabled: false } } },
-        },
-        whoami: {
-          host: 'whoami',
-          port: 80,
-          locations: { '/whoami/': {} },
-        },
+        whoami: { host: 'whoami', port: 80, locations: { '/whoami/': {} } },
       },
     }),
   ],

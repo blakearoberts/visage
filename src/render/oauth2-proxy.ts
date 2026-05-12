@@ -23,9 +23,9 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     provider: 'oidc',
     oidc_issuer_url: config.idp.issuer,
     skip_oidc_discovery: true,
-    login_url: config.idp.authorizationEndpoint,
-    redeem_url: config.idp.tokenEndpoint,
-    oidc_jwks_url: config.idp.jwksEndpoint,
+    login_url: config.idp.authorization,
+    redeem_url: config.idp.token,
+    oidc_jwks_url: config.idp.jwks,
     redirect_url: `https://${config.host}:${config.port}/oauth2/callback`,
     client_id: config.oauth2.id,
     ...(config.oauth2.secret === undefined

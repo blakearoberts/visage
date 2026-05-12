@@ -128,15 +128,7 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   const config = resolvedConfig(t, {
     idp: {
       kind: 'external',
-      path: '/idp',
-      upstream: 'idp',
-    },
-    upstreams: {
-      idp: {
-        host: 'host.docker.internal',
-        port: 5557,
-        locations: { '/idp/': { auth: { enabled: false } } },
-      },
+      issuer: 'http://idp.localhost:5557/idp',
     },
   });
 
@@ -145,6 +137,9 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   const compose = parse(readGenerated(config, config.files.compose));
   assert.equal(compose.services.dex, undefined);
   assert.deepEqual(compose.services.nginx.depends_on, ['oauth2_proxy']);
+  assert.deepEqual(compose.services.nginx.extra_hosts, [
+    'host.docker.internal:host-gateway',
+  ]);
   assert.equal(compose.services.oauth2_proxy.depends_on, undefined);
   assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
     'host.docker.internal:host-gateway',
@@ -411,15 +406,7 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
   const config = resolvedConfig(t, {
     idp: {
       kind: 'external',
-      path: '/idp',
-      upstream: 'idp',
-    },
-    upstreams: {
-      idp: {
-        host: 'host.docker.internal',
-        port: 5557,
-        locations: { '/idp/': { auth: { enabled: false } } },
-      },
+      issuer: 'http://idp.localhost:5557/idp',
     },
   });
 
@@ -428,16 +415,10 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
   const oauth2Proxy = parseKeyValueConfig(
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
-  assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/idp');
-  assert.equal(oauth2Proxy.login_url, 'https://app.local.test:9443/idp/auth');
-  assert.equal(
-    oauth2Proxy.redeem_url,
-    'http://host.docker.internal:5557/idp/token',
-  );
-  assert.equal(
-    oauth2Proxy.oidc_jwks_url,
-    'http://host.docker.internal:5557/idp/keys',
-  );
+  assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
+  assert.equal(oauth2Proxy.login_url, 'http://idp.localhost:5557/idp/auth');
+  assert.equal(oauth2Proxy.redeem_url, 'http://idp.localhost:5557/idp/token');
+  assert.equal(oauth2Proxy.oidc_jwks_url, 'http://idp.localhost:5557/idp/keys');
 });
 
 test('writeOauth2ProxyConfig renders configured cookie policy', (t) => {

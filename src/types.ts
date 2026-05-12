@@ -22,7 +22,7 @@ export type VisageOptions = {
    * Identity provider configuration. Omit this to use Visage's managed Dex
    * provider.
    */
-  readonly idp?: VisageDexOptions | VisageIdpOptions;
+  readonly idp?: VisageDexOptions | VisageExternalIdpOptions;
   /**
    * OAuth2 client settings shared by Dex or an external IdP and OAuth2 Proxy.
    */
@@ -169,45 +169,36 @@ export type VisageDexUser = {
 /**
  * External OpenID Connect identity provider options.
  */
-export type VisageIdpOptions = {
+export type VisageExternalIdpOptions = {
   /**
    * Selects the external IdP flow.
    */
   readonly kind: 'external';
   /**
-   * Name of the configured upstream that serves the external IdP.
+   * OIDC issuer URL used by OAuth2 Proxy.
    */
-  readonly upstream: string;
+  readonly issuer: string;
   /**
-   * Public path where the external IdP is exposed through Visage.
+   * OIDC authorization path appended to
+   * {@link VisageExternalIdpOptions.issuer}.
    *
-   * @defaultValue `'/dex'`
+   * @defaultValue '/auth'
    */
-  readonly path?: string;
+  readonly authorization?: string;
   /**
-   * OIDC issuer URL. Defaults to the Visage origin plus
-   * {@link VisageIdpOptions.path}.
-   */
-  readonly issuer?: string;
-  /**
-   * Browser-facing authorization endpoint URL. Defaults to the Visage origin
-   * plus {@link VisageIdpOptions.path} and `/auth`.
-   */
-  readonly authorizationEndpoint?: string;
-  /**
-   * Token endpoint URL used by OAuth2 Proxy.
+   * OIDC token endpoint path appended to
+   * {@link VisageExternalIdpOptions.issuer}.
    *
-   * Defaults to the configured IdP upstream origin plus
-   * {@link VisageIdpOptions.path} and `/token`.
+   * @defaultValue '/token'
    */
-  readonly tokenEndpoint?: string;
+  readonly token?: string;
   /**
-   * JWKS endpoint URL used by OAuth2 Proxy.
+   * OIDC JWKS endpoint path appended to
+   * {@link VisageExternalIdpOptions.issuer}.
    *
-   * Defaults to the configured IdP upstream origin plus
-   * {@link VisageIdpOptions.path} and `/keys`.
+   * @defaultValue '/keys'
    */
-  readonly jwksEndpoint?: string;
+  readonly jwks?: string;
 };
 
 /**
@@ -243,9 +234,11 @@ export type VisageOAuth2Client = {
  */
 export type VisageService = {
   /**
-   * Container image reference used for the service.
+   * Container image reference used for the service. Required for additional
+   * services; defaults to the managed image when overriding `nginx` or
+   * `oauth2_proxy`.
    */
-  readonly image: string;
+  readonly image?: string;
   /**
    * Optional command override rendered into the Compose service.
    */

@@ -1,4 +1,4 @@
-issuer: https://localhost:9002/idp
+issuer: http://idp.localhost:5557/idp
 storage:
   type: memory
 web:
@@ -6,7 +6,7 @@ web:
 oauth2:
   skipApprovalScreen: true
 staticClients:
-  - id: visage-external-idp
+  - id: visage
     name: Visage External IdP
     public: true
     redirectURIs:

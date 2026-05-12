@@ -268,6 +268,8 @@ export type VisageUpstream = {
   readonly port?: number;
   /**
    * Path-location policies for this upstream, keyed by NGINX location path.
+   *
+   * @defaultValue `/{upstreamName}/`
    */
   readonly locations?: { readonly [path: string]: VisageProxyPolicy };
 };

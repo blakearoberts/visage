@@ -41,12 +41,8 @@ Services are Docker Compose services managed by the Vite dev-server lifecycle. U
 
 ```ts
 visage({
-  services: {
-    whoami: { image: 'traefik/whoami' },
-  },
-  upstreams: {
-    whoami: { locations: { '/whoami/': {} } },
-  },
+  services: { whoami: { image: 'traefik/whoami' } },
+  upstreams: { whoami: {} },
 });
 ```
 

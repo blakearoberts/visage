@@ -185,9 +185,11 @@ test('resolveOptions applies upstream defaults', () => {
   });
 
   assert.equal(options.upstreams.api.host, 'api');
+  assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
   assert.equal(options.upstreams.api.scheme, 'http');
   assert.equal(options.upstreams.api.port, 80);
   assert.equal(options.upstreams.secure.host, 'secure');
+  assert.deepEqual(options.upstreams.secure.locations, { '/secure/': {} });
   assert.equal(options.upstreams.secure.scheme, 'https');
   assert.equal(options.upstreams.secure.port, 443);
 });
@@ -342,8 +344,12 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     'X-Forwarded-Proto': '$scheme',
     'X-Service': 'api',
   });
-  assert.deepEqual(config.upstreams.metrics.locations, {});
   assert.equal(config.upstreams.metrics.host, 'metrics');
+  assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].auth, {
+    enabled: true,
+    forward: true,
+    redirect: false,
+  });
   assert.equal(config.upstreams.metrics.scheme, 'http');
   assert.equal(config.upstreams.metrics.port, 80);
 });

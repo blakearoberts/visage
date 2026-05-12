@@ -264,6 +264,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
               {
                 ...upstream,
                 host: upstream.host ?? name,
+                locations: upstream.locations ?? { [`/${name}/`]: {} },
                 port: upstream.port ?? 80,
                 scheme: upstream.scheme ?? 'http',
               },

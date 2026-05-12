@@ -19,7 +19,7 @@ export default defineConfig({
 
         whoami: { image: 'traefik/whoami' },
       },
-      upstreams: { whoami: { locations: { '/whoami/': {} } } },
+      upstreams: { whoami: {} },
     }),
   ],
 });

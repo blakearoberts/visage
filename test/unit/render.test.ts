@@ -222,9 +222,6 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
         host: 'api.example.test',
         scheme: 'https',
         port: 443,
-        locations: {
-          '/api/': {},
-        },
       },
     },
   });

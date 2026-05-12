@@ -1,28 +1,38 @@
 # Release Process
 
-Releases are tag-driven. GitHub Actions publishes the package to npm and creates the GitHub release when a `v*` tag is pushed.
+Releases are GitHub Actions-driven. The `CI` workflow has two publishing paths:
 
-## Procedure
+- Every push to `main` runs CI and E2E tests, then publishes the next RC for the current package version to npm with the `next` dist-tag.
+- Manual workflow dispatch from `main` runs CI and E2E tests, commits the stable npm package version bump to `main`, tags that commit, publishes the GitHub release, publishes to npm, and moves the `latest` dist-tag.
 
-1. Update the version in `package.json` and `package-lock.json`.
-2. Commit the version change.
-3. Create a matching git tag, such as `v0.0.1-rc.1` or `v0.0.1`.
-4. Push the commit and tag.
+## RC builds
 
-```console
-npm version 0.0.1-rc.1
-git push
-git push origin v0.0.1-rc.1
-```
+Merging to `main` publishes an RC after CI passes. The workflow derives the RC base from `package.json` by stripping any prerelease suffix, checks the published npm versions for the highest existing `rc.N`, then publishes the next one.
 
-Prerelease versions, such as `0.0.1-rc.1`, publish to npm with the `next` dist-tag. Stable versions, such as `0.0.1`, publish with the `latest` dist-tag.
+For example, if `package.json` is `0.0.1-rc.5`, the next successful push to `main` publishes `0.0.1-rc.6` with the `next` dist-tag.
 
-The release workflow runs CI, E2E tests, builds the package, publishes the packed artifact to npm with provenance, and creates a GitHub release that links to the published npm version.
+## Stable releases
+
+Use the `CI` workflow's manual dispatch from the `main` branch.
+
+The optional `version` input accepts a stable version such as `0.0.1` or `v0.0.1`. If omitted, the workflow uses the current package version without its prerelease suffix.
+
+The workflow:
+
+1. Runs format, typecheck, unit tests, build, package, and E2E tests.
+2. Verifies the run is still on the latest `main`.
+3. Updates `package.json` and `package-lock.json`.
+4. Builds and packs the bumped package version.
+5. Commits the version bump to `main`.
+6. Tags the commit as `v<version>`.
+7. Creates the GitHub release.
+8. Publishes the package to npm with provenance.
+9. Moves the npm `latest` dist-tag to the released version.
 
 ## Requirements
 
-- The git tag must start with `v`.
-- The tag version should match the package version.
+- Dispatch stable releases from the `main` branch.
+- The release version must not include a prerelease suffix.
 - The repository must have an `NPM_TOKEN` secret that can publish `@blakearoberts/visage`.
 
 ## TO-DO

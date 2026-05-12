@@ -1,9 +1,10 @@
 # Release Process
 
-Releases are GitHub Actions-driven. The `CI` workflow has two publishing paths:
+Releases are GitHub Actions-driven. The workflows are split by entrypoint:
 
-- Every push to `main` runs CI and E2E tests, then publishes the next RC for the current package version to npm with the `next` dist-tag.
-- Manual workflow dispatch from `main` runs CI and E2E tests, commits the stable npm package version bump to `main`, tags that commit, publishes the GitHub release, publishes to npm, and moves the `latest` dist-tag.
+- The reusable `Checks` workflow contains the shared CI and E2E jobs.
+- Every `CI` workflow push to `main` runs the shared checks, then publishes the next RC for the current package version to npm with the `next` dist-tag.
+- Manual `Release` workflow dispatch from `main` runs the shared checks, commits the stable npm package version bump to `main`, tags that commit, publishes the GitHub release, publishes to npm, and moves the `latest` dist-tag.
 
 ## RC builds
 
@@ -13,7 +14,7 @@ For example, if `package.json` is `0.0.1-rc.5`, the next successful push to `mai
 
 ## Stable releases
 
-Use the `CI` workflow's manual dispatch from the `main` branch.
+Use the `Release` workflow's manual dispatch from the `main` branch.
 
 The optional `version` input accepts a stable version such as `0.0.1` or `v0.0.1`. If omitted, the workflow uses the current package version without its prerelease suffix.
 

@@ -194,6 +194,37 @@ test('resolveOptions applies upstream defaults', () => {
   assert.equal(options.upstreams.secure.port, 443);
 });
 
+test('resolveOptions derives upstreams from services', () => {
+  const options = resolveOptions({
+    services: {
+      api: {
+        image: 'example/api:test',
+        upstream: {
+          port: 8080,
+          locations: { '/api/': { auth: { forward: false } } },
+        },
+      },
+      whoami: {
+        image: 'traefik/whoami',
+      },
+    },
+    upstreams: {
+      api: {
+        host: 'api.local.test',
+        port: 9000,
+      },
+    },
+  });
+
+  assert.deepEqual(options.services.api, { image: 'example/api:test' });
+  assert.equal(options.upstreams.api.host, 'api.local.test');
+  assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
+  assert.equal(options.upstreams.api.port, 9000);
+  assert.equal(options.upstreams.whoami.host, 'whoami');
+  assert.deepEqual(options.upstreams.whoami.locations, { '/whoami/': {} });
+  assert.equal(options.upstreams.whoami.port, 80);
+});
+
 test('resolveOptions supports OAuth2 public PKCE clients', () => {
   const options = resolveOptions({
     oauth2: {
@@ -364,6 +395,9 @@ test('resolveConfig lets named services and upstreams override base entries', (t
       api: {
         image: 'example/api:test',
         command: ['serve'],
+        upstream: {
+          locations: { '/api/': {} },
+        },
       },
     },
     upstreams: {
@@ -391,6 +425,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
     image: 'example/api:test',
     command: ['serve'],
   });
+  assert.deepEqual(Object.keys(config.upstreams.api.locations), ['/api/']);
 
   assert.equal(config.upstreams.vite.host, 'vite');
   assert.equal(config.upstreams.vite.port, 3000);

@@ -242,6 +242,11 @@ export type VisageService = {
    * Additional host-to-IP mappings rendered into the Compose service.
    */
   readonly extra_hosts?: readonly string[];
+  /**
+   * Optional upstream override for this service. Omit this to create a default
+   * upstream from the service name.
+   */
+  readonly upstream?: VisageUpstream;
 };
 
 /**

@@ -5,9 +5,6 @@ import visage from '@blakearoberts/visage';
 export default defineConfig({
   plugins: [
     react(),
-    visage({
-      services: { whoami: { image: 'traefik/whoami' } },
-      upstreams: { whoami: {} },
-    }),
+    visage({ services: { whoami: { image: 'traefik/whoami' } } }),
   ],
 });

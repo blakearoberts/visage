@@ -79,6 +79,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
         image: 'example/api:test',
         command: ['serve'],
         depends_on: ['nginx'],
+        upstream: {
+          locations: { '/api/': {} },
+        },
       },
     },
   });

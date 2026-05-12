@@ -37,16 +37,32 @@ The top-level `host` and `port` configure the local Visage origin that the brows
 visage({ host: 'localhost', port: 9001 });
 ```
 
-Services are Docker Compose services managed by the Vite dev-server lifecycle. Upstreams are proxy targets that Visage routes to, whether they are managed services or external systems.
+### Services
+
+Services are Docker Compose services managed by the Vite dev-server lifecycle.
+Additional services automatically get a matching managed upstream with the same
+name, host, and default `/{name}/` location.
 
 ```ts
 visage({
   services: { whoami: { image: 'traefik/whoami' } },
-  upstreams: { whoami: {} },
 });
 ```
 
-See `VisageOptions` for the full option surface.
+### Upstreams
+
+Upstreams are proxy targets that Visage routes to. A top-level upstream with no
+matching service entry is treated as an external upstream.
+
+```ts
+visage({
+  upstreams: {
+    api: { host: 'api.local.test', locations: { '/api/': {} } },
+  },
+});
+```
+
+See [`VisageOptions`](src/types.ts) for the full option surface.
 
 ## Expected Local URLs
 

@@ -395,7 +395,7 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   assert.equal(oauth2Proxy.client_id, 'visage');
   assert.equal(oauth2Proxy.client_secret, 'visage-secret');
   assert.equal(oauth2Proxy.cookie_secret, expectedCookieSecret);
-  assert.equal(oauth2Proxy.cookie_name, '__HOST-session');
+  assert.equal(oauth2Proxy.cookie_name, '__Host-session');
   assert.equal(oauth2Proxy.cookie_expire, '8h');
   assert.equal(oauth2Proxy.cookie_refresh, '15m');
   assert.equal(oauth2Proxy.cookie_httponly, true);

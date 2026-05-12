@@ -34,7 +34,7 @@ test('resolveOptions applies public defaults', () => {
   assert.equal(options.host, 'localhost');
   assert.equal(options.port, 9001);
   assert.deepEqual(options.cookie, {
-    cookie_name: '__HOST-session',
+    cookie_name: '__Host-session',
     cookie_expire: '8h',
     cookie_refresh: '15m',
     cookie_path: '/',
@@ -62,7 +62,7 @@ test('resolveOptions applies public defaults', () => {
 test('resolveOptions prefixes host-only cookie names', () => {
   const options = resolveOptions({ cookie: { name: 'custom' } });
 
-  assert.equal(options.cookie.cookie_name, '__HOST-custom');
+  assert.equal(options.cookie.cookie_name, '__Host-custom');
 });
 
 test('resolveOptions applies cookie overrides', () => {

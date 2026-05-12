@@ -15,7 +15,8 @@ export type VisageOptions = {
    */
   readonly port?: number;
   /**
-   * Session cookie settings normalized into OAuth2 Proxy configuration.
+   * OAuth2 Proxy session cookie settings for name, browser scope, lifetime, and
+   * refresh timing.
    */
   readonly cookie?: VisageCookiePolicy;
   /**
@@ -39,37 +40,48 @@ export type VisageOptions = {
 };
 
 /**
- * Cookie lifetime, scope, and naming policy for the OAuth2 Proxy session.
+ * Settings for the browser session cookie managed by OAuth2 Proxy.
+ *
+ * OAuth2 Proxy keeps OIDC session state behind this cookie. The cookie lifetime
+ * caps the browser session, while the refresh interval controls when OAuth2
+ * Proxy tries to renew token state with the provider.
  */
 export type VisageCookiePolicy = {
   /**
-   * Session cookie name. Host-only cookies are automatically prefixed with
-   * `__HOST-` when no domains are configured, so the default rendered
-   * host-only cookie name is `__HOST-session`.
+   * Browser session cookie base name. When no domains are configured, Visage
+   * renders a host-only name with a `__Host-` prefix, so the default rendered
+   * name is `__Host-session`.
    *
    * @defaultValue `'session'`
    */
   readonly name?: string;
   /**
-   * Maximum cookie lifetime using an OAuth2 Proxy duration string.
+   * Maximum browser session lifetime. Rendered as OAuth2 Proxy `cookie_expire`
+   * using its duration syntax. Keep this aligned with the identity provider's
+   * refresh-token lifetime to avoid sessions that can no longer be renewed
+   * silently.
    *
    * @defaultValue `'8h'`
    */
   readonly expire?: string;
   /**
-   * Interval after which OAuth2 Proxy refreshes the session using an OAuth2
-   * Proxy duration string.
+   * Session age after which OAuth2 Proxy attempts silent renewal using the
+   * stored refresh token, when one is available. Rendered as `cookie_refresh`
+   * using OAuth2 Proxy duration syntax. If upstreams validate forwarded access
+   * tokens, set this below the access-token lifetime so OAuth2 Proxy refreshes
+   * before forwarding an expired bearer token.
    *
    * @defaultValue `'15m'`
    */
   readonly refresh?: string;
   /**
-   * Cookie domains for sharing the session across local hostnames. Leave unset
-   * for a host-only cookie.
+   * Cookie domains for sharing one session across hostnames. Omit for a
+   * host-only cookie.
    */
   readonly domains?: readonly string[];
   /**
-   * Cookie path scope.
+   * Cookie path scope. Keep broad enough for every protected route that should
+   * send the session.
    *
    * @defaultValue `'/'`
    */

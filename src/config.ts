@@ -212,9 +212,9 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
       ...DefaultCookiePolicy,
       cookie_name:
         cookie.domains === undefined
-          ? cookieName.startsWith('__HOST-')
+          ? cookieName.startsWith('__Host-')
             ? cookieName
-            : `__HOST-${cookieName}`
+            : `__Host-${cookieName}`
           : cookieName,
       ...(cookie.expire === undefined ? {} : { cookie_expire: cookie.expire }),
       ...(cookie.refresh === undefined

@@ -274,7 +274,7 @@ export type VisageUpstream = {
   /**
    * URL scheme NGINX should use when proxying to this upstream.
    *
-   * @defaultValue `'http'`
+   * @defaultValue `'https'` for external upstreams; `'http'` otherwise.
    */
   readonly scheme?: 'http' | 'https';
   /**

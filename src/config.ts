@@ -35,22 +35,14 @@ type ResolvedOAuth2Client = {
   readonly public: boolean;
 };
 
-type ResolvedService = Omit<VisageService, 'upstream'>;
-
-type ResolvedUpstream = Omit<VisageUpstream, 'host' | 'port' | 'scheme'> & {
-  readonly host: string;
-  readonly port: number;
-  readonly scheme: 'http' | 'https';
-};
-
 type ResolvedVisageOptions = {
   readonly host: string;
   readonly port: number;
   readonly cookie: ResolvedCookiePolicy;
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
-  readonly services: Readonly<Record<string, ResolvedService>>;
-  readonly upstreams?: Record<string, ResolvedUpstream>;
+  readonly services: Readonly<Record<string, VisageService>>;
+  readonly upstreams?: Record<string, VisageUpstream>;
 };
 
 type ResolvedBaseIdpConfig = {
@@ -70,6 +62,14 @@ type ResolvedExternalIdpConfig = ResolvedBaseIdpConfig & {
   readonly dex?: never;
 };
 type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
+
+type ResolvedService = Omit<VisageService, 'upstream'>;
+
+type ResolvedUpstream = Omit<VisageUpstream, 'host' | 'port' | 'scheme'> & {
+  readonly host: string;
+  readonly port: number;
+  readonly scheme: 'http' | 'https';
+};
 
 export type VisageConfig = {
   readonly host: string;
@@ -197,10 +197,8 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const { host = 'localhost', port = 9001, cookie = {}, oauth2 = {} } = options;
   const cookieName = cookie.name ?? 'session';
   const publicClient = oauth2.clientSecret === null;
-  const upstreams = {
-    ...resolveServiceUpstreams(options.services),
-    ...resolveUpstreams(options.upstreams),
-  };
+  const services = resolveServicesOptions(options.services);
+  const upstreams = resolveUpstreamsOptions(services, options.upstreams);
   return {
     host,
     port,
@@ -230,82 +228,77 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
       scopes: oauth2.scopes ?? DefaultOAuth2Client.scopes,
       public: publicClient,
     },
-    services: {
-      ...Object.fromEntries(
-        Object.entries(options.services ?? {}).map(([name, service]) => [
-          name,
-          resolveService(service),
-        ]),
-      ),
-      nginx: {
-        ...BaseServiceNginx,
-        ...{
-          ...resolveService(options.services?.nginx ?? {}),
-          extra_hosts: [
-            ...BaseServiceNginx.extra_hosts,
-            ...(options.services?.nginx?.extra_hosts ?? []),
-          ],
-        },
-      },
-      oauth2_proxy: {
-        ...BaseOAuth2ProxyService,
-        ...{
-          ...resolveService(options.services?.oauth2_proxy ?? {}),
-          extra_hosts: [
-            ...BaseOAuth2ProxyService.extra_hosts,
-            ...(options.services?.oauth2_proxy?.extra_hosts ?? []),
-          ],
-        },
-      },
-    },
-    ...(Object.keys(upstreams).length === 0 ? {} : { upstreams }),
+    services,
+    upstreams,
   };
 }
 
-function resolveService(service: VisageService): ResolvedService {
-  const { upstream: _upstream, ...resolved } = service;
-  return resolved;
-}
-
-function resolveServiceUpstreams(
-  services: VisageOptions['services'] = {},
-): Record<string, ResolvedUpstream> {
-  return Object.fromEntries(
-    Object.entries(services)
-      .filter(
-        ([name]) =>
-          // Exclude base services handled separately.
-          name !== 'dex' && name !== 'nginx' && name !== 'oauth2_proxy',
-      )
-      .map(([name, service]) => [
-        name,
-        resolveUpstream(name, service.upstream ?? {}),
-      ]),
-  );
-}
-
-function resolveUpstreams(
-  upstreams: VisageOptions['upstreams'] = {},
-): Record<string, ResolvedUpstream> {
-  return Object.fromEntries(
-    Object.entries(upstreams).map(([name, upstream]) => [
-      name,
-      resolveUpstream(name, upstream),
-    ]),
-  );
-}
-
-function resolveUpstream(
-  name: string,
-  upstream: VisageUpstream,
-): ResolvedUpstream {
-  const scheme = upstream.scheme ?? 'http';
+function resolveServicesOptions(
+  services: Record<string, VisageService> | undefined = {},
+): Record<string, VisageService> {
   return {
-    ...upstream,
-    host: upstream.host ?? name,
-    locations: upstream.locations ?? { [`/${name}/`]: {} },
-    port: upstream.port ?? (scheme === 'https' ? 443 : 80),
-    scheme,
+    ...services,
+    nginx: {
+      ...BaseServiceNginx,
+      ...{
+        ...(services.nginx ?? {}),
+        extra_hosts: [
+          ...BaseServiceNginx.extra_hosts,
+          ...(services.nginx?.extra_hosts ?? []),
+        ],
+      },
+    },
+    oauth2_proxy: {
+      ...BaseOAuth2ProxyService,
+      ...{
+        ...(services.oauth2_proxy ?? {}),
+        extra_hosts: [
+          ...BaseOAuth2ProxyService.extra_hosts,
+          ...(services.oauth2_proxy?.extra_hosts ?? []),
+        ],
+      },
+    },
+  };
+}
+
+function resolveUpstreamsOptions(
+  services: Record<string, VisageService>,
+  upstreams: Record<string, VisageUpstream> = {},
+): Record<string, VisageUpstream> {
+  function resolveUpstream(
+    name: string,
+    upstream: { scheme: 'http' | 'https' } & VisageUpstream,
+  ): VisageUpstream {
+    return {
+      ...upstream,
+      scheme: upstream.scheme,
+      host: upstream.host ?? name,
+      port: upstream.port ?? (upstream.scheme === 'https' ? 443 : 80),
+      locations: upstream.locations ?? { [`/${name}/`]: {} },
+    };
+  }
+  return {
+    ...Object.fromEntries(
+      Object.entries(services)
+        .filter(
+          ([name]) =>
+            // Exclude base services handled separately.
+            name !== 'dex' && name !== 'nginx' && name !== 'oauth2_proxy',
+        )
+        .map(([name, service]) => [
+          name,
+          resolveUpstream(name, { scheme: 'http', ...service.upstream }),
+        ]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(upstreams).map(([name, upstream]) => [
+        name,
+        resolveUpstream(name, {
+          scheme: services[name] === undefined ? 'https' : 'http',
+          ...upstream,
+        }),
+      ]),
+    ),
   };
 }
 
@@ -416,7 +409,11 @@ export function resolveConfig(
               depends_on: ['dex'],
             },
           }),
-      ...options.services,
+      ...Object.fromEntries(
+        Object.entries(options.services).map(
+          ([name, { upstream: _upstream, ...service }]) => [name, service],
+        ),
+      ),
     },
     upstreams: Object.fromEntries(
       Object.entries(upstreams).map(([name, upstream]) => {

@@ -195,7 +195,9 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(api, /proxy_set_header Host api;/);
   assert.match(api, /proxy_set_header X-Service api;/);
   assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
-  assert.match(api, /proxy_pass http:\/\/api;/);
+  assert.match(api, /proxy_ssl_server_name on;/);
+  assert.match(api, /proxy_ssl_name api;/);
+  assert.match(api, /proxy_pass https:\/\/api;/);
 
   const publicLocation = locationBlock(nginx, '/public/');
   assert.doesNotMatch(publicLocation, /auth_request/);

@@ -185,8 +185,8 @@ test('resolveOptions applies upstream defaults', () => {
 
   assert.equal(options.upstreams.api.host, 'api');
   assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
-  assert.equal(options.upstreams.api.scheme, 'http');
-  assert.equal(options.upstreams.api.port, 80);
+  assert.equal(options.upstreams.api.scheme, 'https');
+  assert.equal(options.upstreams.api.port, 443);
   assert.equal(options.upstreams.secure.host, 'secure');
   assert.deepEqual(options.upstreams.secure.locations, { '/secure/': {} });
   assert.equal(options.upstreams.secure.scheme, 'https');
@@ -218,18 +218,27 @@ test('resolveOptions derives upstreams from services', () => {
         host: 'api.local.test',
         port: 9000,
       },
-      external: {
-        scheme: 'https',
+      external: {},
+      externalHttp: {
+        scheme: 'http',
       },
     },
   });
 
-  assert.deepEqual(options.services.api, { image: 'example/api:test' });
+  assert.deepEqual(options.services.api, {
+    image: 'example/api:test',
+    upstream: {
+      port: 8080,
+      locations: { '/api/': { auth: { forward: false } } },
+    },
+  });
   assert.equal(options.upstreams.api.host, 'api.local.test');
   assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
+  assert.equal(options.upstreams.api.scheme, 'http');
   assert.equal(options.upstreams.api.port, 9000);
   assert.equal(options.upstreams.whoami.host, 'whoami');
   assert.deepEqual(options.upstreams.whoami.locations, { '/whoami/': {} });
+  assert.equal(options.upstreams.whoami.scheme, 'http');
   assert.equal(options.upstreams.whoami.port, 80);
   assert.equal(options.upstreams.secure.host, 'secure');
   assert.equal(options.upstreams.secure.scheme, 'https');
@@ -237,6 +246,9 @@ test('resolveOptions derives upstreams from services', () => {
   assert.equal(options.upstreams.external.host, 'external');
   assert.equal(options.upstreams.external.scheme, 'https');
   assert.equal(options.upstreams.external.port, 443);
+  assert.equal(options.upstreams.externalHttp.host, 'externalHttp');
+  assert.equal(options.upstreams.externalHttp.scheme, 'http');
+  assert.equal(options.upstreams.externalHttp.port, 80);
 });
 
 test('resolveOptions supports OAuth2 public PKCE clients', () => {
@@ -375,6 +387,8 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);
   assert.equal(config.upstreams.dex.scheme, 'http');
+  assert.equal(config.upstreams.oauth2_proxy.port, 4180);
+  assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
     enabled: true,
@@ -399,8 +413,8 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     config.upstreams.metrics.locations['/metrics/'].headers.Host,
     'metrics',
   );
-  assert.equal(config.upstreams.metrics.scheme, 'http');
-  assert.equal(config.upstreams.metrics.port, 80);
+  assert.equal(config.upstreams.metrics.scheme, 'https');
+  assert.equal(config.upstreams.metrics.port, 443);
 });
 
 test('resolveConfig lets named services and upstreams override base entries', (t) => {

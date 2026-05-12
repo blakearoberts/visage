@@ -239,10 +239,25 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     },
     services: {
       ...options.services,
-      nginx: { ...BaseServiceNginx, ...options.services?.['nginx'] },
+      nginx: {
+        ...BaseServiceNginx,
+        ...{
+          ...options.services?.nginx,
+          extra_hosts: [
+            ...BaseServiceNginx.extra_hosts,
+            ...(options.services?.nginx?.extra_hosts ?? []),
+          ],
+        },
+      },
       oauth2_proxy: {
         ...BaseOAuth2ProxyService,
-        ...options.services?.['oauth2_proxy'],
+        ...{
+          ...options.services?.oauth2_proxy,
+          extra_hosts: [
+            ...BaseOAuth2ProxyService.extra_hosts,
+            ...(options.services?.oauth2_proxy?.extra_hosts ?? []),
+          ],
+        },
       },
     },
     ...(options.upstreams === undefined

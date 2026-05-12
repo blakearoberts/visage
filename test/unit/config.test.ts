@@ -267,17 +267,25 @@ test('resolveConfig preserves managed service defaults for partial service overr
       issuer: 'http://idp.localhost:5557/idp',
     },
     services: {
+      nginx: {
+        extra_hosts: ['idp.localhost:host-gateway'],
+      },
       oauth2_proxy: {
         extra_hosts: ['idp.localhost:host-gateway'],
       },
     },
   });
 
+  assert.deepEqual(config.services.nginx.extra_hosts, [
+    'host.docker.internal:host-gateway',
+    'idp.localhost:host-gateway',
+  ]);
   assert.deepEqual(config.services.oauth2_proxy.command, [
     '--config',
     '/etc/oauth2-proxy/config.yml',
   ]);
   assert.deepEqual(config.services.oauth2_proxy.extra_hosts, [
+    'host.docker.internal:host-gateway',
     'idp.localhost:host-gateway',
   ]);
 });

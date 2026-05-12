@@ -39,7 +39,8 @@ type ResolvedService = VisageService & {
   readonly image: string;
 };
 
-type ResolvedUpstream = VisageUpstream & {
+type ResolvedUpstream = Omit<VisageUpstream, 'port' | 'scheme'> & {
+  readonly port: number;
   readonly scheme: 'http' | 'https';
 };
 
@@ -259,7 +260,11 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
           upstreams: Object.fromEntries(
             Object.entries(options.upstreams).map(([name, upstream]) => [
               name,
-              { ...upstream, scheme: upstream.scheme ?? 'http' },
+              {
+                ...upstream,
+                port: upstream.port ?? 80,
+                scheme: upstream.scheme ?? 'http',
+              },
             ]),
           ),
         }),

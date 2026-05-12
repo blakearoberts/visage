@@ -20,7 +20,7 @@ export default defineConfig({
         oauth2_proxy: { extra_hosts: ['idp.localhost:host-gateway'] },
       },
       upstreams: {
-        whoami: { host: 'whoami', port: 80, locations: { '/whoami/': {} } },
+        whoami: { host: 'whoami', locations: { '/whoami/': {} } },
       },
     }),
   ],

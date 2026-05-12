@@ -178,7 +178,6 @@ test('resolveOptions applies upstream scheme defaults', () => {
     upstreams: {
       api: {
         host: 'api',
-        port: 8080,
       },
       secure: {
         host: 'secure',
@@ -189,7 +188,9 @@ test('resolveOptions applies upstream scheme defaults', () => {
   });
 
   assert.equal(options.upstreams.api.scheme, 'http');
+  assert.equal(options.upstreams.api.port, 80);
   assert.equal(options.upstreams.secure.scheme, 'https');
+  assert.equal(options.upstreams.secure.port, 443);
 });
 
 test('resolveOptions supports OAuth2 public PKCE clients', () => {
@@ -319,7 +320,6 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
       },
       metrics: {
         host: 'metrics',
-        port: 9090,
       },
     },
   });
@@ -347,6 +347,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   });
   assert.deepEqual(config.upstreams.metrics.locations, {});
   assert.equal(config.upstreams.metrics.scheme, 'http');
+  assert.equal(config.upstreams.metrics.port, 80);
 });
 
 test('resolveConfig lets named services and upstreams override base entries', (t) => {

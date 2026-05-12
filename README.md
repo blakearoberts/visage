@@ -50,7 +50,6 @@ visage({
   upstreams: {
     whoami: {
       host: 'whoami',
-      port: 80,
       locations: { '/whoami/': {} },
     },
   },

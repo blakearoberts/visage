@@ -46,6 +46,11 @@ function locationBlock(rendered, path) {
   return remaining.slice(0, end);
 }
 
+function locationCount(rendered, path) {
+  const pattern = new RegExp(`^\\s*location ${path} \\{`, 'gm');
+  return rendered.match(pattern)?.length ?? 0;
+}
+
 function parseKeyValueConfig(contents) {
   return Object.fromEntries(
     contents
@@ -237,6 +242,39 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api\.example\.test;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
+});
+
+test('writeNginxConfig does not duplicate root locations for root external IdP issuers', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      kind: 'external',
+      issuer: 'https://idp.example.test',
+      authorization: '/oauth2/v2/authorize?prompt=login',
+      token: '/oauth2/v2/token',
+      jwks: '/oauth2/v2/jwks',
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  assert.equal(locationCount(nginx, '/'), 1);
+  assert.doesNotMatch(nginx, /proxy_pass https:\/\/idp;/);
+});
+
+test('writeNginxConfig does not render external IdP upstream locations', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      kind: 'external',
+      issuer: 'https://idp.example.test/idp',
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  assert.equal(locationCount(nginx, '/idp'), 0);
+  assert.doesNotMatch(nginx, /proxy_pass https:\/\/idp;/);
 });
 
 test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) => {

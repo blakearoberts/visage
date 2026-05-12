@@ -200,12 +200,7 @@ const DefaultProxyPolicy = {
 } as const satisfies VisageProxyPolicy;
 
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
-  const {
-    host = 'local.vite.app',
-    port = 9001,
-    cookie = {},
-    oauth2 = {},
-  } = options;
+  const { host = 'localhost', port = 9001, cookie = {}, oauth2 = {} } = options;
   const cookieName = cookie.name ?? 'session';
   const publicClient = oauth2.clientSecret === null;
   return {
@@ -343,7 +338,6 @@ function resolveExternalIdpUpstream(
     host: issuer.hostname,
     scheme: issuer.protocol === 'https:' ? 'https' : 'http',
     port: Number(issuer.port) || (issuer.protocol === 'https:' ? 443 : 80),
-    locations: { [issuer.pathname]: { auth: { enabled: false } } },
   };
 }
 

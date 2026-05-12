@@ -6,10 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     visage({
-      host: 'localhost',
       port: 9002,
       idp: { kind: 'external', issuer: 'http://idp.localhost:5557/idp' },
-      oauth2: { clientSecret: null },
+      oauth2: { clientSecret: null }, // PKCE
       services: {
         whoami: { image: 'traefik/whoami' },
 

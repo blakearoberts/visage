@@ -5,7 +5,7 @@ export type VisageOptions = {
   /**
    * Browser-facing hostname for the local Visage HTTPS origin.
    *
-   * @defaultValue `'local.vite.app'`
+   * @defaultValue `'localhost'`
    */
   readonly host?: string;
   /**

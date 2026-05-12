@@ -6,14 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     visage({
-      host: 'localhost',
       services: { whoami: { image: 'traefik/whoami' } },
       upstreams: {
-        whoami: {
-          host: 'whoami',
-          port: 80,
-          locations: { '/whoami/': {} },
-        },
+        whoami: { host: 'whoami', port: 80, locations: { '/whoami/': {} } },
       },
     }),
   ],

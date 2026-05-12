@@ -14,7 +14,6 @@ test('ensureCerts prepares mkcert CA before parallel app e2e tests', async ({}, 
   try {
     const certs = testInfo.outputPath('certs');
     await ensureCerts({
-      bin: testInfo.outputPath('bin'),
       certs,
       hostname: 'localhost',
     });

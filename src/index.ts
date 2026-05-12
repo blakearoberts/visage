@@ -46,7 +46,6 @@ export function visage(options: VisageOptions = {}): Plugin {
       async function startVisage(port: number) {
         const config = resolveConfig(resolvedOptions, server.config, port);
         await ensureCerts({
-          bin: join(config.cache, 'bin'),
           certs: join(config.cache, config.files.certs[0]),
           hostname: config.host,
         });

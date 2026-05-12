@@ -97,15 +97,17 @@ flowchart LR
 
 ### mkcert
 
-Visage downloads [`mkcert`](https://github.com/FiloSottile/mkcert) from `dl.filippo.io` when the Vite dev server starts. Visage uses it to install a local certificate authority and generate HTTPS certificates for the local proxy.
+Visage downloads [`mkcert`](https://github.com/FiloSottile/mkcert) from `dl.filippo.io` into `$XDG_CACHE_HOME/visage/bin/mkcert-<platform>-<arch>` when the Vite dev server starts. Visage uses it to install a local certificate authority and generate HTTPS certificates for the local proxy.
 
 ### Docker Images
 
 Visage pulls these as needed based on configuration:
 
-- [NGINX](https://nginx.org/): [`nginx:1.30.0-alpine`](https://hub.docker.com/_/nginx).
-- [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/): [`quay.io/oauth2-proxy/oauth2-proxy:v7.15.2`](https://quay.io/repository/oauth2-proxy/oauth2-proxy).
-- [Dex](https://dexidp.io/): [`ghcr.io/dexidp/dex:v2.45.1`](https://github.com/dexidp/dex/pkgs/container/dex).
+| Service                                                      | Image                                                                                               | Source                    |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------- |
+| [NGINX](https://nginx.org/)                                  | [`nginx:1.30.0-alpine`](https://hub.docker.com/_/nginx)                                             | Docker Hub                |
+| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy:v7.15.2`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | Quay                      |
+| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex:v2.45.1`](https://github.com/dexidp/dex/pkgs/container/dex)                    | GitHub Container Registry |
 
 ## Security Notes
 

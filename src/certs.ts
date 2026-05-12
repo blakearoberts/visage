@@ -6,21 +6,16 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 type Options = {
-  bin: string;
   certs: string;
   hostname: string;
 };
 
-export async function ensureCerts({
-  bin,
-  certs,
-  hostname,
-}: Options): Promise<void> {
+export async function ensureCerts({ certs, hostname }: Options): Promise<void> {
   const cert = join(certs, 'tls.crt');
   const key = join(certs, 'tls.key');
   if (existsSync(cert) && existsSync(key)) return;
 
-  const mkcert = await ensureMkCert(bin);
+  const mkcert = await ensureMkCert();
   const env = {
     ...process.env,
     CAROOT: join(
@@ -56,8 +51,12 @@ export async function ensureCerts({
   }
 }
 
-async function ensureMkCert(bin: string): Promise<string> {
-  const file = join(bin, 'mkcert');
+async function ensureMkCert(): Promise<string> {
+  const bin = join(
+    process.env.XDG_CACHE_HOME || join(homedir(), '.cache'),
+    'visage/bin',
+  );
+  const file = join(bin, `mkcert-${process.platform}-${process.arch}`);
   if (existsSync(file)) return file;
 
   mkdirSync(bin, { recursive: true });

@@ -141,11 +141,7 @@ const BaseOauth2ProxyUpstream = {
     '/oauth2/': {
       auth: { enabled: false },
       headers: {
-        Cookie: '$http_cookie',
-        Host: '$host',
-        'X-Real-IP': '$remote_addr',
-        'X-Forwarded-For': '$proxy_add_x_forwarded_for',
-        'X-Forwarded-Proto': '$scheme',
+        Cookie: '$http_cookie', // Forward session cookie.
         'X-Auth-Request-Redirect': '$request_uri',
       },
     },
@@ -423,21 +419,29 @@ export function resolveConfig(
       ...options.services,
     },
     upstreams: Object.fromEntries(
-      Object.entries(upstreams).map(([name, upstream]) => [
-        name,
-        {
-          ...upstream,
-          locations: Object.fromEntries(
-            Object.entries(upstream.locations ?? {}).map(([path, policy]) => [
-              path,
-              {
-                auth: { ...DefaultProxyPolicy.auth, ...policy.auth },
-                headers: { ...DefaultProxyPolicy.headers, ...policy.headers },
-              },
-            ]),
-          ),
-        },
-      ]),
+      Object.entries(upstreams).map(([name, upstream]) => {
+        const external = options.services[name] === undefined;
+        return [
+          name,
+          {
+            ...upstream,
+            locations: Object.fromEntries(
+              Object.entries(upstream.locations ?? {}).map(([path, policy]) => [
+                path,
+                {
+                  auth: { ...DefaultProxyPolicy.auth, ...policy.auth },
+                  headers: {
+                    ...(external
+                      ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
+                      : DefaultProxyPolicy.headers),
+                    ...policy.headers,
+                  },
+                },
+              ]),
+            ),
+          },
+        ];
+      }),
     ),
   };
 }

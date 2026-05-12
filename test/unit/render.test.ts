@@ -192,6 +192,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     /error_page 401 =302 \/oauth2\/start\?rd=\$scheme:\/\/\$http_host\$request_uri;/,
   );
   assert.match(api, /proxy_set_header Cookie "";/);
+  assert.match(api, /proxy_set_header Host api;/);
   assert.match(api, /proxy_set_header X-Service api;/);
   assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
   assert.match(api, /proxy_pass http:\/\/api;/);
@@ -235,6 +236,7 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
 
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(api, /proxy_set_header Host api\.example\.test;/);
   assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api\.example\.test;/);

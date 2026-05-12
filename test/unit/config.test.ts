@@ -395,6 +395,10 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     forward: true,
     redirect: false,
   });
+  assert.equal(
+    config.upstreams.metrics.locations['/metrics/'].headers.Host,
+    'metrics',
+  );
   assert.equal(config.upstreams.metrics.scheme, 'http');
   assert.equal(config.upstreams.metrics.port, 80);
 });
@@ -410,6 +414,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
         image: 'example/api:test',
         command: ['serve'],
         upstream: {
+          host: 'backend',
           locations: { '/api/': {} },
         },
       },
@@ -439,7 +444,9 @@ test('resolveConfig lets named services and upstreams override base entries', (t
     image: 'example/api:test',
     command: ['serve'],
   });
+  assert.equal(config.upstreams.api.host, 'backend');
   assert.deepEqual(Object.keys(config.upstreams.api.locations), ['/api/']);
+  assert.equal(config.upstreams.api.locations['/api/'].headers.Host, '$host');
 
   assert.equal(config.upstreams.vite.host, 'vite');
   assert.equal(config.upstreams.vite.port, 3000);
@@ -450,6 +457,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
     redirect: true,
   });
   assert.equal(config.upstreams.vite.locations['/app/'].headers.Cookie, '""');
+  assert.equal(config.upstreams.vite.locations['/app/'].headers.Host, 'vite');
   assert.equal(
     config.upstreams.vite.locations['/app/'].headers.Upgrade,
     '$http_upgrade',

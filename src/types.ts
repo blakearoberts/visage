@@ -323,7 +323,8 @@ export type VisageProxyPolicy = {
    * Request headers to set when proxying to the upstream. Values may include
    * NGINX variables. These are merged with Visage's default proxy headers:
    * `Cookie`, `Host`, `X-Real-IP`, `X-Forwarded-For`, and
-   * `X-Forwarded-Proto`.
+   * `X-Forwarded-Proto`. `Host` defaults to the upstream host for top-level
+   * upstreams with no matching service, and to `$host` otherwise.
    */
   readonly headers?: { readonly [key: string]: string };
 };

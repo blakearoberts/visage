@@ -173,22 +173,21 @@ test('resolveOptions applies IdP overrides', () => {
   });
 });
 
-test('resolveOptions applies upstream scheme defaults', () => {
+test('resolveOptions applies upstream defaults', () => {
   const options = resolveOptions({
     upstreams: {
-      api: {
-        host: 'api',
-      },
+      api: {},
       secure: {
-        host: 'secure',
         scheme: 'https',
         port: 443,
       },
     },
   });
 
+  assert.equal(options.upstreams.api.host, 'api');
   assert.equal(options.upstreams.api.scheme, 'http');
   assert.equal(options.upstreams.api.port, 80);
+  assert.equal(options.upstreams.secure.host, 'secure');
   assert.equal(options.upstreams.secure.scheme, 'https');
   assert.equal(options.upstreams.secure.port, 443);
 });
@@ -318,9 +317,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
           },
         },
       },
-      metrics: {
-        host: 'metrics',
-      },
+      metrics: {},
     },
   });
 
@@ -346,6 +343,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     'X-Service': 'api',
   });
   assert.deepEqual(config.upstreams.metrics.locations, {});
+  assert.equal(config.upstreams.metrics.host, 'metrics');
   assert.equal(config.upstreams.metrics.scheme, 'http');
   assert.equal(config.upstreams.metrics.port, 80);
 });

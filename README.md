@@ -34,10 +34,7 @@ Visage is configured through `visage(options?)` in `vite.config.ts`.
 The top-level `host` and `port` configure the local Visage origin that the browser visits:
 
 ```ts
-visage({
-  host: 'localhost',
-  port: 9001,
-});
+visage({ host: 'localhost', port: 9001 });
 ```
 
 Services are Docker Compose services managed by the Vite dev-server lifecycle. Upstreams are proxy targets that Visage routes to, whether they are managed services or external systems.
@@ -48,10 +45,7 @@ visage({
     whoami: { image: 'traefik/whoami' },
   },
   upstreams: {
-    whoami: {
-      host: 'whoami',
-      locations: { '/whoami/': {} },
-    },
+    whoami: { locations: { '/whoami/': {} } },
   },
 });
 ```
@@ -123,6 +117,7 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 
 ## TO-DO
 
+- [ ] Support SSR injection of identity into HTML responses as script tag elements.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

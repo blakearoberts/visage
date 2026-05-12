@@ -10,18 +10,16 @@ export default defineConfig({
       idp: { issuer: 'http://idp.localhost:5557/idp' },
       oauth2: { clientSecret: null }, // PKCE
       services: {
-        whoami: { image: 'traefik/whoami' },
-
         // Note: the following extra_hosts overrides are only required for this
         // example because the "external" IdP is a container inside docker where
         // nginx and oauth2_proxy need to reach it without hitting their own
         // loopback interfaces.
         nginx: { extra_hosts: ['idp.localhost:host-gateway'] },
         oauth2_proxy: { extra_hosts: ['idp.localhost:host-gateway'] },
+
+        whoami: { image: 'traefik/whoami' },
       },
-      upstreams: {
-        whoami: { host: 'whoami', locations: { '/whoami/': {} } },
-      },
+      upstreams: { whoami: { locations: { '/whoami/': {} } } },
     }),
   ],
 });

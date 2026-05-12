@@ -7,9 +7,7 @@ export default defineConfig({
     react(),
     visage({
       services: { whoami: { image: 'traefik/whoami' } },
-      upstreams: {
-        whoami: { host: 'whoami', locations: { '/whoami/': {} } },
-      },
+      upstreams: { whoami: { locations: { '/whoami/': {} } } },
     }),
   ],
 });

@@ -154,7 +154,6 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   const config = resolvedConfig(t, {
     upstreams: {
       api: {
-        host: 'api',
         port: 8080,
         locations: {
           '/api/': {

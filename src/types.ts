@@ -250,8 +250,10 @@ export type VisageService = {
 export type VisageUpstream = {
   /**
    * Hostname or Compose service name NGINX should proxy to.
+   *
+   * @defaultValue The upstream name.
    */
-  readonly host: string;
+  readonly host?: string;
   /**
    * URL scheme NGINX should use when proxying to this upstream.
    *

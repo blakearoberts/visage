@@ -39,7 +39,8 @@ type ResolvedService = VisageService & {
   readonly image: string;
 };
 
-type ResolvedUpstream = Omit<VisageUpstream, 'port' | 'scheme'> & {
+type ResolvedUpstream = Omit<VisageUpstream, 'host' | 'port' | 'scheme'> & {
+  readonly host: string;
   readonly port: number;
   readonly scheme: 'http' | 'https';
 };
@@ -262,6 +263,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
               name,
               {
                 ...upstream,
+                host: upstream.host ?? name,
                 port: upstream.port ?? 80,
                 scheme: upstream.scheme ?? 'http',
               },

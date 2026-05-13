@@ -382,6 +382,10 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
               Host: 'api.internal',
               'X-Service': 'api',
             },
+            directives: {
+              proxy_buffer_size: '16k',
+              proxy_hide_header: ['X-A', 'X-B'],
+            },
           },
         },
       },
@@ -412,11 +416,18 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     'X-Forwarded-Proto': '$scheme',
     'X-Service': 'api',
   });
+  assert.deepEqual(config.upstreams.api.locations['/api/'].directives, {
+    proxy_buffer_size: ['16k'],
+    proxy_hide_header: ['X-A', 'X-B'],
+  });
   assert.equal(config.upstreams.metrics.host, 'metrics');
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].auth, {
     enabled: true,
     forward: true,
     redirect: false,
+  });
+  assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
+    proxy_buffer_size: ['8k'],
   });
   assert.equal(
     config.upstreams.metrics.locations['/metrics/'].headers?.Host,

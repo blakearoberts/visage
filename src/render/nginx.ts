@@ -51,6 +51,11 @@ http {
             <%_ for (const [header, value] of Object.entries(location.headers ?? {})) { %>
             proxy_set_header <%~ header %> <%~ value %>;
             <%_ } %>
+            <%_ for (const [directive, values] of Object.entries(location.directives ?? {})) { %>
+                <%_ for (const value of values) { %>
+            <%~ directive %> <%~ value %>;
+                <%_ } %>
+            <%_ } %>
             <%_ if (location.auth?.enabled && location.auth.forward) { %>
             proxy_set_header Authorization "Bearer $access_token";
             <%_ } %>

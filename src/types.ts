@@ -331,4 +331,12 @@ export type VisageProxyPolicy = {
    * upstreams with no matching service, and to `$host` otherwise.
    */
   readonly headers?: { readonly [key: string]: string };
+  /**
+   * Additional NGINX location directives. Values may include NGINX variables.
+   * String values render once; array values render once per item. These are
+   * merged with Visage's default directives such as `proxy_buffer_size`.
+   */
+  readonly directives?: {
+    readonly [name: string]: string | readonly string[];
+  };
 };

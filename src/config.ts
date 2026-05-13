@@ -74,7 +74,8 @@ type ResolvedUpstream = {
 
 type ResolvedProxyPolicy = {
   readonly auth: Required<VisageProxyPolicy['auth']>;
-  readonly headers: VisageProxyPolicy['headers'];
+  readonly headers: Readonly<Record<string, string>>;
+  readonly directives: Readonly<Record<string, readonly string[]>>;
 };
 
 type ResolvedConfigUpstream = Omit<ResolvedUpstream, 'locations'> & {
@@ -201,6 +202,9 @@ const DefaultProxyPolicy = {
     'X-Real-IP': '$remote_addr',
     'X-Forwarded-For': '$proxy_add_x_forwarded_for',
     'X-Forwarded-Proto': '$scheme',
+  },
+  directives: {
+    proxy_buffer_size: ['8k'],
   },
 } as const satisfies VisageProxyPolicy;
 
@@ -337,6 +341,17 @@ function resolveIdpOption(
   };
 }
 
+function resolveDirectives(
+  directives: VisageProxyPolicy['directives'] = {},
+): Record<string, readonly string[]> {
+  return Object.fromEntries(
+    Object.entries(directives).map(([name, value]) => [
+      name,
+      Array.isArray(value) ? value : [value],
+    ]),
+  );
+}
+
 function resolveIdpConfig({
   host,
   port,
@@ -447,6 +462,10 @@ export function resolveConfig(
                       ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
                       : DefaultProxyPolicy.headers),
                     ...policy.headers,
+                  },
+                  directives: {
+                    ...DefaultProxyPolicy.directives,
+                    ...resolveDirectives(policy.directives),
                   },
                 },
               ]),

@@ -184,6 +184,10 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
             headers: {
               'X-Service': 'api',
             },
+            directives: {
+              proxy_buffer_size: '16k',
+              proxy_hide_header: ['X-A', 'X-B'],
+            },
           },
           '/public/': {
             auth: { enabled: false },
@@ -222,6 +226,10 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(api, /proxy_set_header Cookie "";/);
   assert.match(api, /proxy_set_header Host api;/);
   assert.match(api, /proxy_set_header X-Service api;/);
+  assert.match(api, /proxy_buffer_size 16k;/);
+  assert.doesNotMatch(api, /proxy_buffer_size 8k;/);
+  assert.match(api, /proxy_hide_header X-A;/);
+  assert.match(api, /proxy_hide_header X-B;/);
   assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api;/);
@@ -231,6 +239,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.doesNotMatch(publicLocation, /auth_request/);
   assert.doesNotMatch(publicLocation, /Authorization/);
   assert.match(publicLocation, /proxy_set_header Host public\.internal;/);
+  assert.match(publicLocation, /proxy_buffer_size 8k;/);
 });
 
 test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
@@ -247,6 +256,7 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   assert.doesNotMatch(oauth2Proxy, /auth_request/);
   assert.doesNotMatch(oauth2Proxy, /Authorization/);
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2Proxy, /proxy_buffer_size 8k;/);
 });
 
 test('writeNginxConfig preserves browser host for the built-in Vite upstream', (t) => {

@@ -8,7 +8,12 @@ const template = `
 events {}
 
 http {
-    log_format access_log_format '[$time_iso8601] $status | $request_method | $request_time | $auth_user | $request_uri | $proxy_host';
+    map $time_iso8601 $access_log_time {
+        "~^[0-9]{4}-[0-9]{2}-[0-9]{2}T([0-9]{2}:[0-9]{2}:[0-9]{2})" $1;
+        default $time_iso8601;
+    }
+
+    log_format access_log_format '$access_log_time | $status | $request_method $request_uri | $auth_email | $proxy_host';
     resolver 127.0.0.11 ipv6=off;
 
     # Allow WebSockets (Vite HMR).
@@ -36,7 +41,7 @@ http {
         ssl_certificate_key <%~ it.ssl.key %>;
 
         access_log /var/log/nginx/access.log access_log_format;
-        set $auth_user "-";
+        set $auth_email "";
 
         # Redirect accidental plaintext HTTP requests sent to the HTTPS port.
         error_page 497 =301 https://$http_host$request_uri;
@@ -47,7 +52,7 @@ http {
             <%_ if (location.auth?.enabled) { %>
             auth_request      /oauth2/auth;
             auth_request_set  $access_token $upstream_http_x_auth_request_access_token;
-            auth_request_set  $auth_user $upstream_http_x_auth_request_user;
+            auth_request_set  $auth_email $upstream_http_x_auth_request_email;
 
             <%_ if (location.auth.redirect) { %>
             error_page 401 =302 /oauth2/start?rd=$scheme://$http_host$request_uri;

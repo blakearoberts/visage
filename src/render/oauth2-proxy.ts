@@ -4,6 +4,15 @@ import { join } from 'node:path';
 
 import type { VisageConfig } from '../config';
 
+const LogTS = '{{slice .Timestamp 11 19}}';
+const LogReqURI =
+  '{{printf "%.*s" (len (slice .RequestURI 2)) (slice .RequestURI 1)}}';
+const LogFormats = {
+  standard_logging_format: `${LogTS} | [{{.File}}] {{.Message}}`,
+  request_logging_format: `${LogTS} | {{.StatusCode}} | {{.RequestMethod}} ${LogReqURI} | {{.Username}} | {{.Upstream}}`,
+  auth_logging_format: `${LogTS} | {{.Status}} | {{.Username}} | {{.Message}}`,
+};
+
 export function writeOauth2ProxyConfig(config: VisageConfig): void {
   const file = join(config.cache, config.files.oauth2Proxy[0]);
   const render = renderOauth2ProxyConfig(config);
@@ -47,8 +56,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     email_domains: ['*'],
     scope: config.oauth2.scopes.join(' '),
     upstreams: ['static://202'],
-    request_logging_format:
-      '[{{.Timestamp}}] {{.StatusCode}} | {{.RequestMethod}} | {{.RequestDuration}} | {{.Username}} | {{.RequestURI}} | {{.Upstream}}',
+    ...LogFormats,
     reverse_proxy: true,
     set_xauthrequest: true,
     pass_access_token: true,

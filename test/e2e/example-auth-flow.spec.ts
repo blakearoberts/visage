@@ -26,7 +26,7 @@ let vite: ChildProcessWithoutNullStreams | undefined;
 let viteOutput = '';
 
 test.describe('Visage authenticated upstream flow', () => {
-  test.setTimeout(90_000);
+  test.setTimeout(60_000);
 
   test.beforeAll(async ({}, testInfo) => {
     appComposeProject = projectName('managed_service', testInfo.workerIndex);
@@ -83,7 +83,7 @@ test.describe('Visage authenticated upstream flow', () => {
     await expect(
       output,
       'Expected the rendered response body to contain the authenticated upstream whoami response.',
-    ).toContainText('Hostname', { timeout: 30_000 });
+    ).toContainText('Hostname', { timeout: 10_000 });
   });
 });
 
@@ -118,7 +118,10 @@ async function waitForApp(): Promise<void> {
 
 async function completeDexLoginIfPresented(page: Page): Promise<void> {
   if (
-    await isVisible(page.getByRole('heading', { name: 'Hello from Visage' }))
+    await isVisible(
+      page.getByRole('heading', { name: 'Hello from Visage' }),
+      1_000,
+    )
   ) {
     return;
   }
@@ -161,7 +164,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
   await submitLoginForm(submitButton, passwordInput);
 
   const grantAccessButton = page.getByRole('button', { name: 'Grant Access' });
-  if (await isVisible(grantAccessButton, 10_000)) {
+  if (await isVisible(grantAccessButton, 2_000)) {
     await grantAccessButton.click();
   }
 

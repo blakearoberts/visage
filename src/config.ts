@@ -42,7 +42,7 @@ type ResolvedVisageOptions = {
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
   readonly services: Readonly<Record<string, VisageService>>;
-  readonly upstreams?: Record<string, VisageUpstream>;
+  readonly upstreams: Record<string, VisageUpstream>;
 };
 
 type ResolvedBaseIdpConfig = {
@@ -65,10 +65,20 @@ type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
 
 type ResolvedService = Omit<VisageService, 'upstream'>;
 
-type ResolvedUpstream = Omit<VisageUpstream, 'host' | 'port' | 'scheme'> & {
+type ResolvedUpstream = {
+  readonly scheme: 'http' | 'https';
   readonly host: string;
   readonly port: number;
-  readonly scheme: 'http' | 'https';
+  readonly locations: Readonly<Record<string, VisageProxyPolicy>>;
+};
+
+type ResolvedProxyPolicy = {
+  readonly auth: Required<VisageProxyPolicy['auth']>;
+  readonly headers: VisageProxyPolicy['headers'];
+};
+
+type ResolvedConfigUpstream = Omit<ResolvedUpstream, 'locations'> & {
+  readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
 };
 
 export type VisageConfig = {
@@ -89,7 +99,7 @@ export type VisageConfig = {
   };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
-  readonly upstreams: Readonly<Record<string, ResolvedUpstream>>;
+  readonly upstreams: Readonly<Record<string, ResolvedConfigUpstream>>;
 };
 
 const BaseFiles = {
@@ -366,6 +376,7 @@ function resolveExternalIdpUpstream(
   const issuer = new URL(idp.issuer);
   return {
     host: issuer.hostname,
+    locations: {},
     scheme: issuer.protocol === 'https:' ? 'https' : 'http',
     port: Number(issuer.port) || (issuer.protocol === 'https:' ? 443 : 80),
   };
@@ -418,7 +429,7 @@ export function resolveConfig(
     upstreams: Object.fromEntries(
       Object.entries(upstreams).map(([name, upstream]) => {
         const external =
-          options.upstreams?.[name] !== undefined &&
+          options.upstreams[name] !== undefined &&
           options.services[name] === undefined;
         return [
           name,

@@ -121,7 +121,10 @@ async function waitForApp(): Promise<void> {
 
 async function completeDexLoginIfPresented(page: Page): Promise<void> {
   if (
-    await isVisible(page.getByRole('heading', { name: 'Hello from Visage' }))
+    await isVisible(
+      page.getByRole('heading', { name: 'Hello from Visage' }),
+      1_000,
+    )
   ) {
     return;
   }
@@ -161,7 +164,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
   await submitLoginForm(submitButton, passwordInput);
 
   const grantAccessButton = page.getByRole('button', { name: 'Grant Access' });
-  if (await isVisible(grantAccessButton, 10_000)) {
+  if (await isVisible(grantAccessButton, 2_000)) {
     await grantAccessButton.click();
   }
 

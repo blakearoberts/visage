@@ -3,18 +3,27 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
+import type { ResolvedConfig } from 'vite';
 
 import { compareSync } from 'bcryptjs';
 import { parse } from 'yaml';
 
-import { resolveConfig, resolveOptions } from '../../src/config.ts';
+import {
+  resolveConfig,
+  resolveOptions,
+  type VisageConfig,
+} from '../../src/config.ts';
 import { writeComposeConfig } from '../../src/render/compose.ts';
 import { writeDexConfig } from '../../src/render/dex.ts';
 import { writeNginxConfig } from '../../src/render/nginx.ts';
 import { writeOauth2ProxyConfig } from '../../src/render/oauth2-proxy.ts';
+import type { VisageOptions } from '../../src/types.ts';
 
-function resolvedConfig(t, options = {}) {
+function resolvedConfig(
+  t: TestContext,
+  options: VisageOptions = {},
+): VisageConfig {
   const cacheDir = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
 
@@ -24,18 +33,18 @@ function resolvedConfig(t, options = {}) {
       port: 9443,
       ...options,
     }),
-    { cacheDir },
+    { cacheDir } as ResolvedConfig,
     6173,
   );
   mkdirSync(config.cache, { recursive: true });
   return config;
 }
 
-function readGenerated(config, file) {
+function readGenerated(config: VisageConfig, file: string) {
   return readFileSync(join(config.cache, file), 'utf8');
 }
 
-function locationBlock(rendered, path) {
+function locationBlock(rendered: string, path: string) {
   const marker = `location ${path} {`;
   const start = rendered.indexOf(marker);
   assert.notEqual(start, -1, `expected nginx location for ${path}`);
@@ -46,17 +55,17 @@ function locationBlock(rendered, path) {
   return remaining.slice(0, end);
 }
 
-function locationCount(rendered, path) {
+function locationCount(rendered: string, path: string) {
   const pattern = new RegExp(`^\\s*location ${path} \\{`, 'gm');
   return rendered.match(pattern)?.length ?? 0;
 }
 
-function parseKeyValueConfig(contents) {
+function parseKeyValueConfig(contents: string) {
   return Object.fromEntries(
     contents
       .trim()
       .split('\n')
-      .map((line) => {
+      .map((line: string) => {
         const separator = line.indexOf(' = ');
         assert.notEqual(separator, -1, `expected key/value line: ${line}`);
 

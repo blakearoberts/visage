@@ -2,17 +2,26 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
+import type { ResolvedConfig } from 'vite';
 
-import { resolveConfig, resolveOptions } from '../../src/config.ts';
+import {
+  resolveConfig,
+  resolveOptions,
+  type VisageConfig,
+} from '../../src/config.ts';
+import type { VisageOptions } from '../../src/types.ts';
 
-function tempCache(t) {
+function tempCache(t: TestContext) {
   const cacheDir = mkdtempSync(join(tmpdir(), 'visage-config-test-'));
   t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
   return cacheDir;
 }
 
-function resolveForTest(t, options = {}) {
+function resolveForTest(
+  t: TestContext,
+  options: VisageOptions = {},
+): { cacheDir: string; config: VisageConfig } {
   const cacheDir = tempCache(t);
   return {
     cacheDir,
@@ -22,7 +31,7 @@ function resolveForTest(t, options = {}) {
         port: 9443,
         ...options,
       }),
-      { cacheDir },
+      { cacheDir } as ResolvedConfig,
       6173,
     ),
   };
@@ -410,7 +419,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     redirect: false,
   });
   assert.equal(
-    config.upstreams.metrics.locations['/metrics/'].headers.Host,
+    config.upstreams.metrics.locations['/metrics/'].headers?.Host,
     'metrics',
   );
   assert.equal(config.upstreams.metrics.scheme, 'https');
@@ -460,7 +469,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
   });
   assert.equal(config.upstreams.api.host, 'backend');
   assert.deepEqual(Object.keys(config.upstreams.api.locations), ['/api/']);
-  assert.equal(config.upstreams.api.locations['/api/'].headers.Host, '$host');
+  assert.equal(config.upstreams.api.locations['/api/'].headers?.Host, '$host');
 
   assert.equal(config.upstreams.vite.host, 'vite');
   assert.equal(config.upstreams.vite.port, 3000);
@@ -470,10 +479,10 @@ test('resolveConfig lets named services and upstreams override base entries', (t
     forward: false,
     redirect: true,
   });
-  assert.equal(config.upstreams.vite.locations['/app/'].headers.Cookie, '""');
-  assert.equal(config.upstreams.vite.locations['/app/'].headers.Host, 'vite');
+  assert.equal(config.upstreams.vite.locations['/app/'].headers?.Cookie, '""');
+  assert.equal(config.upstreams.vite.locations['/app/'].headers?.Host, 'vite');
   assert.equal(
-    config.upstreams.vite.locations['/app/'].headers.Upgrade,
+    config.upstreams.vite.locations['/app/'].headers?.Upgrade,
     '$http_upgrade',
   );
 });

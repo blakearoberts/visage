@@ -19,7 +19,7 @@ http {
 
     <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
     upstream <%~ name %> {
-        <%_ if (upstream.external) { %>
+        <%_ if (upstream.external || upstream.host === 'host.docker.internal') { %>
         zone <%~ name %> 64k;
         server <%~ upstream.host %>:<%~ upstream.port %> resolve;
         <%_ } else { %>

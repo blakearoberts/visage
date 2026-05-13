@@ -170,6 +170,10 @@ const BaseViteUpstream = {
         Upgrade: '$http_upgrade',
         Connection: '$connection_upgrade',
       },
+      directives: {
+        proxy_http_version: '1.1',
+        proxy_read_timeout: '1h',
+      },
     },
   },
 } as const satisfies Omit<ResolvedUpstream, 'port'>;

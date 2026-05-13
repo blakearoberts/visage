@@ -19,7 +19,7 @@ http {
 
     <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
     upstream <%~ name %> {
-        <%_ if (upstream.external || (upstream.host === 'host.docker.internal' && it.resolveHostDockerInternal)) { %>
+        <%_ if (upstream.resolve) { %>
         zone <%~ name %> 64k;
         server <%~ upstream.host %>:<%~ upstream.port %> resolve;
         <%_ } else { %>
@@ -91,8 +91,18 @@ function renderNginxConfig(config: VisageConfig): string {
       cert: join(config.files.certs[1], 'tls.crt'),
       key: join(config.files.certs[1], 'tls.key'),
     },
-    upstreams: config.upstreams,
-    resolveHostDockerInternal: process.platform !== 'linux',
+    upstreams: Object.fromEntries(
+      Object.entries(config.upstreams).map(([name, upstream]) => [
+        name,
+        {
+          ...upstream,
+          resolve:
+            upstream.external ||
+            (upstream.host === 'host.docker.internal' &&
+              process.platform !== 'linux'),
+        },
+      ]),
+    ),
   };
   return new Eta({ autoTrim: false }).renderString(template, data);
 }

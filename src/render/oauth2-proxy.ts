@@ -42,6 +42,8 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     cookie_httponly: true,
     cookie_secure: true,
     cookie_samesite: 'lax',
+    cookie_csrf_per_request: true,
+    cookie_csrf_per_request_limit: 16,
     email_domains: ['*'],
     scope: config.oauth2.scopes.join(' '),
     upstreams: ['static://202'],
@@ -50,6 +52,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     pass_access_token: true,
     pass_authorization_header: true,
     skip_provider_button: true,
+    whitelist_domains: [config.host, `${config.host}:${config.port}`],
   };
   return `${Object.entries(data)
     .map(([key, value]) => {

@@ -183,6 +183,10 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(nginx, /listen 9443 ssl;/);
   assert.match(nginx, /server_name app\.local\.test;/);
   assert.match(nginx, /ssl_certificate\s+\/etc\/nginx\/certs\/tls\.crt;/);
+  assert.match(
+    nginx,
+    /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
+  );
   assert.match(nginx, /upstream api \{\s+server api:8080;\s+\}/);
 
   const api = locationBlock(nginx, '/api/');
@@ -417,10 +421,16 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   assert.equal(oauth2Proxy.cookie_httponly, true);
   assert.equal(oauth2Proxy.cookie_secure, true);
   assert.equal(oauth2Proxy.cookie_samesite, 'lax');
+  assert.equal(oauth2Proxy.cookie_csrf_per_request, true);
+  assert.equal(oauth2Proxy.cookie_csrf_per_request_limit, '16');
   assert.equal(oauth2Proxy.cookie_path, '/');
   assert.deepEqual(oauth2Proxy.email_domains, ['*']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
   assert.deepEqual(oauth2Proxy.upstreams, ['static://202']);
+  assert.deepEqual(oauth2Proxy.whitelist_domains, [
+    'app.local.test',
+    'app.local.test:9443',
+  ]);
 });
 
 test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {

@@ -75,36 +75,18 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
       page.getByRole('heading', { name: 'Hello from Visage' }),
     ).toBeVisible();
 
-    const whoamiButton = page.getByRole('button', { name: 'Who are you?' });
+    const whoamiButton = page.getByRole('button', { name: 'Who am I?' });
     await expect(whoamiButton).toBeVisible();
 
     await whoamiButton.click();
 
-    const output = page.locator('pre').first();
+    const output = page.locator('[aria-label="Whoami response body"]');
     await expect(output).toBeVisible();
 
-    await expect
-      .poll(
-        async () => {
-          const payload = await readRenderedWhoamiResponse(output);
-          return payload?.status ?? payload?.error ?? 'pending';
-        },
-        {
-          message:
-            'Expected the rendered JSON response to contain a successful upstream status.',
-          timeout: 10_000,
-        },
-      )
-      .toBe(200);
-
-    const payload = await readRenderedWhoamiResponse(output);
-    expect(payload).toEqual(
-      expect.objectContaining({
-        ok: true,
-        status: 200,
-      }),
-    );
-    expect(payload?.body).toEqual(expect.stringContaining('Hostname'));
+    await expect(
+      output,
+      'Expected the rendered response body to contain the authenticated upstream whoami response.',
+    ).toContainText('Hostname', { timeout: 10_000 });
   });
 });
 
@@ -207,21 +189,6 @@ async function isVisible(locator: Locator, timeout = 5_000): Promise<boolean> {
   }
 }
 
-async function readRenderedWhoamiResponse(
-  output: Locator,
-): Promise<RenderedWhoamiResponse | null> {
-  const text = await output.textContent();
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as RenderedWhoamiResponse;
-  } catch {
-    return null;
-  }
-}
-
 async function stopVite(): Promise<void> {
   const running = vite;
   if (running === undefined || running.exitCode !== null) {
@@ -282,16 +249,6 @@ function isTargetAppUrl(url: URL): boolean {
 function normalizePath(pathname: string): string {
   return pathname.endsWith('/') ? pathname : `${pathname}/`;
 }
-
-type RenderedWhoamiResponse = {
-  ok?: boolean;
-  status?: number;
-  statusText?: string;
-  headers?: Record<string, string>;
-  body?: string;
-  error?: string;
-  loading?: boolean;
-};
 
 function writeLog(chunk: Uint8Array | string): void {
   const output = String(chunk);

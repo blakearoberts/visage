@@ -27,6 +27,9 @@ http {
         ssl_certificate     <%~ it.ssl.cert %>;
         ssl_certificate_key <%~ it.ssl.key %>;
 
+        # Redirect accidental plaintext HTTP requests sent to the HTTPS port.
+        error_page 497 =301 https://$http_host$request_uri;
+
         <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
             <%_ for (const [path, location] of Object.entries(upstream.locations ?? {})) { %>
         location <%~ path %> {

@@ -155,11 +155,15 @@ export type VisageDexExpiry = {
 export type VisageDexUser = {
   /**
    * Email address used as the Dex login identifier.
+   *
+   * @defaultValue `'user@example.com'`
    */
   readonly email: string;
   /**
    * Plain-text development password. Visage hashes this before rendering the
    * Dex config.
+   *
+   * @defaultValue `'pass'`
    */
   readonly password: string;
   /**

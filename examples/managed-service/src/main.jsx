@@ -1,4 +1,4 @@
-import { StrictMode, useState } from 'react';
+import { Fragment, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 function App() {
@@ -11,24 +11,58 @@ function App() {
       const response = await fetch('/whoami/');
       const body = await response.text();
 
-      setWhoami({
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        body,
-      });
+      setWhoami({ body });
     } catch (error) {
       setWhoami({ error: error.message });
     }
   }
 
   return (
-    <>
+    <main style={{ padding: '1rem', textAlign: 'center' }}>
       <h1>Hello from Visage</h1>
-      <button onClick={loadWhoami}>Who are you?</button>
-      {whoami && <pre>{JSON.stringify(whoami, null, 2)}</pre>}
-    </>
+      <button onClick={loadWhoami}>Who am I?</button>
+      {whoami?.loading && <p>Loading...</p>}
+      {whoami?.error && <p role='alert'>{whoami.error}</p>}
+      {whoami?.body && (
+        <div
+          aria-label='Whoami response body'
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'max-content minmax(0, 1fr)',
+            gap: '0.125rem 1rem',
+            margin: '1rem auto 0',
+            maxWidth: 'min(72rem, 80vw)',
+            textAlign: 'left',
+            width: '100%',
+          }}
+        >
+          {whoami.body.split('\n').map((line, index) => {
+            const i = line.indexOf(':');
+            const row =
+              i === -1
+                ? { name: 'Request', value: line }
+                : { name: line.slice(0, i), value: line.slice(i + 1) };
+
+            return (
+              <Fragment key={`${row.name}-${index}`}>
+                <div style={{ fontWeight: 600, textAlign: 'right' }}>
+                  {row.name}
+                </div>
+                <div
+                  style={{
+                    minWidth: 0,
+                    overflowWrap: 'anywhere',
+                    whiteSpace: 'normal',
+                  }}
+                >
+                  {row.value}
+                </div>
+              </Fragment>
+            );
+          })}
+        </div>
+      )}
+    </main>
   );
 }
 

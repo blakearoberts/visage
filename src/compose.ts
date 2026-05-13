@@ -1,5 +1,5 @@
 import { spawn, spawnSync, StdioOptions } from 'node:child_process';
-import { mkdirSync, openSync, rmSync } from 'node:fs';
+import { mkdirSync, openSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 type StopCompose = () => void;
@@ -11,7 +11,6 @@ export function startCompose(file: string): StopCompose {
   stopRef = undefined;
 
   const logs = join(dirname(file), 'logs');
-  rmSync(logs, { recursive: true, force: true });
   mkdirSync(logs, { recursive: true });
   const output = openSync(join(logs, 'compose.log'), 'w');
 

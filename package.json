@@ -14,14 +14,15 @@
   },
   "homepage": "https://github.com/blakearoberts/visage#readme",
   "keywords": [
-    "vite",
-    "plugin",
-    "oidc",
+    "authentication",
     "hmr",
-    "session",
-    "cookie",
-    "lifecycle",
-    "development"
+    "local-development",
+    "oauth2",
+    "oidc",
+    "pkce",
+    "session-cookie",
+    "vite",
+    "vite-plugin"
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

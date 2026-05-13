@@ -4,10 +4,11 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  openSync,
   rmSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
@@ -24,13 +25,17 @@ export async function ensureCerts({ certs, hostname }: Options): Promise<void> {
   chmodSync(CAROOT, 0o700);
 
   const mkcert = await ensureMkCert();
+  const logs = join(dirname(certs), 'logs');
+  mkdirSync(logs, { recursive: true });
+  const log = join(logs, 'mkcert.log');
+  const output = openSync(log, 'w');
 
   const env = { CAROOT, TRUST_STORES: 'system', ...process.env };
   const tty = process.stdin.isTTY;
   const stdio = [
     tty ? 'inherit' : 'ignore',
-    'inherit',
-    'inherit',
+    output,
+    output,
   ] satisfies StdioOptions;
 
   if (process.env.CI !== 'true') {

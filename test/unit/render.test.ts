@@ -55,6 +55,17 @@ function locationBlock(rendered: string, path: string) {
   return remaining.slice(0, end);
 }
 
+function upstreamBlock(rendered: string, name: string) {
+  const marker = `upstream ${name} {`;
+  const start = rendered.indexOf(marker);
+  assert.notEqual(start, -1, `expected nginx upstream for ${name}`);
+
+  const remaining = rendered.slice(start);
+  const end = remaining.indexOf('\n    }');
+  assert.notEqual(end, -1, `expected nginx upstream close for ${name}`);
+  return remaining.slice(0, end);
+}
+
 function locationCount(rendered: string, path: string) {
   const pattern = new RegExp(`^\\s*location ${path} \\{`, 'gm');
   return rendered.match(pattern)?.length ?? 0;
@@ -196,7 +207,11 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     nginx,
     /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
   );
-  assert.match(nginx, /upstream api \{\s+server api:8080;\s+\}/);
+  assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
+  assert.match(
+    upstreamBlock(nginx, 'api'),
+    /zone api 64k;\s+server api:8080 resolve;/,
+  );
 
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
@@ -241,9 +256,12 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
 
   const nginx = readGenerated(config, config.files.nginx[0]);
   const root = locationBlock(nginx, '/');
+  const vite = upstreamBlock(nginx, 'vite');
 
   assert.match(root, /proxy_set_header Host \$host;/);
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
+  assert.match(vite, /server host\.docker\.internal:6173;/);
+  assert.doesNotMatch(vite, /resolve/);
 });
 
 test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
@@ -259,7 +277,10 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   writeNginxConfig(config);
 
   const nginx = readGenerated(config, config.files.nginx[0]);
-  assert.match(nginx, /upstream api \{\s+server api\.example\.test:443;\s+\}/);
+  assert.match(
+    upstreamBlock(nginx, 'api'),
+    /zone api 64k;\s+server api\.example\.test:443 resolve;/,
+  );
 
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);

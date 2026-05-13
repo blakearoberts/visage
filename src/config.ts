@@ -79,6 +79,7 @@ type ResolvedProxyPolicy = {
 
 type ResolvedConfigUpstream = Omit<ResolvedUpstream, 'locations'> & {
   readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
+  readonly external: boolean;
 };
 
 export type VisageConfig = {
@@ -435,6 +436,7 @@ export function resolveConfig(
           name,
           {
             ...upstream,
+            external,
             locations: Object.fromEntries(
               Object.entries(upstream.locations ?? {}).map(([path, policy]) => [
                 path,

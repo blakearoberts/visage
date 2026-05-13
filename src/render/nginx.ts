@@ -8,6 +8,8 @@ const template = `
 events {}
 
 http {
+    resolver 127.0.0.11 ipv6=off;
+
     # Allow WebSockets (Vite HMR).
     map $http_upgrade $connection_upgrade {
         default upgrade;
@@ -16,7 +18,12 @@ http {
 
     <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
     upstream <%~ name %> {
+        <%_ if (upstream.external) { %>
+        zone <%~ name %> 64k;
+        server <%~ upstream.host %>:<%~ upstream.port %> resolve;
+        <%_ } else { %>
         server <%~ upstream.host %>:<%~ upstream.port %>;
+        <%_ } %>
     }
 
     <%_ } %>

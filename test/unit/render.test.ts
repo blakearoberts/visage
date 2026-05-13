@@ -272,10 +272,15 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
   assert.match(root, /proxy_http_version 1\.1;/);
   assert.match(root, /proxy_read_timeout 1h;/);
-  assert.match(
-    vite,
-    /zone vite 64k;\s+server host\.docker\.internal:6173 resolve;/,
-  );
+  if (process.platform === 'linux') {
+    assert.match(vite, /server host\.docker\.internal:6173;/);
+    assert.doesNotMatch(vite, /resolve/);
+  } else {
+    assert.match(
+      vite,
+      /zone vite 64k;\s+server host\.docker\.internal:6173 resolve;/,
+    );
+  }
 });
 
 test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {

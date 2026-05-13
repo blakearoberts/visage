@@ -44,11 +44,13 @@
   "scripts": {
     "build": "npm run clean && rollup -c",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "test": "npm run test:unit",
-    "test:e2e": "playwright test test/e2e",
-    "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts",
+    "dev:example": "cd examples/managed-service && npm run dev",
     "format": "prettier --write \"{docs,examples,src,test}/**/*.{ts,tsx,js,jsx,json,css,html,md}\" \"*.{json,md}\"",
-    "format:check": "prettier --check \"{docs,examples,src,test}/**/*.{ts,tsx,js,jsx,json,css,html,md}\" \"*.{json,md}\""
+    "format:check": "prettier --check \"{docs,examples,src,test}/**/*.{ts,tsx,js,jsx,json,css,html,md}\" \"*.{json,md}\"",
+    "test": "npm run test:unit",
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "test:e2e": "playwright test test/e2e",
+    "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

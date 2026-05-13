@@ -24,6 +24,10 @@ export type {
 export function visage(options: VisageOptions = {}): Plugin {
   const resolvedOptions = resolveOptions(options);
   let stop: (() => void) | undefined;
+  const closeBundle = () => {
+    stop?.();
+    stop = undefined;
+  };
 
   return {
     name: 'visage',
@@ -62,14 +66,12 @@ export function visage(options: VisageOptions = {}): Plugin {
           throw new Error('Failed to resolve port for Visage');
         }
         stop = await startVisage(address.port);
+        server.httpServer?.once('close', closeBundle);
         return result;
       };
     },
 
-    closeBundle() {
-      stop?.();
-      stop = undefined;
-    },
+    closeBundle,
   };
 }
 

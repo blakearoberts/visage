@@ -92,7 +92,7 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
         {
           message:
             'Expected the rendered JSON response to contain a successful upstream status.',
-          timeout: 30_000,
+          timeout: 10_000,
         },
       )
       .toBe(200);
@@ -110,7 +110,7 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
 
 async function waitForApp(): Promise<void> {
   const context = await request.newContext({ ignoreHTTPSErrors: true });
-  const timeout = Date.now() + 90_000;
+  const timeout = Date.now() + 30_000;
 
   try {
     while (Date.now() < timeout) {
@@ -156,7 +156,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
     )
     .first();
 
-  await expect(loginInput).toBeVisible({ timeout: 30_000 });
+  await expect(loginInput).toBeVisible({ timeout: 10_000 });
 
   const passwordInput = page
     .locator(
@@ -183,7 +183,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
     await grantAccessButton.click();
   }
 
-  await page.waitForURL(isTargetAppUrl, { timeout: 45_000 });
+  await page.waitForURL(isTargetAppUrl, { timeout: 10_000 });
 }
 
 async function submitLoginForm(

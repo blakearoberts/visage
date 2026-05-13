@@ -117,7 +117,7 @@ test.describe('Visage authenticated upstream flow', () => {
 
 async function waitForApp(): Promise<void> {
   const context = await request.newContext({ ignoreHTTPSErrors: true });
-  const timeout = Date.now() + 90_000;
+  const timeout = Date.now() + 30_000;
 
   try {
     while (Date.now() < timeout) {
@@ -166,7 +166,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
   await expect(
     loginInput,
     'Expected unauthenticated navigation to redirect to the Dex login form.',
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: 10_000 });
 
   const passwordInput = page
     .locator(
@@ -193,7 +193,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
     await grantAccessButton.click();
   }
 
-  await page.waitForURL(isTargetAppUrl, { timeout: 45_000 });
+  await page.waitForURL(isTargetAppUrl, { timeout: 10_000 });
 }
 
 async function submitLoginForm(

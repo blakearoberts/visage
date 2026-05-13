@@ -1,53 +1,50 @@
-import { spawnSync } from 'node:child_process';
-import { dirname } from 'node:path';
+import { spawn, spawnSync, StdioOptions } from 'node:child_process';
+import { mkdirSync, openSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 type StopCompose = () => void;
 
-let stopCompose: StopCompose | undefined;
+let stopRef: StopCompose | undefined;
 
 export function startCompose(file: string): StopCompose {
-  stopCompose?.();
-  stopCompose = undefined;
+  stopRef?.();
+  stopRef = undefined;
 
-  const stop = () => {
-    if (stopCompose !== stop) return;
+  const logs = join(dirname(file), 'logs');
+  rmSync(logs, { recursive: true, force: true });
+  mkdirSync(logs, { recursive: true });
+  const output = openSync(join(logs, 'compose.log'), 'w');
 
-    stopCompose = undefined;
-    process.off('SIGINT', onSigInt);
-    process.off('SIGTERM', onSigTerm);
-    run(file, ['down'], 'Failed to stop Docker Compose');
+  const compose = [
+    'compose',
+    `--project-name=${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}`,
+    `--file=${file}`,
+  ] as const;
+  const env = { ...process.env, COMPOSE_MENU: 'false' } as const;
+  const opts = {
+    cwd: dirname(file),
+    stdio: ['ignore', output, output] satisfies StdioOptions,
+    env,
   };
 
-  run(file, ['up', '-d'], 'Failed to start Docker Compose');
-  stopCompose = stop;
-  process.off('SIGINT', onSigInt);
-  process.off('SIGTERM', onSigTerm);
-  process.once('SIGINT', onSigInt);
-  process.once('SIGTERM', onSigTerm);
+  const up = [
+    ...compose,
+    'up',
+    '--abort-on-container-failure',
+    '--no-color',
+    '--remove-orphans',
+  ] as const;
+  const child = spawn('docker', up, opts);
+
+  const stop = () => {
+    if (stopRef !== stop) return;
+    stopRef = undefined;
+
+    child.kill();
+    const down = [...compose, 'down', '--remove-orphans'] as const;
+    spawnSync('docker', down, opts);
+  };
+
+  stopRef = stop;
   return stop;
-}
-
-function run(file: string, args: string[], message: string): void {
-  const result = spawnSync('docker', ['compose', '-f', file, ...args], {
-    cwd: dirname(file),
-    stdio: 'inherit',
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(message);
-}
-
-function onSigInt(): void {
-  try {
-    stopCompose?.();
-  } finally {
-    process.exit(130);
-  }
-}
-
-function onSigTerm(): void {
-  try {
-    stopCompose?.();
-  } finally {
-    process.exit(143);
-  }
 }

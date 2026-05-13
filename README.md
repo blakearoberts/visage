@@ -125,7 +125,7 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 - If startup fails immediately, confirm Docker is running and `docker compose` works.
 - If NGINX cannot start, check whether the configured `port` is already in use.
 - If the hostname cannot be resolved, Visage may need permission to update `/etc/hosts`.
-- If the browser rejects the certificate, allow the local certificate authority prompt from `mkcert`.
+- If the browser rejects the certificate, allow the local certificate authority prompt from `mkcert`; CI test runners should be configured to ignore local HTTPS errors.
 
 ## TO-DO
 

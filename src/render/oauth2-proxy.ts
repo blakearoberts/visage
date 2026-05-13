@@ -47,6 +47,8 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     email_domains: ['*'],
     scope: config.oauth2.scopes.join(' '),
     upstreams: ['static://202'],
+    request_logging_format:
+      '[{{.Timestamp}}] {{.StatusCode}} | {{.RequestMethod}} | {{.RequestDuration}} | {{.Username}} | {{.RequestURI}} | {{.Upstream}}',
     reverse_proxy: true,
     set_xauthrequest: true,
     pass_access_token: true,

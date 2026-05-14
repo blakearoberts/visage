@@ -43,7 +43,7 @@ test('resolveOptions applies public defaults', () => {
   assert.equal(options.host, 'localhost');
   assert.equal(options.port, 9001);
   assert.deepEqual(options.cookie, {
-    cookie_name: '__Host-session',
+    cookie_name: '__Host-sess',
     cookie_expire: '8h',
     cookie_refresh: '15m',
     cookie_path: '/',

@@ -97,7 +97,7 @@ export type VisageConfig = {
     readonly dex: Volume;
     readonly nginx: Volume;
     readonly oauth2Proxy: Volume;
-    readonly oauth2ProxyClientSecret: Volume;
+    readonly clientSecret: Volume;
   };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
@@ -109,10 +109,7 @@ const BaseFiles = {
   compose: './compose.yaml',
   dex: ['./dex.yml', '/etc/dex/dex.yml'],
   nginx: ['./nginx.conf', '/etc/nginx/nginx.conf'],
-  oauth2ProxyClientSecret: [
-    './oauth2-client-secret',
-    '/etc/oauth2-proxy/client-secret',
-  ],
+  clientSecret: ['./oauth2-client-secret', '/etc/oauth2-proxy/client-secret'],
   oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
 } as const satisfies VisageConfig['files'];
 
@@ -214,7 +211,7 @@ const DefaultProxyPolicy = {
 
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const { host = 'localhost', port = 9001, cookie = {}, oauth2 = {} } = options;
-  const cookieName = cookie.name ?? 'session';
+  const cookieName = cookie.name ?? 'sess';
   const publicClient = oauth2.clientSecret === null;
   const services = resolveServicesOptions(options.services);
   const upstreams = resolveUpstreamsOptions(services, options.upstreams);

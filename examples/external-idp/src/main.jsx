@@ -17,10 +17,15 @@ function App() {
     }
   }
 
+  function signOut() {
+    window.location.assign('/oauth2/sign_out');
+  }
+
   return (
     <main style={{ padding: '1rem', textAlign: 'center' }}>
       <h1>Hello from Visage</h1>
       <button onClick={loadWhoami}>Who am I?</button>
+      <button onClick={signOut}>Sign out</button>
       {whoami?.loading && <p>Loading...</p>}
       {whoami?.error && <p role='alert'>{whoami.error}</p>}
       {whoami?.body && (

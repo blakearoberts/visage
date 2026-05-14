@@ -19,10 +19,7 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
   writeFileSync(file, render, 'utf-8');
 
   if (config.oauth2.public) {
-    writeFileSync(
-      join(config.cache, config.files.oauth2ProxyClientSecret[0]),
-      '',
-    );
+    writeFileSync(join(config.cache, config.files.clientSecret[0]), '');
   }
 }
 
@@ -39,7 +36,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     client_id: config.oauth2.id,
     ...(config.oauth2.secret === undefined
       ? {
-          client_secret_file: config.files.oauth2ProxyClientSecret[1],
+          client_secret_file: config.files.clientSecret[1],
           code_challenge_method: 'S256',
         }
       : { client_secret: config.oauth2.secret }),
@@ -55,7 +52,6 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     cookie_csrf_per_request_limit: 16,
     email_domains: ['*'],
     scope: config.oauth2.scopes.join(' '),
-    upstreams: ['static://202'],
     ...LogFormats,
     reverse_proxy: true,
     set_xauthrequest: true,

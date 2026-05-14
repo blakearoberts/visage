@@ -35,7 +35,7 @@ function renderComposeConfig(config: VisageConfig): string {
           `${config.files.oauth2Proxy[0]}:${config.files.oauth2Proxy[1]}:ro`,
           ...(config.oauth2.public
             ? [
-                `${config.files.oauth2ProxyClientSecret[0]}:${config.files.oauth2ProxyClientSecret[1]}:ro`,
+                `${config.files.clientSecret[0]}:${config.files.clientSecret[1]}:ro`,
               ]
             : []),
         ],

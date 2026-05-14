@@ -50,9 +50,9 @@ export type VisageCookiePolicy = {
   /**
    * Browser session cookie base name. When no domains are configured, Visage
    * renders a host-only name with a `__Host-` prefix, so the default rendered
-   * name is `__Host-session`.
+   * name is `__Host-sess`.
    *
-   * @defaultValue `'session'`
+   * @defaultValue `'sess'`
    */
   readonly name?: string;
   /**

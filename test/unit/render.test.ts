@@ -464,7 +464,7 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   assert.equal(oauth2Proxy.client_id, 'visage');
   assert.equal(oauth2Proxy.client_secret, 'visage-secret');
   assert.equal(oauth2Proxy.cookie_secret, expectedCookieSecret);
-  assert.equal(oauth2Proxy.cookie_name, '__Host-session');
+  assert.equal(oauth2Proxy.cookie_name, '__Host-sess');
   assert.equal(oauth2Proxy.cookie_expire, '8h');
   assert.equal(oauth2Proxy.cookie_refresh, '15m');
   assert.equal(oauth2Proxy.cookie_httponly, true);
@@ -475,7 +475,7 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   assert.equal(oauth2Proxy.cookie_path, '/');
   assert.deepEqual(oauth2Proxy.email_domains, ['*']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
-  assert.deepEqual(oauth2Proxy.upstreams, ['static://202']);
+  assert.equal(oauth2Proxy.upstreams, undefined);
   assert.deepEqual(oauth2Proxy.whitelist_domains, [
     'app.local.test',
     'app.local.test:9443',
@@ -504,10 +504,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   );
   assert.equal(oauth2Proxy.code_challenge_method, 'S256');
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
-  assert.equal(
-    readGenerated(config, config.files.oauth2ProxyClientSecret[0]),
-    '',
-  );
+  assert.equal(readGenerated(config, config.files.clientSecret[0]), '');
 });
 
 test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => {

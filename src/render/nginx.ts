@@ -51,6 +51,7 @@ http {
         location <%~ path %> {
             <%_ if (location.auth?.enabled) { %>
             auth_request      /oauth2/auth;
+            auth_request_set  $authorization $upstream_http_authorization;
             auth_request_set  $access_token $upstream_http_x_auth_request_access_token;
             auth_request_set  $auth_user $upstream_http_x_auth_request_user;
             auth_request_set  $auth_email $upstream_http_x_auth_request_email;
@@ -69,7 +70,9 @@ http {
             <%~ directive %> <%~ value %>;
                 <%_ } %>
             <%_ } %>
-            <%_ if (location.auth?.enabled && location.auth.forward) { %>
+            <%_ if (location.auth?.enabled && location.auth.forward === 'id') { %>
+            proxy_set_header Authorization $authorization;
+            <%_ } else if (location.auth?.enabled && location.auth.forward === 'access') { %>
             proxy_set_header Authorization "Bearer $access_token";
             <%_ } %>
             <%_ if (upstream.scheme === 'https') { %>

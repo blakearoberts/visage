@@ -81,9 +81,9 @@ export type VisageCookiePolicy = {
   /**
    * Session age after which OAuth2 Proxy attempts silent renewal using the
    * stored refresh token, when one is available. Rendered as `cookie_refresh`
-   * using OAuth2 Proxy duration syntax. If upstreams validate forwarded access
-   * tokens, set this below the access-token lifetime so OAuth2 Proxy refreshes
-   * before forwarding an expired bearer token.
+   * using OAuth2 Proxy duration syntax. If upstreams validate forwarded bearer
+   * tokens, set this below the relevant token lifetime so OAuth2 Proxy refreshes
+   * before forwarding expired token material.
    *
    * @defaultValue `'15m'`
    */
@@ -273,6 +273,11 @@ export type VisageService = {
    */
   readonly extra_hosts?: readonly string[];
   /**
+   * Container restart policy.
+   * @defaultValue `'on-failure'`
+   */
+  readonly restart?: 'always' | 'no' | 'on-failure' | 'unless-stopped';
+  /**
    * Optional upstream override for this service. Omit this to create a default
    * upstream from the service name.
    */
@@ -330,12 +335,15 @@ export type VisageProxyPolicy = {
      */
     readonly redirect?: boolean;
     /**
-     * Whether the authenticated access token should be forwarded upstream as an
-     * `Authorization: Bearer ...` header.
+     * Token forwarding behavior for the upstream `Authorization` header.
      *
-     * @defaultValue `true`
+     * `'id'` forwards the authenticated OIDC ID token. `'access'` forwards the
+     * OAuth access token for legacy/resource-server integrations that
+     * explicitly require it.
+     *
+     * @defaultValue `'id'`
      */
-    readonly forward?: boolean;
+    readonly forward?: 'id' | 'access';
   };
   /**
    * Request headers to set when proxying to the upstream. Values may include

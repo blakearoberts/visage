@@ -60,7 +60,9 @@ type ResolvedExternalIdpConfig = ResolvedBaseIdpConfig & {
 };
 type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
 
-type ResolvedService = Omit<VisageService, 'upstream'>;
+type ResolvedService = Omit<VisageService, 'upstream'> & {
+  readonly restart: NonNullable<VisageService['restart']>;
+};
 
 type ResolvedUpstream = {
   readonly scheme: 'http' | 'https';
@@ -110,36 +112,34 @@ const BaseFiles = {
   oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
 } as const satisfies VisageConfig['files'];
 
-const BaseDexService = {
+const BaseServiceDex = {
   image: 'ghcr.io/dexidp/dex:v2.45.1',
   command: ['dex', 'serve', '/etc/dex/dex.yml'],
+  restart: 'always',
 } as const satisfies ResolvedService;
 
 const BaseServiceNginx = {
   image: 'nginx:1.30.0-alpine',
   depends_on: ['oauth2_proxy'],
   extra_hosts: ['host.docker.internal:host-gateway'],
+  restart: 'always',
 } as const satisfies ResolvedService;
 
-const BaseOAuth2ProxyService = {
+const BaseServiceOAuth2Proxy = {
   image: 'quay.io/oauth2-proxy/oauth2-proxy:v7.15.2',
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
   extra_hosts: ['host.docker.internal:host-gateway'],
+  restart: 'always',
 } as const satisfies ResolvedService;
 
-const BaseServices = {
-  nginx: BaseServiceNginx,
-  oauth2_proxy: BaseOAuth2ProxyService,
-} as const satisfies Readonly<Record<string, ResolvedService>>;
-
-const BaseDexUpstream = {
+const BaseUpstreamDex = {
   host: 'dex',
   scheme: 'http',
   port: 5556,
   locations: { '/dex/': { auth: { enabled: false } } },
 } as const satisfies ResolvedUpstream;
 
-const BaseOauth2ProxyUpstream = {
+const BaseUpstreamOauth2Proxy = {
   host: 'oauth2_proxy',
   scheme: 'http',
   port: 4180,
@@ -175,7 +175,7 @@ const DefaultOAuth2Client = {
 } as const satisfies ResolvedOAuth2Client;
 
 const DefaultProxyPolicy = {
-  auth: { enabled: true, forward: true, redirect: false },
+  auth: { enabled: true, forward: 'id', redirect: false },
   headers: {
     Cookie: '""', // Don't forward session cookie.
     Host: '$host',
@@ -244,11 +244,11 @@ function resolveServicesOptions(
       },
     },
     oauth2_proxy: {
-      ...BaseOAuth2ProxyService,
+      ...BaseServiceOAuth2Proxy,
       ...{
         ...(services.oauth2_proxy ?? {}),
         extra_hosts: [
-          ...BaseOAuth2ProxyService.extra_hosts,
+          ...BaseServiceOAuth2Proxy.extra_hosts,
           ...(services.oauth2_proxy?.extra_hosts ?? []),
         ],
       },
@@ -384,10 +384,10 @@ export function resolveConfig(
 ): VisageConfig {
   const idp = resolveIdpConfig(options);
   const upstreams: Record<string, ResolvedUpstream> = {
-    oauth2_proxy: BaseOauth2ProxyUpstream,
+    oauth2_proxy: BaseUpstreamOauth2Proxy,
     ...(idp.dex === undefined
       ? { idp: resolveExternalIdpUpstream(idp) }
-      : { dex: BaseDexUpstream }),
+      : { dex: BaseUpstreamDex }),
     ...options.upstreams,
   };
   return {
@@ -400,23 +400,18 @@ export function resolveConfig(
     files: { ...BaseFiles },
     services: {
       ...(idp.dex === undefined
-        ? BaseServices
+        ? { nginx: BaseServiceNginx, oauth2_proxy: BaseServiceOAuth2Proxy }
         : {
-            dex: BaseDexService,
-            nginx: {
-              ...BaseServices.nginx,
-              depends_on: ['dex', 'oauth2_proxy'],
-            },
-            oauth2_proxy: {
-              command: BaseServices.oauth2_proxy.command,
-              extra_hosts: BaseServices.oauth2_proxy.extra_hosts,
-              image: BaseServices.oauth2_proxy.image,
-              depends_on: ['dex'],
-            },
+            dex: BaseServiceDex,
+            nginx: { ...BaseServiceNginx, depends_on: ['dex', 'oauth2_proxy'] },
+            oauth2_proxy: { ...BaseServiceOAuth2Proxy, depends_on: ['dex'] },
           }),
       ...Object.fromEntries(
         Object.entries(options.services).map(
-          ([name, { upstream: _upstream, ...service }]) => [name, service],
+          ([name, { upstream: _upstream, ...service }]) => [
+            name,
+            { restart: 'on-failure', ...service },
+          ],
         ),
       ),
     },
@@ -460,7 +455,7 @@ const BaseViteUpstream = {
   scheme: 'http',
   locations: {
     '/': {
-      auth: { forward: false, redirect: true },
+      auth: { forward: undefined, redirect: true },
       headers: {
         Host: '$host',
         Upgrade: '$http_upgrade',

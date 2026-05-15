@@ -62,6 +62,27 @@ visage({
 });
 ```
 
+Authenticated upstream locations forward the OIDC ID token as the upstream
+`Authorization` bearer value by default. Set `auth.forward` to `'access'` for
+legacy upstreams that explicitly expect the OAuth access token as
+`Authorization: Bearer ...`.
+
+```ts
+visage({
+  upstreams: {
+    api: {
+      locations: {
+        '/api/': { auth: { forward: 'access' } },
+      },
+    },
+  },
+});
+```
+
+OAuth2 Proxy identity values can also be mapped explicitly through headers such
+as `$auth_user`, `$auth_email`, `$auth_groups`, and
+`$auth_preferred_username`.
+
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
 ## Expected Local URLs

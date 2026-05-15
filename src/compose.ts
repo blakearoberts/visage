@@ -16,8 +16,9 @@ export function startCompose(file: string): StopCompose {
 
   const compose = [
     'compose',
-    `--project-name=${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}`,
+    '--ansi=never',
     `--file=${file}`,
+    `--project-name=${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}`,
   ] as const;
   const env = { ...process.env, COMPOSE_MENU: 'false' } as const;
   const opts = {
@@ -30,7 +31,6 @@ export function startCompose(file: string): StopCompose {
     ...compose,
     'up',
     '--abort-on-container-failure',
-    '--no-color',
     '--remove-orphans',
   ] as const;
   const child = spawn('docker', up, opts);

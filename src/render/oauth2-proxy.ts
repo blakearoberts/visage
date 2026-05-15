@@ -55,8 +55,8 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     ...LogFormats,
     reverse_proxy: true,
     set_xauthrequest: true,
+    set_authorization_header: true,
     pass_access_token: true,
-    pass_authorization_header: true,
     skip_provider_button: true,
     whitelist_domains: [config.host, `${config.host}:${config.port}`],
   };

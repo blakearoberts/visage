@@ -117,9 +117,11 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     'serve',
     '/etc/dex/dex.yml',
   ]);
+  assert.equal(compose.services.dex.restart, 'always');
   assert.deepEqual(compose.services.dex.volumes, [
     './dex.yml:/etc/dex/dex.yml:ro',
   ]);
+  assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.ports, ['9443:9443']);
   assert.deepEqual(compose.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
@@ -131,6 +133,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
     'host.docker.internal:host-gateway',
   ]);
+  assert.equal(compose.services.oauth2_proxy.restart, 'always');
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
   ]);
@@ -138,6 +141,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     image: 'example/api:test',
     command: ['serve'],
     depends_on: ['nginx'],
+    restart: 'on-failure',
   });
 });
 
@@ -224,6 +228,10 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
   assert.match(
     api,
+    /auth_request_set\s+\$authorization \$upstream_http_authorization;/,
+  );
+  assert.match(
+    api,
     /error_page 401 =302 \/oauth2\/start\?rd=\$scheme:\/\/\$http_host\$request_uri;/,
   );
   assert.match(api, /proxy_set_header Cookie "";/);
@@ -233,7 +241,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.doesNotMatch(api, /proxy_buffer_size 8k;/);
   assert.match(api, /proxy_hide_header X-A;/);
   assert.match(api, /proxy_hide_header X-B;/);
-  assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
+  assert.match(api, /proxy_set_header Authorization \$authorization;/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
@@ -273,6 +281,7 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
 
   assert.match(root, /proxy_set_header Host \$host;/);
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
+  assert.doesNotMatch(root, /proxy_set_header Authorization/);
   assert.match(root, /proxy_http_version 1\.1;/);
   assert.match(root, /proxy_read_timeout 1h;/);
   if (process.platform === 'linux') {
@@ -307,10 +316,32 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
   assert.match(api, /proxy_set_header Host api\.example\.test;/);
-  assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
+  assert.match(api, /proxy_set_header Authorization \$authorization;/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api\.example\.test;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
+});
+
+test('writeNginxConfig supports explicit access-token forwarding', (t) => {
+  const config = resolvedConfig(t, {
+    upstreams: {
+      api: {
+        port: 8080,
+        locations: {
+          '/api/': {
+            auth: { forward: 'access' },
+          },
+        },
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const api = locationBlock(nginx, '/api/');
+  assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization \$authorization;/);
 });
 
 test('writeNginxConfig does not duplicate root locations for root external IdP issuers', (t) => {
@@ -478,6 +509,9 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   assert.equal(oauth2Proxy.cookie_path, '/');
   assert.deepEqual(oauth2Proxy.email_domains, ['*']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
+  assert.equal(oauth2Proxy.set_xauthrequest, true);
+  assert.equal(oauth2Proxy.set_authorization_header, true);
+  assert.equal(oauth2Proxy.pass_access_token, true);
   assert.equal(oauth2Proxy.upstreams, undefined);
   assert.deepEqual(oauth2Proxy.whitelist_domains, [
     'app.local.test',

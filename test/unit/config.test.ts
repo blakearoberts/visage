@@ -212,7 +212,7 @@ test('resolveOptions derives upstreams from services', () => {
         image: 'example/api:test',
         upstream: {
           port: 8080,
-          locations: { '/api/': { auth: { forward: false } } },
+          locations: { '/api/': { auth: { forward: 'access' } } },
         },
       },
       whoami: {
@@ -241,7 +241,7 @@ test('resolveOptions derives upstreams from services', () => {
     image: 'example/api:test',
     upstream: {
       port: 8080,
-      locations: { '/api/': { auth: { forward: false } } },
+      locations: { '/api/': { auth: { forward: 'access' } } },
     },
   });
   assert.equal(options.upstreams.api.host, 'api.local.test');
@@ -380,7 +380,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
         port: 8080,
         locations: {
           '/api/': {
-            auth: { forward: false },
+            auth: { forward: 'access' },
             headers: {
               Host: 'api.internal',
               'X-Service': 'api',
@@ -408,7 +408,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
     enabled: true,
-    forward: false,
+    forward: 'access',
     redirect: false,
   });
   assert.deepEqual(config.upstreams.api.locations['/api/'].headers, {
@@ -426,7 +426,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.metrics.host, 'metrics');
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].auth, {
     enabled: true,
-    forward: true,
+    forward: 'id',
     redirect: false,
   });
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
@@ -462,7 +462,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
         port: 3000,
         locations: {
           '/app/': {
-            auth: { redirect: true, forward: false },
+            auth: { redirect: true, forward: 'access' },
             headers: {
               Upgrade: '$http_upgrade',
             },
@@ -476,10 +476,12 @@ test('resolveConfig lets named services and upstreams override base entries', (t
     image: 'custom-nginx:test',
     depends_on: ['api'],
     extra_hosts: ['host.docker.internal:host-gateway'],
+    restart: 'always',
   });
   assert.deepEqual(config.services.api, {
     image: 'example/api:test',
     command: ['serve'],
+    restart: 'on-failure',
   });
   assert.equal(config.upstreams.api.host, 'backend');
   assert.deepEqual(Object.keys(config.upstreams.api.locations), ['/api/']);
@@ -490,7 +492,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
   assert.deepEqual(Object.keys(config.upstreams.vite.locations), ['/app/']);
   assert.deepEqual(config.upstreams.vite.locations['/app/'].auth, {
     enabled: true,
-    forward: false,
+    forward: 'access',
     redirect: true,
   });
   assert.equal(config.upstreams.vite.locations['/app/'].headers?.Cookie, '""');

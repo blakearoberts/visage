@@ -84,7 +84,7 @@ test.describe('Visage SSR authenticated identity flow', () => {
     await expect(
       csrIdentity,
       'Expected the hydrated app to keep calling the authenticated /whoami/ upstream.',
-    ).toContainText('Hostname', { timeout: 10_000 });
+    ).toContainText('Hostname', { timeout: 5_000 });
   });
 });
 
@@ -142,7 +142,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
   await expect(
     loginInput,
     'Expected unauthenticated navigation to redirect to the Dex login form.',
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 5_000 });
 
   const passwordInput = page
     .locator(
@@ -164,12 +164,7 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
 
   await submitLoginForm(submitButton, passwordInput);
 
-  const grantAccessButton = page.getByRole('button', { name: 'Grant Access' });
-  if (await isVisible(grantAccessButton, 2_000)) {
-    await grantAccessButton.click();
-  }
-
-  await page.waitForURL(isTargetAppUrl, { timeout: 10_000 });
+  await page.waitForURL(isTargetAppUrl, { timeout: 5_000 });
 }
 
 async function submitLoginForm(
@@ -203,7 +198,7 @@ async function stopSsr(): Promise<void> {
     const timeout = setTimeout(() => {
       running.kill('SIGKILL');
       resolve();
-    }, 10_000);
+    }, 5_000);
 
     running.once('exit', () => {
       clearTimeout(timeout);

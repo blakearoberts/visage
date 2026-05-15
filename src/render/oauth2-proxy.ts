@@ -54,14 +54,15 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     cookie_csrf_per_request: true,
     cookie_csrf_per_request_limit: 16,
     email_domains: config.oauth2.emailDomains,
+    whitelist_domains: [config.host, `${config.host}:${config.port}`],
     scope: config.oauth2.scopes.join(' '),
-    ...LogFormats,
     reverse_proxy: true,
     set_xauthrequest: true,
     set_authorization_header: true,
     pass_access_token: true,
     skip_provider_button: true,
-    whitelist_domains: [config.host, `${config.host}:${config.port}`],
+    approval_prompt: 'auto',
+    ...LogFormats,
   };
   return `${Object.entries(data)
     .map(([key, value]) => {
@@ -69,11 +70,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
         const values = value.map((item) => JSON.stringify(item)).join(', ');
         return `${key} = [${values}]`;
       }
-
-      if (typeof value === 'string') {
-        return `${key} = ${JSON.stringify(value)}`;
-      }
-
+      if (typeof value === 'string') return `${key} = ${JSON.stringify(value)}`;
       return `${key} = ${String(value)}`;
     })
     .join('\n')}\n`;

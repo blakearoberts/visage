@@ -105,9 +105,9 @@ function renderNginxConfig(config: VisageConfig): string {
         {
           ...upstream,
           resolve:
-            upstream.external ||
-            (upstream.host === 'host.docker.internal' &&
-              process.platform !== 'linux'),
+            upstream.host === 'host.docker.internal'
+              ? process.platform !== 'linux'
+              : upstream.external,
         },
       ]),
     ),

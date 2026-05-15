@@ -5,7 +5,7 @@ const browserChannel =
 
 export default defineConfig({
   testDir: 'test/e2e',
-  workers: 2,
+  workers: 4,
   projects: [
     {
       name: 'certs-setup',

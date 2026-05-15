@@ -15,40 +15,36 @@ import { dirname, join } from 'node:path';
 
 import { e2eEnv, repo } from './environment';
 
-const example = join(repo, 'examples/external-idp');
-const appUrl = 'https://localhost:9002/';
-const targetUrl = new URL(appUrl);
+const example = join(repo, 'examples/ssr');
+const appUrl = 'https://localhost:9003/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
-const externalDexProject = 'visage-external-idp';
-const appComposeProject = 'visage_external_idp_app';
-
+const targetUrl = new URL(appUrl);
+let appComposeProject = '';
 let logFile = '';
-let vite: ChildProcessWithoutNullStreams | undefined;
-let viteOutput = '';
+let ssr: ChildProcessWithoutNullStreams | undefined;
+let ssrOutput = '';
 
-test.describe('Visage external IdP authenticated upstream flow', () => {
+test.describe('Visage SSR authenticated identity flow', () => {
   test.setTimeout(30_000);
 
   test.beforeAll(async ({}, testInfo) => {
-    logFile = testInfo.outputPath('external-idp.log');
+    appComposeProject = projectName('ssr', testInfo.workerIndex);
+    logFile = testInfo.outputPath('ssr.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');
 
-    dockerCompose(['down', '--remove-orphans']);
-    dockerCompose(['up', '-d']);
-
-    vite = spawn('npm', ['run', 'dev'], {
+    ssr = spawn('npm', ['run', 'dev'], {
       cwd: example,
       env: e2eEnv({
         COMPOSE_PROJECT_NAME: appComposeProject,
       }),
     });
 
-    vite.stdout.on('data', (chunk) => {
+    ssr.stdout.on('data', (chunk) => {
       writeLog(chunk);
     });
-    vite.stderr.on('data', (chunk) => {
+    ssr.stderr.on('data', (chunk) => {
       writeLog(chunk);
     });
 
@@ -56,16 +52,11 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
   });
 
   test.afterAll(async () => {
-    writeDockerComposeLogs(
-      appComposeProject,
-      'node_modules/.vite/visage/compose.yaml',
-    );
-    writeDockerComposeLogs(externalDexProject, 'compose.idp.yaml');
-    await stopVite();
-    dockerCompose(['down', '--remove-orphans']);
+    writeDockerComposeLogs();
+    await stopSsr();
   });
 
-  test('logs in through an external IdP and renders the authenticated whoami response', async ({
+  test('logs in through Dex and renders authenticated identity during SSR', async ({
     page,
   }) => {
     await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
@@ -75,17 +66,24 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
       page.getByRole('heading', { name: 'Hello from Visage' }),
     ).toBeVisible();
 
-    const whoamiButton = page.getByRole('button', { name: 'Who am I?' });
-    await expect(whoamiButton).toBeVisible();
+    const response = await page.context().request.get(appUrl, {
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(200);
 
-    await whoamiButton.click();
+    const html = await response.text();
+    expect(html).toContain('data-test-id="ssr-identity"');
+    expect(html).toContain(dexEmail);
+    expect(html).not.toContain('<!--ssr-outlet-->');
 
-    const output = page.locator('[aria-label="Whoami response body"]');
-    await expect(output).toBeVisible();
+    const ssrIdentity = page.locator('[data-test-id="ssr-identity"]');
+    await expect(ssrIdentity).toContainText('email:');
+    await expect(ssrIdentity).toContainText(dexEmail);
 
+    const csrIdentity = page.locator('[data-test-id="csr-identity"]');
     await expect(
-      output,
-      'Expected the rendered response body to contain the authenticated upstream whoami response.',
+      csrIdentity,
+      'Expected the hydrated app to keep calling the authenticated /whoami/ upstream.',
     ).toContainText('Hostname', { timeout: 10_000 });
   });
 });
@@ -96,8 +94,8 @@ async function waitForApp(): Promise<void> {
 
   try {
     while (Date.now() < timeout) {
-      if (vite?.exitCode !== null) {
-        throw new Error(viteOutput);
+      if (ssr !== undefined && ssr.exitCode !== null) {
+        throw new Error(ssrOutput);
       }
 
       try {
@@ -116,7 +114,7 @@ async function waitForApp(): Promise<void> {
     await context.dispose();
   }
 
-  throw new Error(viteOutput || 'External IdP example did not start');
+  throw new Error(ssrOutput || 'SSR example did not start');
 }
 
 async function completeDexLoginIfPresented(page: Page): Promise<void> {
@@ -141,7 +139,10 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
     )
     .first();
 
-  await expect(loginInput).toBeVisible({ timeout: 10_000 });
+  await expect(
+    loginInput,
+    'Expected unauthenticated navigation to redirect to the Dex login form.',
+  ).toBeVisible({ timeout: 10_000 });
 
   const passwordInput = page
     .locator(
@@ -192,8 +193,8 @@ async function isVisible(locator: Locator, timeout = 5_000): Promise<boolean> {
   }
 }
 
-async function stopVite(): Promise<void> {
-  const running = vite;
+async function stopSsr(): Promise<void> {
+  const running = ssr;
   if (running === undefined || running.exitCode !== null) {
     return;
   }
@@ -209,37 +210,8 @@ async function stopVite(): Promise<void> {
       resolve();
     });
 
-    running.kill('SIGTERM');
+    running.kill('SIGINT');
   });
-}
-
-function dockerCompose(args: string[]): void {
-  const result = spawnSync(
-    'docker',
-    ['compose', '-p', externalDexProject, '-f', 'compose.idp.yaml', ...args],
-    {
-      cwd: example,
-      encoding: 'utf8',
-    },
-  );
-  writeLog(result.stdout);
-  writeLog(result.stderr);
-  if (result.error) throw result.error;
-  if (result.status !== 0)
-    throw new Error('External IdP Docker Compose failed');
-}
-
-function writeDockerComposeLogs(project: string, file: string): void {
-  const result = spawnSync(
-    'docker',
-    ['compose', '-p', project, '-f', file, 'logs', '--no-color'],
-    {
-      cwd: example,
-      encoding: 'utf8',
-    },
-  );
-  writeLog(result.stdout);
-  writeLog(result.stderr);
 }
 
 function isTargetAppUrl(url: URL): boolean {
@@ -253,8 +225,33 @@ function normalizePath(pathname: string): string {
   return pathname.endsWith('/') ? pathname : `${pathname}/`;
 }
 
+function projectName(name: string, workerIndex: number): string {
+  return `visage_e2e_${name}_${process.pid}_${workerIndex}`;
+}
+
+function writeDockerComposeLogs(): void {
+  if (!appComposeProject) return;
+
+  const result = spawnSync(
+    'docker',
+    [
+      'compose',
+      '-p',
+      appComposeProject,
+      '-f',
+      join(example, '.visage/compose.yaml'),
+      'logs',
+      '--no-color',
+    ],
+    { encoding: 'utf8' },
+  );
+
+  writeLog(result.stdout);
+  writeLog(result.stderr);
+}
+
 function writeLog(chunk: Uint8Array | string): void {
   const output = String(chunk);
-  viteOutput += output;
+  ssrOutput += output;
   appendFileSync(logFile, output);
 }

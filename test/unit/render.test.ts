@@ -4,7 +4,6 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
-import type { ResolvedConfig } from 'vite';
 
 import { compareSync } from 'bcryptjs';
 import { parse } from 'yaml';
@@ -12,6 +11,7 @@ import { parse } from 'yaml';
 import {
   resolveConfig,
   resolveOptions,
+  resolveViteUpstream,
   type VisageConfig,
 } from '../../src/config.ts';
 import { writeComposeConfig } from '../../src/render/compose.ts';
@@ -24,17 +24,20 @@ function resolvedConfig(
   t: TestContext,
   options: VisageOptions = {},
 ): VisageConfig {
-  const cacheDir = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
-  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
+  const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
+  t.after(() => rmSync(cache, { recursive: true, force: true }));
 
   const config = resolveConfig(
     resolveOptions({
       host: 'app.local.test',
       port: 9443,
       ...options,
+      upstreams: {
+        vite: resolveViteUpstream({ port: 6173 }),
+        ...options.upstreams,
+      },
     }),
-    { cacheDir } as ResolvedConfig,
-    6173,
+    cache,
   );
   mkdirSync(config.cache, { recursive: true });
   return config;

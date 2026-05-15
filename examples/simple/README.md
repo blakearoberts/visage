@@ -1,4 +1,4 @@
-# Managed Service Example
+# Simple Example
 
 ## System Block Diagram
 

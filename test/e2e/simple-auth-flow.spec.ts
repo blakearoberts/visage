@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 
 import { e2eEnv, repo } from './environment';
 
-const example = join(repo, 'examples/managed-service');
+const example = join(repo, 'examples/simple');
 const appUrl = process.env.VISAGE_E2E_URL ?? 'https://localhost:9001/';
 const dexEmail = process.env.VISAGE_E2E_EMAIL ?? 'user@example.com';
 const dexPassword = process.env.VISAGE_E2E_PASSWORD ?? 'pass';
@@ -25,12 +25,12 @@ let logFile = '';
 let vite: ChildProcessWithoutNullStreams | undefined;
 let viteOutput = '';
 
-test.describe('Visage authenticated upstream flow', () => {
-  test.setTimeout(60_000);
+test.describe('Visage simple authenticated upstream flow', () => {
+  test.setTimeout(30_000);
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = projectName('managed_service', testInfo.workerIndex);
-    logFile = testInfo.outputPath('managed-service.log');
+    appComposeProject = projectName('simple', testInfo.workerIndex);
+    logFile = testInfo.outputPath('simple.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');
 
@@ -89,7 +89,7 @@ test.describe('Visage authenticated upstream flow', () => {
 
 async function waitForApp(): Promise<void> {
   const context = await request.newContext({ ignoreHTTPSErrors: true });
-  const timeout = Date.now() + 30_000;
+  const timeout = Date.now() + 15_000;
 
   try {
     while (Date.now() < timeout) {
@@ -113,7 +113,7 @@ async function waitForApp(): Promise<void> {
     await context.dispose();
   }
 
-  throw new Error(viteOutput || 'Managed service example did not start');
+  throw new Error(viteOutput || 'Simple example did not start');
 }
 
 async function completeDexLoginIfPresented(page: Page): Promise<void> {

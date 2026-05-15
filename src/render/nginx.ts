@@ -52,7 +52,10 @@ http {
             <%_ if (location.auth?.enabled) { %>
             auth_request      /oauth2/auth;
             auth_request_set  $access_token $upstream_http_x_auth_request_access_token;
+            auth_request_set  $auth_user $upstream_http_x_auth_request_user;
             auth_request_set  $auth_email $upstream_http_x_auth_request_email;
+            auth_request_set  $auth_groups $upstream_http_x_auth_request_groups;
+            auth_request_set  $auth_preferred_username $upstream_http_x_auth_request_preferred_username;
 
             <%_ if (location.auth.redirect) { %>
             error_page 401 =302 /oauth2/start?rd=$scheme://$http_host$request_uri;

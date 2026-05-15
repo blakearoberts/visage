@@ -1,6 +1,3 @@
-import { join } from 'node:path';
-import type { ResolvedConfig } from 'vite';
-
 import type {
   VisageDexExpiry,
   VisageDexOptions,
@@ -156,24 +153,6 @@ const BaseOauth2ProxyUpstream = {
     },
   },
 } as const satisfies ResolvedUpstream;
-
-const BaseViteUpstream = {
-  host: 'host.docker.internal',
-  scheme: 'http',
-  locations: {
-    '/': {
-      auth: { forward: false, redirect: true },
-      headers: {
-        Upgrade: '$http_upgrade',
-        Connection: '$connection_upgrade',
-      },
-      directives: {
-        proxy_http_version: '1.1',
-        proxy_read_timeout: '1h',
-      },
-    },
-  },
-} as const satisfies Omit<ResolvedUpstream, 'port'>;
 
 const DefaultCookiePolicy = {
   cookie_expire: '8h',
@@ -401,13 +380,11 @@ function resolveExternalIdpUpstream(
 
 export function resolveConfig(
   options: ResolvedVisageOptions,
-  config: ResolvedConfig,
-  vitePort: number,
+  cache: string,
 ): VisageConfig {
   const idp = resolveIdpConfig(options);
   const upstreams: Record<string, ResolvedUpstream> = {
     oauth2_proxy: BaseOauth2ProxyUpstream,
-    vite: { ...BaseViteUpstream, port: vitePort },
     ...(idp.dex === undefined
       ? { idp: resolveExternalIdpUpstream(idp) }
       : { dex: BaseDexUpstream }),
@@ -419,7 +396,7 @@ export function resolveConfig(
     cookie: options.cookie,
     idp,
     oauth2: options.oauth2,
-    cache: join(config.cacheDir, 'visage'),
+    cache,
     files: { ...BaseFiles },
     services: {
       ...(idp.dex === undefined
@@ -475,5 +452,52 @@ export function resolveConfig(
         ];
       }),
     ),
+  };
+}
+
+const BaseViteUpstream = {
+  host: 'host.docker.internal',
+  scheme: 'http',
+  locations: {
+    '/': {
+      auth: { forward: false, redirect: true },
+      headers: {
+        Host: '$host',
+        Upgrade: '$http_upgrade',
+        Connection: '$connection_upgrade',
+      },
+      directives: {
+        proxy_http_version: '1.1',
+        proxy_read_timeout: '1h',
+      },
+    },
+  },
+} as const satisfies Omit<ResolvedUpstream, 'port'>;
+
+export function resolveViteUpstream(
+  vite: VisageUpstream = { locations: {} },
+): VisageUpstream {
+  return {
+    ...BaseViteUpstream,
+    ...vite,
+    locations: {
+      ...BaseViteUpstream.locations,
+      ...Object.fromEntries(
+        Object.entries(vite.locations ?? {}).map(([path, policy]) => {
+          if (path !== '/') return [path, policy];
+          const defaults = BaseViteUpstream.locations['/'];
+          return [
+            path,
+            {
+              ...defaults,
+              ...policy,
+              auth: { ...defaults.auth, ...policy.auth },
+              headers: { ...defaults.headers, ...policy.headers },
+              directives: { ...defaults.directives, ...policy.directives },
+            },
+          ];
+        }),
+      ),
+    },
   };
 }

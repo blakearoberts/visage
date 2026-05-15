@@ -1,17 +1,18 @@
 # E2E Tests
 
-These Playwright tests run the example Vite app through the local Visage auth
-stack:
+These Playwright tests run the example apps through the local Visage auth stack:
 
 1. Navigate to the authenticated local URL.
 2. Complete the Dex username/password login with the test user.
 3. Return to the Vite app.
-4. Click the `Who are you?` button.
-5. Assert that the rendered JSON contains the authenticated `/whoami/` response.
+4. Exercise the app-specific authenticated upstream or SSR identity path.
+5. Assert that the rendered output contains authenticated identity data.
 
 ## Defaults
 
-- `VISAGE_E2E_URL`: `https://localhost:9001/`
+- Simple app URL: `VISAGE_E2E_URL` or `https://localhost:9001/`
+- External IdP app URL: `https://localhost:9002/`
+- SSR app URL: `https://localhost:9003/`
 - `VISAGE_E2E_EMAIL`: `user@example.com`
 - `VISAGE_E2E_PASSWORD`: `pass`
 
@@ -20,14 +21,14 @@ stack:
 The Playwright setup project first runs real `ensureCerts()` calls to download
 `mkcert`, prepare the local CA, and generate TLS material. In CI, Visage skips
 trust-store installation by default and Playwright ignores local HTTPS errors.
-After that, the managed-service and external-IdP specs run in parallel with
-their own Vite processes and Docker Compose projects. The managed service spec
-uses the plugin-managed Dex stack, while the external IdP spec starts Dex
-separately from `examples/external-idp`. From there, the Visage plugin starts the
-app auth stack and serves the app through NGINX.
+After that, the simple, SSR, and external-IdP specs run in parallel with their
+own app processes and Docker Compose projects. The simple spec uses the
+plugin-managed Dex stack, the SSR spec starts Visage through
+`createVisageServer()`, and the external IdP spec starts Dex separately from
+`examples/external-idp`. From there, Visage serves each app through NGINX.
 
 Child process and container lifecycle output is written to each test's
-Playwright output directory as `managed-service.log` or `external-idp.log`.
+Playwright output directory as `simple.log`, `ssr.log`, or `external-idp.log`.
 
 Run the suite from the repo root:
 

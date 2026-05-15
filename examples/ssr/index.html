@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Visage Managed Service Example</title>
+    <title>Visage SSR Example</title>
     <style>
       body {
         font-family: system-ui, sans-serif;
@@ -11,7 +11,10 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script id="identity" type="application/json">
+      <!--ssr-identity-->
+    </script>
+    <div id="root"><!--ssr-outlet--></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

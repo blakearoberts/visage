@@ -3,36 +3,39 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
-import type { ResolvedConfig } from 'vite';
 
 import {
   resolveConfig,
   resolveOptions,
+  resolveViteUpstream,
   type VisageConfig,
 } from '../../src/config.ts';
 import type { VisageOptions } from '../../src/types.ts';
 
 function tempCache(t: TestContext) {
-  const cacheDir = mkdtempSync(join(tmpdir(), 'visage-config-test-'));
-  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
-  return cacheDir;
+  const cache = mkdtempSync(join(tmpdir(), 'visage-config-test-'));
+  t.after(() => rmSync(cache, { recursive: true, force: true }));
+  return cache;
 }
 
 function resolveForTest(
   t: TestContext,
   options: VisageOptions = {},
-): { cacheDir: string; config: VisageConfig } {
-  const cacheDir = tempCache(t);
+): { cache: string; config: VisageConfig } {
+  const cache = tempCache(t);
   return {
-    cacheDir,
+    cache,
     config: resolveConfig(
       resolveOptions({
         host: 'app.local.test',
         port: 9443,
         ...options,
+        upstreams: {
+          vite: resolveViteUpstream({ port: 6173 }),
+          ...options.upstreams,
+        },
       }),
-      { cacheDir } as ResolvedConfig,
-      6173,
+      cache,
     ),
   };
 }
@@ -370,7 +373,7 @@ test('resolveConfig preserves managed service defaults for partial service overr
 });
 
 test('resolveConfig applies defaults and normalizes upstream locations', (t) => {
-  const { cacheDir, config } = resolveForTest(t, {
+  const { cache, config } = resolveForTest(t, {
     upstreams: {
       api: {
         host: 'api',
@@ -395,7 +398,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
 
   assert.equal(config.host, 'app.local.test');
   assert.equal(config.port, 9443);
-  assert.equal(config.cache, join(cacheDir, 'visage'));
+  assert.equal(config.cache, cache);
   assert.equal(config.services.dex.image, 'ghcr.io/dexidp/dex:v2.45.1');
   assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);

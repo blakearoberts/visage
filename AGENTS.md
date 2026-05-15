@@ -11,6 +11,21 @@ This file is intended for LLM based collaborators.
 - The `codex` branch is for CI validation only; npm dist-tags are moved by
   `main` and release workflows.
 
+## Code change discipline
+
+- Prefer the smallest faithful diff that satisfies the request.
+- Before editing, identify the intended behavior change and the files that
+  should change. Keep the final diff inside that boundary.
+- When the user provides a code snippet or target shape, treat it as the source
+  of truth. Keep implementation structurally close to it; justify any
+  deviation before adding it.
+- Do not add fallback values, helper functions, lifecycle handling,
+  dependencies, configuration, or abstractions unless they are required for the
+  requested behavior.
+- Prefer existing code shape and local patterns over new abstractions.
+- After editing, review the diff line by line and remove code that is not
+  directly required.
+
 ## Command phrases
 
 - "Promote codex" means:

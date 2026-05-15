@@ -1,5 +1,5 @@
 {
-  "name": "visage-managed-service-example",
+  "name": "visage-simple-example",
   "private": true,
   "type": "module",
   "scripts": {

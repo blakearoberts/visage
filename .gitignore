@@ -1,3 +1,4 @@
 dist
+examples/*/.visage
 node_modules
 test-results

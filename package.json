@@ -45,7 +45,7 @@
   "scripts": {
     "build": "npm run clean && rollup -c",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "dev:example": "cd examples/managed-service && npm run dev",
+    "dev:example": "cd examples/simple && npm run dev",
     "format": "prettier --write \"{docs,examples,src,test}/**/*.{ts,tsx,js,jsx,json,css,html,md}\" \"*.{json,md}\"",
     "format:check": "prettier --check \"{docs,examples,src,test}/**/*.{ts,tsx,js,jsx,json,css,html,md}\" \"*.{json,md}\"",
     "promote:codex": "scripts/promote-codex.sh",

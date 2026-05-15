@@ -65,8 +65,11 @@ jobs:
           name: package
           path: package
 
-      - name: Install managed service example app
-        run: npm install --prefix examples/managed-service --package-lock=false --no-save ./package/*.tgz
+      - name: Install simple example app
+        run: npm install --prefix examples/simple --package-lock=false --no-save ./package/*.tgz
+
+      - name: Install SSR example app
+        run: npm install --prefix examples/ssr --package-lock=false --no-save ./package/*.tgz
 
       - name: Install external IdP example app
         run: npm install --prefix examples/external-idp --package-lock=false --no-save ./package/*.tgz

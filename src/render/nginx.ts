@@ -8,13 +8,15 @@ const template = `
 events {}
 
 http {
+    # Disable IPv6 DNS lookups that may fail to resolve upstream hostnames.
+    resolver 127.0.0.11 ipv6=off;
+
+    # Configure access log format.
     map $time_iso8601 $access_log_time {
         "~^[0-9]{4}-[0-9]{2}-[0-9]{2}T([0-9]{2}:[0-9]{2}:[0-9]{2})" $1;
         default $time_iso8601;
     }
-
     log_format access_log_format '$access_log_time | $status | $request_method $request_uri | $auth_email | $proxy_host';
-    resolver 127.0.0.11 ipv6=off;
 
     # Allow WebSockets (Vite HMR).
     map $http_upgrade $connection_upgrade {
@@ -23,6 +25,7 @@ http {
     }
 
     <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
+
     upstream <%~ name %> {
         <%_ if (upstream.resolve) { %>
         zone <%~ name %> 64k;
@@ -31,8 +34,8 @@ http {
         server <%~ upstream.host %>:<%~ upstream.port %>;
         <%_ } %>
     }
-
     <%_ } %>
+
     server {
         listen <%~ it.port %> ssl;
         server_name <%~ it.host %>;
@@ -43,7 +46,7 @@ http {
         access_log /var/log/nginx/access.log access_log_format;
         set $auth_email "";
 
-        # Redirect accidental plaintext HTTP requests sent to the HTTPS port.
+        # Redirect HTTP to HTTPS.
         error_page 497 =301 https://$http_host$request_uri;
 
         <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
@@ -57,6 +60,10 @@ http {
             auth_request_set  $auth_email $upstream_http_x_auth_request_email;
             auth_request_set  $auth_groups $upstream_http_x_auth_request_groups;
             auth_request_set  $auth_preferred_username $upstream_http_x_auth_request_preferred_username;
+
+            # Propagate refreshed session cookie.
+            auth_request_set  $auth_cookie $upstream_http_set_cookie;
+            add_header        Set-Cookie $auth_cookie;
 
             <%_ if (location.auth.redirect) { %>
             error_page 401 =302 /oauth2/start?rd=$scheme://$http_host$request_uri;

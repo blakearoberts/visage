@@ -21,11 +21,21 @@ export default defineConfig({
 });
 ```
 
-Then start Vite normally:
+Start Vite normally:
 
 ```console
 vite
 ```
+
+By default, you can reach the app at [https://localhost:9001/](https://localhost:9001/). You will be redirected to Dex to sign in. The default username and password is `user@example.com` and `pass`.
+
+## Why Visage
+
+Visage is a local development harness for web apps that run behind an auth-protected edge, where browser sessions are represented by secure cookies backed by OIDC tokens.
+
+Visage narrows the gap between local development, automated tests, and production by bringing production-like session lifecycle semantics to local Vite development without giving up HMR. That makes it practical to iterate on SSR identity injection, session timeout recovery, lock screens, and authenticated API calls.
+
+Visage can also use a hosted IdP, so local frontend code can call hosted backend APIs with real credentials. That avoids frontend-only auth mocks or backend-only local bypasses: code can be written for production and still work locally.
 
 ## Configuration
 
@@ -150,7 +160,7 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 
 ## TO-DO
 
-- [ ] Support SSR injection of identity into HTML responses as script tag elements.
+- [ ] Support OIDC auto-discovery with external IdP configuration.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

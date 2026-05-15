@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -502,6 +508,10 @@ test('writeOauth2ProxyConfig renders proxy settings and random cookie secret fil
   const cookieSecret = readGenerated(config, config.files.cookieSecret[0]);
   assert.match(cookieSecret, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(Buffer.from(cookieSecret, 'base64url').length, 32);
+  assert.equal(
+    statSync(join(config.cache, config.files.cookieSecret[0])).mode & 0o777,
+    0o644,
+  );
   assert.equal(oauth2Proxy.cookie_name, '__Host-sess');
   assert.equal(oauth2Proxy.cookie_expire, '8h');
   assert.equal(oauth2Proxy.cookie_refresh, '15m');

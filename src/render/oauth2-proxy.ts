@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { VisageConfig } from '../config';
@@ -25,8 +25,9 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
   const cookieSecretFile = join(config.cache, config.files.cookieSecret[0]);
   if (!existsSync(cookieSecretFile)) {
     const secret = randomBytes(32).toString('base64url');
-    writeFileSync(cookieSecretFile, secret, { encoding: 'utf-8', mode: 0o600 });
+    writeFileSync(cookieSecretFile, secret, { encoding: 'utf-8', mode: 0o644 });
   }
+  chmodSync(cookieSecretFile, 0o644);
 }
 
 function renderOauth2ProxyConfig(config: VisageConfig): string {

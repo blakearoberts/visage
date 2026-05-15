@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -136,6 +135,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.equal(compose.services.oauth2_proxy.restart, 'always');
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
+    './oauth2-cookie-secret:/etc/oauth2-proxy/cookie-secret:ro',
   ]);
   assert.deepEqual(compose.services.api, {
     image: 'example/api:test',
@@ -155,6 +155,7 @@ test('writeComposeConfig mounts empty OAuth2 client secret file for public clien
   const compose = parse(readGenerated(config, config.files.compose));
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
+    './oauth2-cookie-secret:/etc/oauth2-proxy/cookie-secret:ro',
     './oauth2-client-secret:/etc/oauth2-proxy/client-secret:ro',
   ]);
 });
@@ -473,12 +474,8 @@ test('writeDexConfig renders configured expiry and users', (t) => {
   );
 });
 
-test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
+test('writeOauth2ProxyConfig renders proxy settings and random cookie secret file', (t) => {
   const config = resolvedConfig(t);
-  const expectedCookieSecret = createHash('sha256')
-    .update('visage:cookie-secret\0')
-    .update(config.cache)
-    .digest('base64url');
 
   writeOauth2ProxyConfig(config);
 
@@ -497,7 +494,14 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   );
   assert.equal(oauth2Proxy.client_id, 'visage');
   assert.equal(oauth2Proxy.client_secret, 'visage-secret');
-  assert.equal(oauth2Proxy.cookie_secret, expectedCookieSecret);
+  assert.equal(oauth2Proxy.cookie_secret, undefined);
+  assert.equal(
+    oauth2Proxy.cookie_secret_file,
+    '/etc/oauth2-proxy/cookie-secret',
+  );
+  const cookieSecret = readGenerated(config, config.files.cookieSecret[0]);
+  assert.match(cookieSecret, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(Buffer.from(cookieSecret, 'base64url').length, 32);
   assert.equal(oauth2Proxy.cookie_name, '__Host-sess');
   assert.equal(oauth2Proxy.cookie_expire, '8h');
   assert.equal(oauth2Proxy.cookie_refresh, '15m');
@@ -517,6 +521,12 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
     'app.local.test',
     'app.local.test:9443',
   ]);
+
+  writeOauth2ProxyConfig(config);
+  assert.equal(
+    readGenerated(config, config.files.cookieSecret[0]),
+    cookieSecret,
+  );
 });
 
 test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {

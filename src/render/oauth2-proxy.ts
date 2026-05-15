@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { VisageConfig } from '../config';
@@ -21,6 +21,12 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
   if (config.oauth2.public) {
     writeFileSync(join(config.cache, config.files.clientSecret[0]), '');
   }
+
+  const cookieSecretFile = join(config.cache, config.files.cookieSecret[0]);
+  if (!existsSync(cookieSecretFile)) {
+    const secret = randomBytes(32).toString('base64url');
+    writeFileSync(cookieSecretFile, secret, { encoding: 'utf-8', mode: 0o600 });
+  }
 }
 
 function renderOauth2ProxyConfig(config: VisageConfig): string {
@@ -40,10 +46,6 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
           code_challenge_method: 'S256',
         }
       : { client_secret: config.oauth2.secret }),
-    cookie_secret: createHash('sha256')
-      .update('visage:cookie-secret\0')
-      .update(config.cache)
-      .digest('base64url'),
     ...config.cookie,
     cookie_httponly: true,
     cookie_secure: true,

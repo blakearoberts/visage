@@ -248,6 +248,12 @@ export type VisageOAuth2Client = {
    * @defaultValue `['openid', 'email', 'profile', 'offline_access']`
    */
   readonly scopes?: readonly string[];
+  /**
+   * Email domains allowed by OAuth2 Proxy after authentication.
+   *
+   * @defaultValue `['example.com']`
+   */
+  readonly emailDomains?: readonly string[];
 };
 
 /**

@@ -29,6 +29,7 @@ type ResolvedOAuth2Client = {
   readonly id: string;
   readonly secret?: string;
   readonly scopes: readonly string[];
+  readonly emailDomains: readonly string[];
   readonly public: boolean;
 };
 
@@ -171,6 +172,7 @@ const DefaultOAuth2Client = {
   id: 'visage',
   secret: 'visage-secret',
   scopes: ['openid', 'email', 'profile', 'offline_access'],
+  emailDomains: ['example.com'],
   public: false,
 } as const satisfies ResolvedOAuth2Client;
 
@@ -221,6 +223,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         ? {}
         : { secret: oauth2.clientSecret ?? DefaultOAuth2Client.secret }),
       scopes: oauth2.scopes ?? DefaultOAuth2Client.scopes,
+      emailDomains: oauth2.emailDomains ?? DefaultOAuth2Client.emailDomains,
       public: publicClient,
     },
     services,

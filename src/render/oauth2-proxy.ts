@@ -50,7 +50,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     cookie_samesite: 'lax',
     cookie_csrf_per_request: true,
     cookie_csrf_per_request_limit: 16,
-    email_domains: ['*'],
+    email_domains: config.oauth2.emailDomains,
     scope: config.oauth2.scopes.join(' '),
     ...LogFormats,
     reverse_proxy: true,

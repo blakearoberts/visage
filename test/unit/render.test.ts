@@ -507,7 +507,7 @@ test('writeOauth2ProxyConfig renders deterministic proxy settings', (t) => {
   assert.equal(oauth2Proxy.cookie_csrf_per_request, true);
   assert.equal(oauth2Proxy.cookie_csrf_per_request_limit, '16');
   assert.equal(oauth2Proxy.cookie_path, '/');
-  assert.deepEqual(oauth2Proxy.email_domains, ['*']);
+  assert.deepEqual(oauth2Proxy.email_domains, ['example.com']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
   assert.equal(oauth2Proxy.set_xauthrequest, true);
   assert.equal(oauth2Proxy.set_authorization_header, true);
@@ -525,6 +525,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
       clientId: 'local-app',
       clientSecret: null,
       scopes: ['openid', 'email', 'profile', 'offline_access'],
+      emailDomains: ['example.test'],
     },
   });
 
@@ -541,6 +542,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   );
   assert.equal(oauth2Proxy.code_challenge_method, 'S256');
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
+  assert.deepEqual(oauth2Proxy.email_domains, ['example.test']);
   assert.equal(readGenerated(config, config.files.clientSecret[0]), '');
 });
 

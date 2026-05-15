@@ -67,6 +67,7 @@ test('resolveOptions applies public defaults', () => {
     id: 'visage',
     secret: 'visage-secret',
     scopes: ['openid', 'email', 'profile', 'offline_access'],
+    emailDomains: ['example.com'],
     public: false,
   });
 });
@@ -159,6 +160,7 @@ test('resolveOptions applies OAuth2 client overrides', () => {
       clientId: 'local-app',
       clientSecret: 'local-secret',
       scopes: ['openid', 'email'],
+      emailDomains: ['example.test', 'admin.example.test'],
     },
   });
 
@@ -166,6 +168,7 @@ test('resolveOptions applies OAuth2 client overrides', () => {
     id: 'local-app',
     secret: 'local-secret',
     scopes: ['openid', 'email'],
+    emailDomains: ['example.test', 'admin.example.test'],
     public: false,
   });
 });
@@ -275,6 +278,7 @@ test('resolveOptions supports OAuth2 public PKCE clients', () => {
   assert.deepEqual(options.oauth2, {
     id: 'local-app',
     scopes: ['openid', 'email', 'profile', 'offline_access'],
+    emailDomains: ['example.com'],
     public: true,
   });
 });

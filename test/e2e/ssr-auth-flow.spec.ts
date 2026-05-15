@@ -19,7 +19,6 @@ const example = join(repo, 'examples/ssr');
 const appUrl = 'https://localhost:9003/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
-const targetUrl = new URL(appUrl);
 let appComposeProject = '';
 let logFile = '';
 let ssr: ChildProcessWithoutNullStreams | undefined;
@@ -164,7 +163,8 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
 
   await submitLoginForm(submitButton, passwordInput);
 
-  await page.waitForURL(isTargetAppUrl, { timeout: 5_000 });
+  const appHeading = page.getByRole('heading', { name: 'Hello from Visage' });
+  await expect(appHeading).toBeVisible({ timeout: 5_000 });
 }
 
 async function submitLoginForm(
@@ -207,17 +207,6 @@ async function stopSsr(): Promise<void> {
 
     running.kill('SIGINT');
   });
-}
-
-function isTargetAppUrl(url: URL): boolean {
-  return (
-    url.origin === targetUrl.origin &&
-    normalizePath(url.pathname) === normalizePath(targetUrl.pathname)
-  );
-}
-
-function normalizePath(pathname: string): string {
-  return pathname.endsWith('/') ? pathname : `${pathname}/`;
 }
 
 function projectName(name: string, workerIndex: number): string {

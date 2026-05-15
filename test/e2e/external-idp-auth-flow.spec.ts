@@ -17,7 +17,6 @@ import { e2eEnv, repo } from './environment';
 
 const example = join(repo, 'examples/external-idp');
 const appUrl = 'https://localhost:9002/';
-const targetUrl = new URL(appUrl);
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
 const externalDexProject = 'visage-external-idp';
@@ -163,7 +162,8 @@ async function completeDexLoginIfPresented(page: Page): Promise<void> {
 
   await submitLoginForm(submitButton, passwordInput);
 
-  await page.waitForURL(isTargetAppUrl, { timeout: 5_000 });
+  const appHeading = page.getByRole('heading', { name: 'Hello from Visage' });
+  await expect(appHeading).toBeVisible({ timeout: 5_000 });
 }
 
 async function submitLoginForm(
@@ -235,17 +235,6 @@ function writeDockerComposeLogs(project: string, file: string): void {
   );
   writeLog(result.stdout);
   writeLog(result.stderr);
-}
-
-function isTargetAppUrl(url: URL): boolean {
-  return (
-    url.origin === targetUrl.origin &&
-    normalizePath(url.pathname) === normalizePath(targetUrl.pathname)
-  );
-}
-
-function normalizePath(pathname: string): string {
-  return pathname.endsWith('/') ? pathname : `${pathname}/`;
 }
 
 function writeLog(chunk: Uint8Array | string): void {

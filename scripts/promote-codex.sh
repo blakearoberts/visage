@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+base_branch="${PROMOTE_CODEX_BASE_BRANCH:-main}"
+staging_branch="${PROMOTE_CODEX_BRANCH:-codex}"
 workflow_name="${PROMOTE_CODEX_WORKFLOW:-CI}"
 commit_message=""
+tmp_body_file=""
 
 usage() {
   cat <<'USAGE'
 Usage: npm run promote:codex -- [-m "Commit message"]
 
-Commits staged changes on codex, pushes codex, waits for remote CI on the exact
-codex SHA, fast-forwards main only after that CI succeeds, pushes main, waits for
-the main run, then checks local codex back out.
+Commits staged changes on codex, pushes codex, opens or updates a pull request
+from codex into main, waits for required PR checks, merges the PR, waits for the
+main CI run on the merge commit, then checks local codex back out.
 
 Options:
   -m, --message  Commit staged changes with this message before promotion.
@@ -29,6 +32,14 @@ require_command() {
 
 current_branch() {
   git branch --show-current
+}
+
+cleanup() {
+  [[ -z "$tmp_body_file" ]] || rm -f "$tmp_body_file"
+
+  if [[ "$(current_branch 2>/dev/null || true)" != "$staging_branch" ]]; then
+    git checkout "$staging_branch" >/dev/null 2>&1 || true
+  fi
 }
 
 find_run_id() {
@@ -71,6 +82,91 @@ wait_for_run() {
     die "$workflow_name run $run_id concluded with $conclusion"
 }
 
+wait_for_required_checks() {
+  local pr_number="$1"
+  local checks_count=""
+  local pending=""
+  local failed=""
+
+  for _ in {1..60}; do
+    checks_count="$(
+      gh pr checks "$pr_number" \
+        --required \
+        --json event,name \
+        --jq '[.[] | select(.event == "pull_request")] | length' 2>/dev/null || true
+    )"
+    if [[ "$checks_count" =~ ^[0-9]+$ ]] && ((checks_count > 0)); then
+      break
+    fi
+    sleep 2
+  done
+
+  if ! [[ "$checks_count" =~ ^[0-9]+$ ]] || ((checks_count == 0)); then
+    die "could not find required checks for PR #$pr_number"
+  fi
+
+  while true; do
+    failed="$(
+      gh pr checks "$pr_number" \
+        --required \
+        --json bucket,event,link,name,state \
+        --jq '.[] | select(.event == "pull_request" and (.bucket == "fail" or .bucket == "cancel")) | "\(.name): \(.state) \(.link)"'
+    )"
+    [[ -z "$failed" ]] ||
+      die "required checks did not pass for PR #$pr_number: $failed"
+
+    pending="$(
+      gh pr checks "$pr_number" \
+        --required \
+        --json bucket,event,name \
+        --jq '.[] | select(.event == "pull_request" and .bucket == "pending") | .name'
+    )"
+    [[ -n "$pending" ]] || break
+
+    echo "Waiting for required PR checks: $pending"
+    sleep 10
+  done
+}
+
+upsert_pull_request() {
+  local sha="$1"
+  local pr_number=""
+
+  tmp_body_file="$(mktemp)"
+  cat >"$tmp_body_file" <<EOF
+Promotes \`$staging_branch\` to \`$base_branch\`.
+
+Head commit: \`$sha\`
+EOF
+
+  pr_number="$(
+    gh pr list \
+      --state open \
+      --head "$staging_branch" \
+      --base "$base_branch" \
+      --json number \
+      --jq '.[0].number // empty'
+  )"
+
+  if [[ -n "$pr_number" ]]; then
+    gh pr edit "$pr_number" \
+      --title "Promote $staging_branch to $base_branch" \
+      --body-file "$tmp_body_file" >/dev/null
+  else
+    local pr_url
+    pr_url="$(
+      gh pr create \
+        --base "$base_branch" \
+        --head "$staging_branch" \
+        --title "Promote $staging_branch to $base_branch" \
+        --body-file "$tmp_body_file"
+    )"
+    pr_number="$(gh pr view "$pr_url" --json number --jq .number)"
+  fi
+
+  echo "$pr_number"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m | --message)
@@ -95,12 +191,17 @@ require_command gh
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-[[ "$(current_branch)" == "codex" ]] ||
-  die "run this from the local codex branch"
+[[ "$(current_branch)" == "$staging_branch" ]] ||
+  die "run this from the local $staging_branch branch"
 
-trap '[[ "$(current_branch 2>/dev/null || true)" == "codex" ]] || git checkout codex >/dev/null 2>&1 || true' EXIT
+trap cleanup EXIT
 
 gh auth status >/dev/null
+
+repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+can_push="$(gh api "repos/$repo" --jq '.permissions.push')"
+[[ "$can_push" == "true" ]] ||
+  die "the active gh account must have write access to $repo"
 
 if ! git diff --cached --quiet; then
   [[ -n "$commit_message" ]] ||
@@ -124,26 +225,45 @@ fi
 [[ -z "$(git status --porcelain --untracked-files=all)" ]] ||
   die "working tree is dirty; commit or move changes aside before promotion"
 
-git fetch origin main:refs/remotes/origin/main
-git merge-base --is-ancestor origin/main HEAD ||
-  die "codex does not contain origin/main; update codex before promotion"
+git fetch origin "$base_branch:refs/remotes/origin/$base_branch"
+git merge-base --is-ancestor "origin/$base_branch" HEAD ||
+  die "$staging_branch does not contain origin/$base_branch; update $staging_branch before promotion"
 
 sha="$(git rev-parse HEAD)"
-git push -u origin codex
+git push -u origin "$staging_branch"
 
-wait_for_run codex "$sha"
+pr_number="$(upsert_pull_request "$sha")"
+echo "Promote PR: #$pr_number"
 
-git fetch origin main:refs/remotes/origin/main
-git checkout main
-git pull --ff-only origin main
-git merge --ff-only "$sha"
-git push origin main
+wait_for_required_checks "$pr_number"
 
-git checkout codex
-wait_for_run main "$sha"
+git fetch origin "$base_branch:refs/remotes/origin/$base_branch"
+git merge-base --is-ancestor "origin/$base_branch" "$sha" ||
+  die "$base_branch moved while checks were running; update $staging_branch before promotion"
+
+gh pr merge "$pr_number" \
+  --merge \
+  --match-head-commit "$sha" \
+  --subject "Promote $staging_branch to $base_branch" \
+  --body "Promoted $staging_branch commit $sha."
+
+merge_sha=""
+for _ in {1..30}; do
+  merge_sha="$(
+    gh pr view "$pr_number" \
+      --json mergeCommit \
+      --jq '.mergeCommit.oid // empty'
+  )"
+  if [[ -n "$merge_sha" ]]; then
+    break
+  fi
+  sleep 2
+done
+
+[[ -n "$merge_sha" ]] ||
+  die "could not resolve merge commit for PR #$pr_number"
+
+wait_for_run "$base_branch" "$merge_sha"
 
 git fetch --prune origin
-if ! git ls-remote --exit-code --heads origin codex >/dev/null 2>&1; then
-  git branch --unset-upstream codex >/dev/null 2>&1 || true
-fi
-git checkout codex
+git checkout "$staging_branch"

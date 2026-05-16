@@ -19,11 +19,10 @@ function renderDexConfig(config: VisageConfig): string {
 
   const origin = `https://${config.host}:${config.port}`;
   const redirect = `${origin}/oauth2/callback`;
-  const upstream = config.upstreams[idp.upstream];
   return stringify({
     issuer: idp.issuer,
     storage: { type: 'memory' },
-    web: { http: `0.0.0.0:${upstream.port}` },
+    web: { http: `0.0.0.0:${idp.upstream.dex.port}` },
     oauth2: { skipApprovalScreen: true },
     staticClients: [
       {

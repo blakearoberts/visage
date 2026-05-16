@@ -306,7 +306,14 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.equal(config.upstreams.idp.scheme, 'http');
   assert.equal(config.upstreams.idp.port, 5557);
   assert.deepEqual(config.upstreams.idp.locations, {});
-  assert.equal(config.idp.upstream, 'idp');
+  assert.deepEqual(config.idp.upstream, {
+    idp: {
+      host: 'idp.localhost',
+      locations: {},
+      scheme: 'http',
+      port: 5557,
+    },
+  });
   assert.equal(config.idp.issuer, 'http://idp.localhost:5557/idp');
   assert.equal(config.idp.authorization, 'http://idp.localhost:5557/idp/auth');
   assert.equal(config.idp.token, 'http://idp.localhost:5557/idp/token');

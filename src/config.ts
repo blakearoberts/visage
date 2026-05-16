@@ -45,19 +45,20 @@ type ResolvedVisageOptions = {
 };
 
 type ResolvedBaseIdpConfig = {
-  readonly upstream: string;
   readonly issuer: string;
   readonly authorization: string;
   readonly token: string;
   readonly jwks: string;
 };
 type ResolvedDexIdpConfig = ResolvedBaseIdpConfig & {
+  readonly upstream: { readonly dex: ResolvedUpstream };
   readonly dex: {
     readonly expiry?: VisageDexExpiry;
     readonly users: readonly VisageDexUser[];
   };
 };
 type ResolvedExternalIdpConfig = ResolvedBaseIdpConfig & {
+  readonly upstream: { readonly idp: ResolvedUpstream };
   readonly dex?: never;
 };
 type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
@@ -348,19 +349,16 @@ function resolveDirectives(
 function resolveAuthPolicy(
   auth: VisageProxyPolicy['auth'] = {},
   external: boolean,
-  local: boolean,
 ): ResolvedAuthPolicy {
-  const merged = { ...DefaultProxyPolicy.auth, ...auth };
-  const forward =
-    merged.forward === true
-      ? external && !local
-        ? 'access'
-        : 'id'
-      : merged.forward;
   return {
-    enabled: merged.enabled,
-    forward,
-    redirect: merged.redirect,
+    enabled: auth.enabled ?? true,
+    forward:
+      auth.forward === true
+        ? external
+          ? 'access'
+          : 'id'
+        : (auth.forward ?? false),
+    redirect: auth.redirect ?? false,
   };
 }
 
@@ -371,13 +369,12 @@ function resolveIdpConfig({
 }: ResolvedVisageOptions): ResolvedIdpConfig {
   if ('dex' in idp) {
     const issuer = `https://${host}:${port}/dex`;
-    const upstream = `http://dex:5556/dex`;
     return {
-      upstream: 'dex',
+      upstream: { dex: BaseUpstreamDex },
       issuer,
       authorization: `${issuer}/auth`,
-      token: `${upstream}/token`,
-      jwks: `${upstream}/keys`,
+      token: 'http://dex:5556/dex/token',
+      jwks: 'http://dex:5556/dex/keys',
       dex: {
         expiry: idp.dex.expiry,
         users: (idp.dex?.users ?? DefaultDexUsers).map((user) => ({
@@ -389,24 +386,20 @@ function resolveIdpConfig({
       },
     };
   }
+  const issuer = new URL(idp.issuer);
   return {
-    upstream: 'idp',
+    upstream: {
+      idp: {
+        host: issuer.hostname,
+        locations: {},
+        scheme: issuer.protocol === 'https:' ? 'https' : 'http',
+        port: Number(issuer.port) || (issuer.protocol === 'https:' ? 443 : 80),
+      },
+    },
     issuer: idp.issuer,
     authorization: idp.issuer + (idp.authorization ?? '/auth'),
     token: idp.issuer + (idp.token ?? '/token'),
     jwks: idp.issuer + (idp.jwks ?? '/keys'),
-  };
-}
-
-function resolveExternalIdpUpstream(
-  idp: ResolvedExternalIdpConfig,
-): ResolvedUpstream {
-  const issuer = new URL(idp.issuer);
-  return {
-    host: issuer.hostname,
-    locations: {},
-    scheme: issuer.protocol === 'https:' ? 'https' : 'http',
-    port: Number(issuer.port) || (issuer.protocol === 'https:' ? 443 : 80),
   };
 }
 
@@ -417,9 +410,7 @@ export function resolveConfig(
   const idp = resolveIdpConfig(options);
   const upstreams: Record<string, ResolvedUpstream> = {
     oauth2_proxy: BaseUpstreamOauth2Proxy,
-    ...(idp.dex === undefined
-      ? { idp: resolveExternalIdpUpstream(idp) }
-      : { dex: BaseUpstreamDex }),
+    ...idp.upstream,
     ...options.upstreams,
   };
   return {
@@ -463,8 +454,7 @@ export function resolveConfig(
                 {
                   auth: resolveAuthPolicy(
                     policy.auth,
-                    external,
-                    name === 'vite',
+                    external && name !== 'vite',
                   ),
                   headers: {
                     ...(external

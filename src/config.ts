@@ -158,6 +158,13 @@ const BaseUpstreamOauth2Proxy = {
         'X-Auth-Request-Redirect': '$request_uri',
       },
     },
+    '/oauth2/sign_out': {
+      auth: { enabled: false },
+      headers: {
+        Cookie: '$http_cookie', // Forward session cookie.
+        'X-Auth-Request-Redirect': '/',
+      },
+    },
   },
 } as const satisfies ResolvedUpstream;
 

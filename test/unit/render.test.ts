@@ -287,6 +287,7 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   const nginx = readGenerated(config, config.files.nginx[0]);
   const dex = locationBlock(nginx, '/dex/');
   const oauth2Proxy = locationBlock(nginx, '/oauth2/');
+  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
 
   assert.doesNotMatch(dex, /auth_request/);
   assert.doesNotMatch(dex, /Authorization/);
@@ -294,6 +295,14 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   assert.doesNotMatch(oauth2Proxy, /Authorization/);
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2Proxy, /proxy_buffer_size 8k;/);
+  assert.doesNotMatch(oauth2SignOut, /auth_request/);
+  assert.doesNotMatch(oauth2SignOut, /Authorization/);
+  assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
+  assert.doesNotMatch(
+    oauth2SignOut,
+    /proxy_set_header X-Auth-Request-Redirect \$request_uri;/,
+  );
 });
 
 test('writeNginxConfig preserves browser host for the built-in Vite upstream', (t) => {

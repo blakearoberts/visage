@@ -4,21 +4,27 @@ set -euo pipefail
 base_branch="${PROMOTE_CODEX_BASE_BRANCH:-main}"
 staging_branch="${PROMOTE_CODEX_BRANCH:-codex}"
 workflow_name="${PROMOTE_CODEX_WORKFLOW:-CI}"
-commit_message=""
+pr_title=""
+pr_body=""
+ignore_staged=false
+ignore_unstaged=false
 tmp_body_file=""
 
 usage() {
   cat <<'USAGE'
-Usage: npm run promote:codex -- [-m "Commit message"]
+Usage: npm run promote:codex -- --pr-title "PR title" --pr-body "PR body" [options]
 
-Commits staged changes on codex, pushes codex, opens or updates a pull request
-from codex into main, waits for required PR checks, merges the PR, waits for the
-main CI run on the merge commit, then fast-forwards local codex to main. The
-remote codex PR branch may be auto-deleted by GitHub after merge.
+Pushes codex, opens or updates a pull request from codex into main, waits for
+required PR checks, merges the PR, waits for the main CI run on the merge
+commit, then fast-forwards local codex to main. The remote codex PR branch may
+be auto-deleted by GitHub after merge.
 
 Options:
-  -m, --message  Commit staged changes with this message before promotion.
-  -h, --help     Show this help.
+  --pr-title         Required pull request title.
+  --pr-body          Required pull request body.
+  --ignore-staged    Continue even when staged changes are present.
+  --ignore-unstaged  Continue even when unstaged or untracked changes are present.
+  -h, --help         Show this help.
 USAGE
 }
 
@@ -130,15 +136,12 @@ wait_for_required_checks() {
 }
 
 upsert_pull_request() {
-  local sha="$1"
+  local title="$1"
+  local body="$2"
   local pr_number=""
 
   tmp_body_file="$(mktemp)"
-  cat >"$tmp_body_file" <<EOF
-Promotes \`$staging_branch\` to \`$base_branch\`.
-
-Head commit: \`$sha\`
-EOF
+  printf '%s\n' "$body" >"$tmp_body_file"
 
   pr_number="$(
     gh pr list \
@@ -151,7 +154,7 @@ EOF
 
   if [[ -n "$pr_number" ]]; then
     gh pr edit "$pr_number" \
-      --title "Promote $staging_branch to $base_branch" \
+      --title "$title" \
       --body-file "$tmp_body_file" >/dev/null
   else
     local pr_url
@@ -159,7 +162,7 @@ EOF
       gh pr create \
         --base "$base_branch" \
         --head "$staging_branch" \
-        --title "Promote $staging_branch to $base_branch" \
+        --title "$title" \
         --body-file "$tmp_body_file"
     )"
     pr_number="$(gh pr view "$pr_url" --json number --jq .number)"
@@ -170,10 +173,31 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -m | --message)
+    --pr-title)
       [[ $# -ge 2 ]] || die "$1 requires a value"
-      commit_message="$2"
+      pr_title="$2"
       shift 2
+      ;;
+    --pr-title=*)
+      pr_title="${1#*=}"
+      shift
+      ;;
+    --pr-body)
+      [[ $# -ge 2 ]] || die "$1 requires a value"
+      pr_body="$2"
+      shift 2
+      ;;
+    --pr-body=*)
+      pr_body="${1#*=}"
+      shift
+      ;;
+    --ignore-staged)
+      ignore_staged=true
+      shift
+      ;;
+    --ignore-unstaged)
+      ignore_unstaged=true
+      shift
       ;;
     -h | --help)
       usage
@@ -186,6 +210,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ -n "${pr_title//[[:space:]]/}" ]] ||
+  die "--pr-title is required"
+[[ -n "${pr_body//[[:space:]]/}" ]] ||
+  die "--pr-body is required"
+
 require_command git
 require_command gh
 
@@ -197,34 +226,27 @@ cd "$repo_root"
 
 trap cleanup EXIT
 
+staged_paths="$(git diff --cached --name-only)"
+if [[ -n "$staged_paths" && "$ignore_staged" != true ]]; then
+  die "staged changes are present; commit or unstage them before promotion, or rerun with --ignore-staged: $staged_paths"
+fi
+
+unstaged_paths="$(
+  {
+    git diff --name-only
+    git ls-files --others --exclude-standard
+  } | sort -u
+)"
+if [[ -n "$unstaged_paths" && "$ignore_unstaged" != true ]]; then
+  die "unstaged or untracked changes are present; commit, stash, or remove them before promotion, or rerun with --ignore-unstaged: $unstaged_paths"
+fi
+
 gh auth status >/dev/null
 
 repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
 can_push="$(gh api "repos/$repo" --jq '.permissions.push')"
 [[ "$can_push" == "true" ]] ||
   die "the active gh account must have write access to $repo"
-
-if ! git diff --cached --quiet; then
-  [[ -n "$commit_message" ]] ||
-    die "staged changes require -m/--message"
-
-  overlap="$(
-    git diff --cached --name-only | while IFS= read -r path; do
-      if ! git diff --quiet -- "$path"; then
-        printf '%s\n' "$path"
-      fi
-    done
-  )"
-  [[ -z "$overlap" ]] ||
-    die "staged paths also have unstaged edits; finish these first: $overlap"
-
-  git commit -m "$commit_message"
-elif [[ -n "$commit_message" ]]; then
-  die "no staged changes to commit"
-fi
-
-[[ -z "$(git status --porcelain --untracked-files=all)" ]] ||
-  die "working tree is dirty; commit or move changes aside before promotion"
 
 git fetch origin "$base_branch:refs/remotes/origin/$base_branch"
 git merge-base --is-ancestor "origin/$base_branch" HEAD ||
@@ -233,7 +255,7 @@ git merge-base --is-ancestor "origin/$base_branch" HEAD ||
 sha="$(git rev-parse HEAD)"
 git push -u origin "$staging_branch"
 
-pr_number="$(upsert_pull_request "$sha")"
+pr_number="$(upsert_pull_request "$pr_title" "$pr_body")"
 echo "Promote PR: #$pr_number"
 
 wait_for_required_checks "$pr_number"
@@ -245,8 +267,8 @@ git merge-base --is-ancestor "origin/$base_branch" "$sha" ||
 gh pr merge "$pr_number" \
   --merge \
   --match-head-commit "$sha" \
-  --subject "Promote $staging_branch to $base_branch" \
-  --body "Promoted $staging_branch commit $sha."
+  --subject "$pr_title" \
+  --body "$pr_body"
 
 merge_sha=""
 for _ in {1..30}; do

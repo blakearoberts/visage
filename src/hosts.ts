@@ -1,14 +1,16 @@
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 
+import type { VisageConfig } from './config';
+
 const HOSTS_FILE = '/etc/hosts';
 
-export function ensureHostEntry(hostname: string): void {
+export function ensureHostEntry({ host }: VisageConfig): void {
   if (
-    !hostname ||
-    hostname.trim() !== hostname ||
-    hostname.includes('/') ||
-    hostname.includes(':')
+    !host ||
+    host.trim() !== host ||
+    host.includes('/') ||
+    host.includes(':')
   ) {
     throw new Error('Invalid hostname');
   }
@@ -22,7 +24,7 @@ export function ensureHostEntry(hostname: string): void {
     }
 
     const [address, ...names] = uncommented.split(/\s+/);
-    if (!names.includes(hostname)) {
+    if (!names.includes(host)) {
       continue;
     }
 
@@ -35,7 +37,7 @@ export function ensureHostEntry(hostname: string): void {
   }
 
   const prefix = contents.endsWith('\n') ? '' : '\n';
-  const entry = `${prefix}127.0.0.1\t${hostname} # visage\n`;
+  const entry = `${prefix}127.0.0.1\t${host} # visage\n`;
 
   try {
     appendFileSync(HOSTS_FILE, entry);

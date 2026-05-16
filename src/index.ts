@@ -1,13 +1,23 @@
-import { rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Plugin } from 'vite';
 
 import { ensureCerts } from './certs';
 import { startCompose } from './compose';
-import { resolveConfig, resolveOptions, resolveViteUpstream } from './config';
+import {
+  resolveConfig,
+  resolveOptions,
+  resolveViteUpstream,
+  type VisageConfig,
+} from './config';
 import { ensureHostEntry } from './hosts';
-import { render } from './render';
-import type { VisageOptions, VisageServer, VisageUpstream } from './types';
+import {
+  writeComposeConfig,
+  writeDexConfig,
+  writeNginxConfig,
+  writeOauth2ProxyConfig,
+} from './render';
+import type { VisageOptions, VisageServer } from './types';
 
 export type {
   VisageCookiePolicy,
@@ -38,17 +48,7 @@ export function createVisageServer(options: VisageOptions): VisageServer {
   return {
     async listen() {
       if (stop) return;
-
-      rmSync(join(config.cache, 'logs'), { recursive: true, force: true });
-
-      await ensureCerts({
-        certs: join(config.cache, config.files.certs[0]),
-        hostname: config.host,
-      });
-      ensureHostEntry(config.host);
-
-      render(config);
-      stop = await startCompose(join(config.cache, config.files.compose));
+      stop = await startVisageServer(config);
     },
     close() {
       stop?.();
@@ -91,28 +91,6 @@ export default function visage(options: VisageOptions = {}): Plugin {
         viteDevServer.config.logger.info(visageUrl ?? 'Visage failed to start');
       };
 
-      async function startVisage(vite: VisageUpstream) {
-        const config = resolveConfig(
-          resolveOptions({
-            ...options,
-            upstreams: { ...options.upstreams, vite },
-          }),
-          join(viteDevServer.config.cacheDir, 'visage'),
-        );
-        visageUrl = formatVisageUrlLog(config.host, config.port);
-
-        rmSync(join(config.cache, 'logs'), { recursive: true, force: true });
-
-        await ensureCerts({
-          certs: join(config.cache, config.files.certs[0]),
-          hostname: config.host,
-        });
-        ensureHostEntry(config.host);
-
-        render(config);
-        return startCompose(join(config.cache, config.files.compose));
-      }
-
       // monkey patch vite's listen to get vite's auto-resolved port
       const listen = viteDevServer.listen.bind(viteDevServer);
       viteDevServer.listen = async (port, isRestart) => {
@@ -121,11 +99,24 @@ export default function visage(options: VisageOptions = {}): Plugin {
         if (!address || typeof address === 'string') {
           throw new Error('Failed to resolve port for Visage');
         }
-        const vite = resolveViteUpstream({
-          port: address.port,
-          ...options.upstreams?.vite,
-        });
-        stop = await startVisage(vite);
+
+        const config = resolveConfig(
+          resolveOptions({
+            ...options,
+            upstreams: {
+              ...options.upstreams,
+              vite: resolveViteUpstream({
+                port: address.port,
+                ...options.upstreams?.vite,
+              }),
+            },
+          }),
+          join(viteDevServer.config.cacheDir, 'visage'),
+        );
+
+        visageUrl = formatVisageUrlLog(config.host, config.port);
+
+        stop = await startVisageServer(config);
         viteDevServer.httpServer?.once('close', closeBundle);
         return result;
       };
@@ -133,6 +124,24 @@ export default function visage(options: VisageOptions = {}): Plugin {
 
     closeBundle,
   };
+}
+
+async function startVisageServer(config: VisageConfig) {
+  const logs = join(config.cache, 'logs');
+  rmSync(logs, { recursive: true, force: true });
+  mkdirSync(logs, { recursive: true });
+
+  await ensureCerts(config);
+  ensureHostEntry(config);
+
+  writeComposeConfig(config);
+  if ('dex' in config.idp) {
+    writeDexConfig(config);
+  }
+  writeNginxConfig(config);
+  writeOauth2ProxyConfig(config);
+
+  return startCompose(config);
 }
 
 function formatVisageUrlLog(host: string, port: number): string {

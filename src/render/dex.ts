@@ -6,8 +6,8 @@ import { stringify } from 'yaml';
 import type { VisageConfig } from '../config';
 
 export function writeDexConfig(config: VisageConfig): void {
-  const file = join(config.cache, config.files.dex[0]);
   const render = renderDexConfig(config);
+  const file = join(config.cache, config.files.dex[0]);
   writeFileSync(file, render, 'utf-8');
 }
 

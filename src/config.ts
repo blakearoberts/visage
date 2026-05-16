@@ -73,8 +73,14 @@ type ResolvedUpstream = {
   readonly locations: Readonly<Record<string, VisageProxyPolicy>>;
 };
 
+type ResolvedAuthPolicy = {
+  readonly enabled: boolean;
+  readonly forward: false | 'id' | 'access';
+  readonly redirect: boolean;
+};
+
 type ResolvedProxyPolicy = {
-  readonly auth: Required<VisageProxyPolicy['auth']>;
+  readonly auth: ResolvedAuthPolicy;
   readonly headers: Readonly<Record<string, string>>;
   readonly directives: Readonly<Record<string, readonly string[]>>;
 };
@@ -181,7 +187,7 @@ const DefaultOAuth2Client = {
 } as const satisfies ResolvedOAuth2Client;
 
 const DefaultProxyPolicy = {
-  auth: { enabled: true, forward: 'id', redirect: false },
+  auth: { enabled: true, forward: false, redirect: false },
   headers: {
     Cookie: '""', // Don't forward session cookie.
     Host: '$host',
@@ -339,6 +345,25 @@ function resolveDirectives(
   );
 }
 
+function resolveAuthPolicy(
+  auth: VisageProxyPolicy['auth'] = {},
+  external: boolean,
+  local: boolean,
+): ResolvedAuthPolicy {
+  const merged = { ...DefaultProxyPolicy.auth, ...auth };
+  const forward =
+    merged.forward === true
+      ? external && !local
+        ? 'access'
+        : 'id'
+      : merged.forward;
+  return {
+    enabled: merged.enabled,
+    forward,
+    redirect: merged.redirect,
+  };
+}
+
 function resolveIdpConfig({
   host,
   port,
@@ -436,7 +461,11 @@ export function resolveConfig(
               Object.entries(upstream.locations ?? {}).map(([path, policy]) => [
                 path,
                 {
-                  auth: { ...DefaultProxyPolicy.auth, ...policy.auth },
+                  auth: resolveAuthPolicy(
+                    policy.auth,
+                    external,
+                    name === 'vite',
+                  ),
                   headers: {
                     ...(external
                       ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
@@ -462,7 +491,7 @@ const BaseViteUpstream = {
   scheme: 'http',
   locations: {
     '/': {
-      auth: { forward: undefined, redirect: true },
+      auth: { redirect: true },
       headers: {
         Host: '$host',
         Upgrade: '$http_upgrade',

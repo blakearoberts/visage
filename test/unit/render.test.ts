@@ -248,7 +248,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.doesNotMatch(api, /proxy_buffer_size 8k;/);
   assert.match(api, /proxy_hide_header X-A;/);
   assert.match(api, /proxy_hide_header X-B;/);
-  assert.match(api, /proxy_set_header Authorization \$authorization;/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
@@ -323,10 +323,44 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
   assert.match(api, /proxy_set_header Host api\.example\.test;/);
-  assert.match(api, /proxy_set_header Authorization \$authorization;/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api\.example\.test;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
+});
+
+test('writeNginxConfig resolves automatic token forwarding by upstream kind', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      api: {
+        image: 'example/api:test',
+        upstream: {
+          locations: { '/api/': { auth: { forward: true } } },
+        },
+      },
+    },
+    upstreams: {
+      external: {
+        locations: { '/external/': { auth: { forward: true } } },
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const api = locationBlock(nginx, '/api/');
+  const external = locationBlock(nginx, '/external/');
+  assert.match(api, /proxy_set_header Authorization \$authorization;/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization "Bearer/);
+  assert.match(
+    external,
+    /proxy_set_header Authorization "Bearer \$access_token";/,
+  );
+  assert.doesNotMatch(
+    external,
+    /proxy_set_header Authorization \$authorization;/,
+  );
 });
 
 test('writeNginxConfig supports explicit access-token forwarding', (t) => {

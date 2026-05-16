@@ -432,7 +432,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.metrics.host, 'metrics');
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].auth, {
     enabled: true,
-    forward: 'id',
+    forward: false,
     redirect: false,
   });
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
@@ -444,6 +444,34 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
   assert.equal(config.upstreams.metrics.scheme, 'https');
   assert.equal(config.upstreams.metrics.port, 443);
+});
+
+test('resolveConfig resolves automatic token forwarding by upstream kind', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      api: {
+        image: 'example/api:test',
+        upstream: {
+          locations: { '/api/': { auth: { forward: true } } },
+        },
+      },
+    },
+    upstreams: {
+      external: {
+        locations: { '/external/': { auth: { forward: true } } },
+      },
+      vite: {
+        locations: { '/': { auth: { forward: true } } },
+      },
+    },
+  });
+
+  assert.equal(config.upstreams.api.locations['/api/'].auth.forward, 'id');
+  assert.equal(
+    config.upstreams.external.locations['/external/'].auth.forward,
+    'access',
+  );
+  assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
 });
 
 test('resolveConfig lets named services and upstreams override base entries', (t) => {

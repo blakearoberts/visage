@@ -72,17 +72,21 @@ visage({
 });
 ```
 
-Authenticated upstream locations forward the OIDC ID token as the upstream
-`Authorization` bearer value by default. Set `auth.forward` to `'access'` for
-legacy upstreams that explicitly expect the OAuth access token as
-`Authorization: Bearer ...`.
+Authenticated upstream locations do not forward bearer tokens by default. Set
+`auth.forward` to `true` to forward the default bearer token for the upstream
+kind: external upstreams receive the OAuth access token, while local service
+upstreams receive the OIDC ID token.
+
+Hosted backend APIs that validate bearer auth should generally receive the
+access token, provided the token is issued for that API's issuer, audience, and
+scopes. Use `'access'` or `'id'` when you need to force a specific token kind.
 
 ```ts
 visage({
   upstreams: {
     api: {
       locations: {
-        '/api/': { auth: { forward: 'access' } },
+        '/api/': { auth: { forward: true } },
       },
     },
   },

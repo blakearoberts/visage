@@ -341,15 +341,16 @@ export type VisageProxyPolicy = {
      */
     readonly redirect?: boolean;
     /**
-     * Token forwarding behavior for the upstream `Authorization` header.
+     * Token forwarding behavior for the upstream `Authorization` header. Set
+     * to `false` to omit a bearer token. Set to `true` to forward the
+     * default bearer token for the upstream kind: an OAuth access token for
+     * external upstreams, or an OIDC ID token for local service upstreams.
      *
-     * `'id'` forwards the authenticated OIDC ID token. `'access'` forwards the
-     * OAuth access token for legacy/resource-server integrations that
-     * explicitly require it.
+     * Use `'id'` or `'access'` to force a specific token kind.
      *
-     * @defaultValue `'id'`
+     * @defaultValue `false`
      */
-    readonly forward?: 'id' | 'access';
+    readonly forward?: boolean | 'id' | 'access';
   };
   /**
    * Request headers to set when proxying to the upstream. Values may include

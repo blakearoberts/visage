@@ -85,13 +85,15 @@ wait_for_run() {
 wait_for_required_checks() {
   local pr_number="$1"
   local checks_count=""
+  local pending=""
+  local failed=""
 
   for _ in {1..60}; do
     checks_count="$(
       gh pr checks "$pr_number" \
         --required \
-        --json name \
-        --jq length 2>/dev/null || true
+        --json event,name \
+        --jq '[.[] | select(.event == "pull_request")] | length' 2>/dev/null || true
     )"
     if [[ "$checks_count" =~ ^[0-9]+$ ]] && ((checks_count > 0)); then
       break
@@ -103,17 +105,27 @@ wait_for_required_checks() {
     die "could not find required checks for PR #$pr_number"
   fi
 
-  gh pr checks "$pr_number" --required --watch --fail-fast
+  while true; do
+    failed="$(
+      gh pr checks "$pr_number" \
+        --required \
+        --json bucket,event,link,name,state \
+        --jq '.[] | select(.event == "pull_request" and (.bucket == "fail" or .bucket == "cancel")) | "\(.name): \(.state) \(.link)"'
+    )"
+    [[ -z "$failed" ]] ||
+      die "required checks did not pass for PR #$pr_number: $failed"
 
-  local unresolved
-  unresolved="$(
-    gh pr checks "$pr_number" \
-      --required \
-      --json name,bucket,state,link \
-      --jq '.[] | select(.bucket != "pass" and .bucket != "skipping") | "\(.name): \(.state) \(.link)"'
-  )"
-  [[ -z "$unresolved" ]] ||
-    die "required checks did not pass for PR #$pr_number: $unresolved"
+    pending="$(
+      gh pr checks "$pr_number" \
+        --required \
+        --json bucket,event,name \
+        --jq '.[] | select(.event == "pull_request" and .bucket == "pending") | .name'
+    )"
+    [[ -n "$pending" ]] || break
+
+    echo "Waiting for required PR checks: $pending"
+    sleep 10
+  done
 }
 
 upsert_pull_request() {

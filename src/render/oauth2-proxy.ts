@@ -34,11 +34,15 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
   const data = {
     http_address: `0.0.0.0:${config.upstreams.oauth2_proxy.port}`,
     provider: 'oidc',
-    oidc_issuer_url: config.idp.issuer,
-    skip_oidc_discovery: true,
-    login_url: config.idp.authorization,
-    redeem_url: config.idp.token,
-    oidc_jwks_url: config.idp.jwks,
+    oidc_issuer_url: config.idp.oidc.issuer,
+    ...('authorization' in config.idp.oidc
+      ? {
+          skip_oidc_discovery: true,
+          login_url: config.idp.oidc.authorization,
+          redeem_url: config.idp.oidc.token,
+          oidc_jwks_url: config.idp.oidc.jwks,
+        }
+      : {}),
     redirect_url: `https://${config.host}:${config.port}/oauth2/callback`,
     client_id: config.oauth2.id,
     ...(config.oauth2.secret === undefined

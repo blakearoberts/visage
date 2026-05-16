@@ -600,7 +600,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   assert.equal(readGenerated(config, config.files.clientSecret[0]), '');
 });
 
-test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => {
+test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t) => {
   const config = resolvedConfig(t, {
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
@@ -613,7 +613,31 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
   assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
-  assert.equal(oauth2Proxy.login_url, 'http://idp.localhost:5557/idp/auth');
+  assert.equal(oauth2Proxy.skip_oidc_discovery, undefined);
+  assert.equal(oauth2Proxy.login_url, undefined);
+  assert.equal(oauth2Proxy.redeem_url, undefined);
+  assert.equal(oauth2Proxy.oidc_jwks_url, undefined);
+});
+
+test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      authorization: '/authorize',
+    },
+  });
+
+  writeOauth2ProxyConfig(config);
+
+  const oauth2Proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
+  assert.equal(oauth2Proxy.skip_oidc_discovery, true);
+  assert.equal(
+    oauth2Proxy.login_url,
+    'http://idp.localhost:5557/idp/authorize',
+  );
   assert.equal(oauth2Proxy.redeem_url, 'http://idp.localhost:5557/idp/token');
   assert.equal(oauth2Proxy.oidc_jwks_url, 'http://idp.localhost:5557/idp/keys');
 });

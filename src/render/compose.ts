@@ -14,7 +14,7 @@ function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = config.services;
   return stringify({
     services: {
-      ...(config.idp.dex !== undefined
+      ...('dex' in config.idp
         ? {
             dex: {
               ...config.services.dex,

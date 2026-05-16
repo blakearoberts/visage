@@ -184,9 +184,6 @@ test('resolveOptions applies IdP overrides', () => {
 
   assert.deepEqual(options.idp, {
     issuer: 'http://idp.localhost:5557/idp',
-    authorization: '/auth',
-    token: '/token',
-    jwks: '/keys',
   });
 });
 
@@ -314,13 +311,13 @@ test('resolveConfig supports external IdP upstreams', (t) => {
       port: 5557,
     },
   });
-  assert.equal(config.idp.issuer, 'http://idp.localhost:5557/idp');
-  assert.equal(config.idp.authorization, 'http://idp.localhost:5557/idp/auth');
-  assert.equal(config.idp.token, 'http://idp.localhost:5557/idp/token');
-  assert.equal(config.idp.jwks, 'http://idp.localhost:5557/idp/keys');
+  assert.equal(config.idp.oidc.issuer, 'http://idp.localhost:5557/idp');
+  assert.equal('authorization' in config.idp, false);
+  assert.equal('token' in config.idp, false);
+  assert.equal('jwks' in config.idp, false);
 });
 
-test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t) => {
+test('resolveConfig uses issuer scheme for external IdP upstream defaults', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
       issuer: 'https://idp.example.test/idp',
@@ -330,8 +327,9 @@ test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t
   assert.equal(config.upstreams.idp.scheme, 'https');
   assert.equal(config.upstreams.idp.port, 443);
   assert.deepEqual(config.upstreams.idp.locations, {});
-  assert.equal(config.idp.token, 'https://idp.example.test/idp/token');
-  assert.equal(config.idp.jwks, 'https://idp.example.test/idp/keys');
+  assert.equal('authorization' in config.idp, false);
+  assert.equal('token' in config.idp, false);
+  assert.equal('jwks' in config.idp, false);
 });
 
 test('resolveConfig omits external IdP upstream locations for root issuer paths', (t) => {
@@ -348,12 +346,17 @@ test('resolveConfig omits external IdP upstream locations for root issuer paths'
   assert.equal(config.upstreams.idp.scheme, 'https');
   assert.equal(config.upstreams.idp.port, 443);
   assert.deepEqual(config.upstreams.idp.locations, {});
+  assert.equal(config.idp.oidc.issuer, 'https://idp.example.test');
+  assert.ok('authorization' in config.idp.oidc);
   assert.equal(
-    config.idp.authorization,
+    config.idp.oidc.authorization,
     'https://idp.example.test/oauth2/v2/authorize?prompt=login',
   );
-  assert.equal(config.idp.token, 'https://idp.example.test/oauth2/v2/token');
-  assert.equal(config.idp.jwks, 'https://idp.example.test/oauth2/v2/jwks');
+  assert.equal(
+    config.idp.oidc.token,
+    'https://idp.example.test/oauth2/v2/token',
+  );
+  assert.equal(config.idp.oidc.jwks, 'https://idp.example.test/oauth2/v2/jwks');
 });
 
 test('resolveConfig preserves managed service defaults for partial service overrides', (t) => {

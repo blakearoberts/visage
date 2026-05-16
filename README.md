@@ -97,6 +97,19 @@ OAuth2 Proxy identity values can also be mapped explicitly through headers such
 as `$auth_user`, `$auth_email`, `$auth_groups`, and
 `$auth_preferred_username`.
 
+### External IdPs
+
+External OIDC providers use issuer discovery by default:
+
+```ts
+visage({
+  idp: { issuer: 'https://idp.example.test/oauth2/default' },
+});
+```
+
+Configure `authorization`, `token`, or `jwks` only when the provider endpoints
+must be rendered explicitly instead of discovered from the issuer.
+
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
 ## Expected Local URLs
@@ -164,7 +177,9 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 
 ## TO-DO
 
-- [ ] Support OIDC auto-discovery with external IdP configuration.
+- [ ] Configure downstream trusted IPs (NGINX) for OAuth2 Proxy.
+- [ ] Support CSRF (click-jacking) mitigations/projections.
+- [ ] Support IdP logout with post logout redirect.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

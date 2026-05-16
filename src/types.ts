@@ -103,11 +103,14 @@ export type VisageCookiePolicy = {
 };
 
 /**
- * Managed Dex identity provider options.
+ * Managed Dex identity provider options. Dex is the default identity provider
+ * for Visage.
  */
 export type VisageDexOptions = {
   /**
    * Token expiration and rotation settings rendered into the Dex config.
+   *
+   * @see {@link https://dexidp.io/docs/configuration/tokens/#expiration-and-rotation-settings}
    */
   readonly expiry?: VisageDexExpiry;
   /**
@@ -196,28 +199,34 @@ export type VisageDexUser = {
  */
 export type VisageExternalIdpOptions = {
   /**
-   * OIDC issuer URL used by OAuth2 Proxy.
+   * OIDC issuer URL used by OAuth2 Proxy. When no endpoint paths are
+   * configured, OAuth2 Proxy discovers provider endpoints from this issuer.
    */
   readonly issuer: string;
   /**
    * OIDC authorization path appended to
-   * {@link VisageExternalIdpOptions.issuer}.
+   * {@link VisageExternalIdpOptions.issuer}. Configure this, `token`, or `jwks`
+   * to disable OIDC discovery and render explicit provider endpoints.
    *
-   * @defaultValue '/auth'
+   * @defaultValue Discovered from the issuer.
    */
   readonly authorization?: string;
   /**
    * OIDC token endpoint path appended to
-   * {@link VisageExternalIdpOptions.issuer}.
+   * {@link VisageExternalIdpOptions.issuer}. Configure this, `authorization`,
+   * or `jwks` to disable OIDC discovery and render explicit provider
+   * endpoints.
    *
-   * @defaultValue '/token'
+   * @defaultValue Discovered from the issuer.
    */
   readonly token?: string;
   /**
    * OIDC JWKS endpoint path appended to
-   * {@link VisageExternalIdpOptions.issuer}.
+   * {@link VisageExternalIdpOptions.issuer}. Configure this, `authorization`,
+   * or `token` to disable OIDC discovery and render explicit provider
+   * endpoints.
    *
-   * @defaultValue '/keys'
+   * @defaultValue Discovered from the issuer.
    */
   readonly jwks?: string;
 };

@@ -12,33 +12,37 @@ export function writeDexConfig(config: VisageConfig): void {
 }
 
 function renderDexConfig(config: VisageConfig): string {
-  const { idp } = config;
-  if (idp.dex === undefined) {
-    throw new Error('Dex config is required to render Dex');
-  }
-
-  const origin = `https://${config.host}:${config.port}`;
-  const redirect = `${origin}/oauth2/callback`;
+  if (!('dex' in config.idp)) throw new Error('Dex config missing');
+  const {
+    host,
+    port,
+    oauth2,
+    idp: {
+      dex: { expiry, users },
+      oidc,
+      upstream,
+    },
+  } = config;
   return stringify({
-    issuer: idp.issuer,
+    issuer: oidc.issuer,
     storage: { type: 'memory' },
-    web: { http: `0.0.0.0:${idp.upstream.dex.port}` },
+    web: { http: `0.0.0.0:${upstream.dex.port}` },
     oauth2: { skipApprovalScreen: true },
     staticClients: [
       {
-        id: config.oauth2.id,
+        id: oauth2.id,
         name: 'Visage',
-        ...(config.oauth2.secret === undefined
+        ...(oauth2.secret === undefined
           ? { public: true }
-          : { secret: config.oauth2.secret }),
-        redirectURIs: [redirect],
+          : { secret: oauth2.secret }),
+        redirectURIs: [`https://${host}:${port}/oauth2/callback`],
       },
     ],
     enablePasswordDB: true,
-    ...(idp.dex.expiry === undefined ? {} : { expiry: idp.dex.expiry }),
-    staticPasswords: idp.dex.users.map(({ password, ...user }) => ({
+    ...(expiry === undefined ? {} : { expiry }),
+    staticPasswords: users.map(({ password, ...user }) => ({
       ...user,
-      hash: hashSync(password, 10),
+      hash: hashSync(password),
     })),
   });
 }

@@ -267,3 +267,5 @@ wait_for_run "$base_branch" "$merge_sha"
 
 git fetch --prune origin
 git checkout "$staging_branch"
+git merge --ff-only "origin/$base_branch"
+git push -u origin "$staging_branch"

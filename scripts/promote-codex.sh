@@ -13,7 +13,8 @@ Usage: npm run promote:codex -- [-m "Commit message"]
 
 Commits staged changes on codex, pushes codex, opens or updates a pull request
 from codex into main, waits for required PR checks, merges the PR, waits for the
-main CI run on the merge commit, then checks local codex back out.
+main CI run on the merge commit, then fast-forwards local codex to main. The
+remote codex PR branch may be auto-deleted by GitHub after merge.
 
 Options:
   -m, --message  Commit staged changes with this message before promotion.
@@ -268,4 +269,7 @@ wait_for_run "$base_branch" "$merge_sha"
 git fetch --prune origin
 git checkout "$staging_branch"
 git merge --ff-only "origin/$base_branch"
-git push -u origin "$staging_branch"
+
+if ! git rev-parse --verify --quiet "refs/remotes/origin/$staging_branch" >/dev/null; then
+  git branch --unset-upstream "$staging_branch" >/dev/null 2>&1 || true
+fi

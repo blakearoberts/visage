@@ -4,12 +4,13 @@ This file is intended for LLM based collaborators.
 
 ## Guidelines
 
-- Use the `codex` branch as the shared staging branch for next-type work that
-  needs hosted CI before it is merged to `main`.
-- LLM collaborators may push to `codex` for that staging purpose. Do not push
-  directly to `main` unless the user explicitly requests it.
-- The `codex` branch is for CI validation only; npm dist-tags are moved by
-  `main` and release workflows.
+- Use the local `codex` branch as the shared staging branch for next-type work
+  that needs hosted CI before it is merged to `main`.
+- LLM collaborators may push or recreate the remote `codex` branch for that
+  staging purpose. Do not push directly to `main` unless the user explicitly
+  requests it.
+- The remote `codex` branch is disposable after its pull request merges; GitHub
+  may auto-delete it. npm dist-tags are moved by `main` and release workflows.
 
 ## Code change discipline
 
@@ -31,12 +32,13 @@ This file is intended for LLM based collaborators.
 - "Promote codex" means:
   1. Work from the local `codex` branch.
   2. Commit only the intended changes to `codex`.
-  3. Push `codex`.
+  3. Push or recreate remote `codex`.
   4. Open or update a pull request from `codex` into `main`.
   5. Wait for the required pull request status checks to pass.
   6. Merge the pull request through GitHub.
   7. Wait for the remote `CI` workflow on the exact `main` merge commit.
-  8. Check out local `codex` before finishing.
+  8. Fast-forward local `codex` to the `main` merge commit before finishing,
+     and let GitHub auto-delete the remote `codex` PR branch.
   9. Or, use `npm run promote:codex -- -m "<commit message>"`.
 
 ## Programmatic checks

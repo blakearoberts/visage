@@ -1,0 +1,123 @@
+name: Publish Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: visage-publish-release-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.head_commit.message, 'chore(release):')
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve release version
+        id: release-version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_name="$(node -p "require('./package.json').name")"
+          release_version="$(node -p "require('./package.json').version")"
+
+          if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release version must be a stable semver version like 1.2.3." >&2
+            exit 1
+          fi
+
+          echo "package-name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$release_version" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release target
+        env:
+          PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          git fetch origin main:refs/remotes/origin/main --tags
+
+          if [[ "$(git rev-parse HEAD)" != "$RELEASE_COMMIT" ]]; then
+            echo "Checked out $(git rev-parse HEAD), expected $RELEASE_COMMIT." >&2
+            exit 1
+          fi
+
+          if [[ "$RELEASE_COMMIT" != "$(git rev-parse origin/main)" ]]; then
+            echo "main moved after CI passed. Re-run the release from the latest main." >&2
+            exit 1
+          fi
+
+          if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "Tag $RELEASE_TAG already exists locally." >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Tag $RELEASE_TAG already exists on origin." >&2
+            exit 1
+          fi
+
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published to npm." >&2
+            exit 1
+          fi
+
+      - name: Build release package
+        run: |
+          npm ci
+          npm run build
+          mkdir -p package
+          npm pack --pack-destination package
+
+      - name: Tag release
+        env:
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+        run: |
+          git tag "$RELEASE_TAG" "$RELEASE_COMMIT"
+          git push origin "$RELEASE_TAG"
+
+      - name: Publish release to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
+        run: |
+          npm publish ./package/*.tgz --access public --tag latest --provenance
+          npm dist-tag add "$PACKAGE_NAME@$PACKAGE_VERSION" latest
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            --verify-tag \
+            --title "$RELEASE_TAG" \
+            --notes "Published [$PACKAGE_NAME@$PACKAGE_VERSION](https://www.npmjs.com/package/$PACKAGE_NAME/v/$PACKAGE_VERSION) to npm with the \`latest\` dist-tag."

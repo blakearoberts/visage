@@ -421,6 +421,10 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.dex.scheme, 'http');
   assert.equal(config.upstreams.oauth2_proxy.port, 4180);
   assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
+  assert.deepEqual(config.network, {
+    name: `${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}_nginx`,
+    trustedProxyIps: [],
+  });
 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
     enabled: true,

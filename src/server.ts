@@ -10,6 +10,7 @@ import {
   type VisageConfig,
 } from './config';
 import { ensureHostEntry } from './hosts';
+import { ensureNginxNetwork } from './network';
 import {
   writeComposeConfig,
   writeDexConfig,
@@ -52,12 +53,14 @@ export async function startVisageServer(
   await ensureCerts(config);
   ensureHostEntry(config);
 
-  writeComposeConfig(config);
-  if ('dex' in config.idp) {
-    writeDexConfig(config);
-  }
-  writeNginxConfig(config);
-  writeOauth2ProxyConfig(config);
+  const renderConfig = ensureNginxNetwork(config);
 
-  return startCompose(config);
+  writeComposeConfig(renderConfig);
+  if ('dex' in renderConfig.idp) {
+    writeDexConfig(renderConfig);
+  }
+  writeNginxConfig(renderConfig);
+  writeOauth2ProxyConfig(renderConfig);
+
+  return startCompose(renderConfig);
 }

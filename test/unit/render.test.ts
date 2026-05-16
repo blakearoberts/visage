@@ -52,6 +52,19 @@ function readGenerated(config: VisageConfig, file: string) {
   return readFileSync(join(config.cache, file), 'utf8');
 }
 
+function withNetwork(
+  config: VisageConfig,
+  trustedProxyIps: readonly string[],
+): VisageConfig {
+  return {
+    ...config,
+    network: {
+      ...config.network,
+      trustedProxyIps,
+    },
+  };
+}
+
 function locationBlock(rendered: string, path: string) {
   const marker = `location ${path} {`;
   const start = rendered.indexOf(marker);
@@ -148,6 +161,12 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     command: ['serve'],
     depends_on: ['nginx'],
     restart: 'on-failure',
+  });
+  assert.deepEqual(compose.networks, {
+    default: {
+      external: true,
+      name: config.network.name,
+    },
   });
 });
 
@@ -515,7 +534,7 @@ test('writeDexConfig renders configured expiry and users', (t) => {
 });
 
 test('writeOauth2ProxyConfig renders proxy settings and random cookie secret file', (t) => {
-  const config = resolvedConfig(t);
+  const config = withNetwork(resolvedConfig(t), ['172.30.0.0/16']);
 
   writeOauth2ProxyConfig(config);
 
@@ -557,6 +576,7 @@ test('writeOauth2ProxyConfig renders proxy settings and random cookie secret fil
   assert.equal(oauth2Proxy.cookie_path, '/');
   assert.deepEqual(oauth2Proxy.email_domains, ['example.com']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
+  assert.deepEqual(oauth2Proxy.trusted_proxy_ips, ['172.30.0.0/16']);
   assert.equal(oauth2Proxy.set_xauthrequest, true);
   assert.equal(oauth2Proxy.set_authorization_header, true);
   assert.equal(oauth2Proxy.pass_access_token, true);

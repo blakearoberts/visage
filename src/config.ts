@@ -107,6 +107,10 @@ export type VisageConfig = {
     readonly clientSecret: Volume;
     readonly cookieSecret: Volume;
   };
+  readonly network: {
+    readonly name: string;
+    readonly trustedProxyIps: readonly string[];
+  };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
   readonly upstreams: Readonly<Record<string, ResolvedConfigUpstream>>;
@@ -337,6 +341,10 @@ export function resolveConfig(
     oauth2: options.oauth2,
     cache,
     files: BaseFiles,
+    network: {
+      name: `${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}_nginx`,
+      trustedProxyIps: [],
+    },
     services: {
       ...('dex' in idp
         ? {

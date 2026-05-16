@@ -177,7 +177,6 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 
 ## TO-DO
 
-- [ ] Configure downstream trusted IPs (NGINX) for OAuth2 Proxy.
 - [ ] Support CSRF (click-jacking) mitigations/projections.
 - [ ] Support IdP logout with post logout redirect.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).

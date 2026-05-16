@@ -61,6 +61,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     whitelist_domains: [config.host, `${config.host}:${config.port}`],
     scope: config.oauth2.scopes.join(' '),
     reverse_proxy: true,
+    trusted_proxy_ips: config.network.trustedProxyIps,
     set_xauthrequest: true,
     set_authorization_header: true,
     pass_access_token: true,

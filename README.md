@@ -27,7 +27,7 @@ Start Vite normally:
 vite
 ```
 
-By default, you can reach the app at [https://localhost:9001/](https://localhost:9001/). You will be redirected to Dex to sign in. The default username and password is `user@example.com` and `pass`.
+By default, you can reach the app at `https://localhost:9001`. You will be redirected to Dex to sign in. The default username and password is `user@example.com` and `pass`.
 
 ## Why Visage
 

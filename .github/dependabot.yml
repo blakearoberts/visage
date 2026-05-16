@@ -1,6 +1,14 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directory: "/"
+    directories:
+      - "/"
+      - "/examples/external-idp"
+      - "/examples/simple"
+      - "/examples/ssr"
     schedule:
       interval: "weekly"
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"

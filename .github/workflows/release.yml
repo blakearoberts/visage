@@ -7,9 +7,11 @@ on:
         description: Stable npm version to release. Defaults to the current package version without any prerelease suffix.
         required: false
         type: string
+  push:
+    branches: [main]
 
 concurrency:
-  group: visage-${{ github.ref }}
+  group: visage-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -18,17 +20,20 @@ permissions:
 jobs:
   checks:
     name: Checks
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'chore(release):')
     uses: ./.github/workflows/checks.yml
     permissions:
       contents: read
 
-  release:
-    name: Release
+  prepare:
+    name: Prepare Release PR
     runs-on: ubuntu-latest
     needs: checks
+    if: github.event_name == 'workflow_dispatch'
     permissions:
+      actions: write
       contents: write
-      id-token: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -60,6 +65,7 @@ jobs:
             exit 1
           fi
 
+          echo "branch=release/v$release_version" >> "$GITHUB_OUTPUT"
           echo "package-name=$package_name" >> "$GITHUB_OUTPUT"
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
           echo "tag=v$release_version" >> "$GITHUB_OUTPUT"
@@ -119,19 +125,137 @@ jobs:
           mkdir -p package
           npm pack --pack-destination package
 
-      - name: Commit and tag release
+      - name: Create release pull request
         env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
+          RELEASE_BRANCH: ${{ steps.release-version.outputs.branch }}
           RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
         run: |
           set -euo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B "$RELEASE_BRANCH"
           git add package.json package-lock.json
           git commit -m "chore(release): $RELEASE_TAG"
-          git tag "$RELEASE_TAG"
-          git push origin HEAD:main
+
+          git fetch origin "refs/heads/$RELEASE_BRANCH:refs/remotes/origin/$RELEASE_BRANCH" || true
+          git push --force-with-lease="refs/heads/$RELEASE_BRANCH" origin HEAD:"$RELEASE_BRANCH"
+
+          cat > release-pr.md <<EOF
+          Prepares $PACKAGE_NAME@$PACKAGE_VERSION for stable release.
+
+          After this PR merges to main, the Release workflow will tag the merge commit, create the GitHub release, publish to npm with provenance, and move the latest dist-tag.
+          EOF
+
+          if pr_url="$(gh pr view "$RELEASE_BRANCH" --json url --jq .url 2>/dev/null)"; then
+            gh pr edit "$RELEASE_BRANCH" \
+              --title "chore(release): $RELEASE_TAG" \
+              --body-file release-pr.md
+          else
+            pr_url="$(
+              gh pr create \
+                --base main \
+                --head "$RELEASE_BRANCH" \
+                --title "chore(release): $RELEASE_TAG" \
+                --body-file release-pr.md
+            )"
+          fi
+
+          echo "Release PR: $pr_url"
+          gh workflow run CI --ref "$RELEASE_BRANCH"
+
+  publish:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: checks
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'chore(release):')
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve release version
+        id: release-version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_name="$(node -p "require('./package.json').name")"
+          release_version="$(node -p "require('./package.json').version")"
+
+          if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release version must be a stable semver version like 1.2.3." >&2
+            exit 1
+          fi
+
+          echo "package-name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "version=$release_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$release_version" >> "$GITHUB_OUTPUT"
+
+      - name: Validate release target
+        env:
+          PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          git fetch origin main:refs/remotes/origin/main --tags
+
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+            echo "main moved after this workflow started. Re-run the release from the latest main." >&2
+            exit 1
+          fi
+
+          if git rev-parse --verify --quiet "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "Tag $RELEASE_TAG already exists locally." >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Tag $RELEASE_TAG already exists on origin." >&2
+            exit 1
+          fi
+
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published to npm." >&2
+            exit 1
+          fi
+
+      - name: Build release package
+        run: |
+          npm ci
+          npm run build
+          mkdir -p package
+          npm pack --pack-destination package
+
+      - name: Tag release
+        env:
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+        run: |
+          git tag "$RELEASE_TAG" "$GITHUB_SHA"
           git push origin "$RELEASE_TAG"
+
+      - name: Publish release to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
+        run: |
+          npm publish ./package/*.tgz --access public --tag latest --provenance
+          npm dist-tag add "$PACKAGE_NAME@$PACKAGE_VERSION" latest
 
       - name: Publish GitHub release
         env:
@@ -144,12 +268,3 @@ jobs:
             --verify-tag \
             --title "$RELEASE_TAG" \
             --notes "Published [$PACKAGE_NAME@$PACKAGE_VERSION](https://www.npmjs.com/package/$PACKAGE_NAME/v/$PACKAGE_VERSION) to npm with the \`latest\` dist-tag."
-
-      - name: Publish release to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
-          PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
-        run: |
-          npm publish ./package/*.tgz --access public --tag latest --provenance
-          npm dist-tag add "$PACKAGE_NAME@$PACKAGE_VERSION" latest

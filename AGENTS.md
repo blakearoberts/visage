@@ -32,11 +32,12 @@ This file is intended for LLM based collaborators.
   1. Work from the local `codex` branch.
   2. Commit only the intended changes to `codex`.
   3. Push `codex`.
-  4. Wait for the remote `CI` workflow on the exact pushed `codex` commit.
-  5. Only if that workflow succeeds, fast-forward `main` to that same commit and
-     push `main`.
-  6. Check out local `codex` before finishing.
-  7. Or, use `npm run promote:codex -- -m "<commit message>"`.
+  4. Open or update a pull request from `codex` into `main`.
+  5. Wait for the required pull request status checks to pass.
+  6. Merge the pull request through GitHub.
+  7. Wait for the remote `CI` workflow on the exact `main` merge commit.
+  8. Check out local `codex` before finishing.
+  9. Or, use `npm run promote:codex -- -m "<commit message>"`.
 
 ## Programmatic checks
 

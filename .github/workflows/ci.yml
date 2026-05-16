@@ -28,7 +28,7 @@ jobs:
     name: Publish RC
     runs-on: ubuntu-latest
     needs: checks
-    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'chore(release):')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, 'chore(release):')
     permissions:
       contents: write
       id-token: write
@@ -38,13 +38,13 @@ jobs:
           fetch-depth: 0
 
       - uses: actions/setup-node@v6
-        if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+        if: ${{ !contains(github.event.head_commit.message, 'chore(release):') }}
         with:
           node-version: 26
           registry-url: https://registry.npmjs.org
 
       - name: Resolve RC version
-        if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+        if: ${{ !contains(github.event.head_commit.message, 'chore(release):') }}
         id: rc-version
         shell: bash
         run: |
@@ -80,7 +80,7 @@ jobs:
           echo "tag=v$rc_version" >> "$GITHUB_OUTPUT"
 
       - name: Build RC package
-        if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+        if: ${{ !contains(github.event.head_commit.message, 'chore(release):') }}
         run: |
           npm version "${{ steps.rc-version.outputs.version }}" --no-git-tag-version --ignore-scripts
           npm ci
@@ -89,7 +89,7 @@ jobs:
           npm pack --pack-destination package
 
       - name: Publish RC to npm
-        if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+        if: ${{ !contains(github.event.head_commit.message, 'chore(release):') }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PACKAGE_NAME: ${{ steps.rc-version.outputs.package-name }}
@@ -104,7 +104,7 @@ jobs:
           npm dist-tag add "$PACKAGE_NAME@$PACKAGE_VERSION" next
 
       - name: Publish GitHub RC release
-        if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+        if: ${{ !contains(github.event.head_commit.message, 'chore(release):') }}
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGE_NAME: ${{ steps.rc-version.outputs.package-name }}
@@ -140,22 +140,3 @@ jobs:
               --title "$RELEASE_TAG" \
               --notes "Published [$PACKAGE_NAME@$PACKAGE_VERSION](https://www.npmjs.com/package/$PACKAGE_NAME/v/$PACKAGE_VERSION) to npm with the \`next\` dist-tag."
           fi
-
-      - name: Delete merged codex branch
-        if: ${{ !cancelled() }}
-        run: |
-          set -euo pipefail
-
-          if ! git ls-remote --exit-code --heads origin codex >/dev/null 2>&1; then
-            echo "No remote codex branch to delete."
-            exit 0
-          fi
-
-          git fetch origin codex:refs/remotes/origin/codex
-
-          if ! git merge-base --is-ancestor refs/remotes/origin/codex HEAD; then
-            echo "Remote codex branch is not merged into this main commit."
-            exit 0
-          fi
-
-          git push origin --delete codex

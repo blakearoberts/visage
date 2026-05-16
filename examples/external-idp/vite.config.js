@@ -7,7 +7,10 @@ export default defineConfig({
     react(),
     visage({
       port: 9002,
-      idp: { issuer: 'http://idp.localhost:5557/idp' },
+      idp: {
+        issuer: 'http://idp.localhost:5557/idp',
+        end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+      },
       oauth2: { clientSecret: null }, // PKCE
       services: {
         whoami: { image: 'traefik/whoami' },

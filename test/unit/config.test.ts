@@ -312,9 +312,30 @@ test('resolveConfig supports external IdP upstreams', (t) => {
     },
   });
   assert.equal(config.idp.oidc.issuer, 'http://idp.localhost:5557/idp');
+  assert.equal(config.idp.oidc.end_session_endpoint, undefined);
   assert.equal('authorization' in config.idp, false);
   assert.equal('token' in config.idp, false);
   assert.equal('jwks' in config.idp, false);
+});
+
+test('resolveConfig supports external IdP end-session endpoints', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+    },
+  });
+
+  assert.equal(
+    config.idp.oidc.end_session_endpoint,
+    'http://idp.localhost:5557/idp/logout',
+  );
+  assert.equal(
+    config.upstreams.oauth2_proxy.locations['/oauth2/sign_out'].headers[
+      'X-Auth-Request-Redirect'
+    ],
+    '"http://idp.localhost:5557/idp/logout?id_token_hint={id_token}&post_logout_redirect_uri=https%3A%2F%2Fapp.local.test%3A9443%2F"',
+  );
 });
 
 test('resolveConfig uses issuer scheme for external IdP upstream defaults', (t) => {
@@ -416,6 +437,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.port, 9443);
   assert.equal(config.cache, cache);
   assert.equal(config.services.dex.image, 'ghcr.io/dexidp/dex:v2.45.1');
+  assert.equal(config.idp.oidc.end_session_endpoint, undefined);
   assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);
   assert.equal(config.upstreams.dex.scheme, 'http');

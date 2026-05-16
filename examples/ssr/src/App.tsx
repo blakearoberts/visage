@@ -33,7 +33,7 @@ export function App({ identity }: { identity: Record<string, unknown> }) {
   const csrIdentity = useCsrIdentity();
 
   function signOut() {
-    window.location.assign('/oauth2/sign_out?rd=%2F');
+    window.location.assign('/oauth2/sign_out');
   }
 
   return (

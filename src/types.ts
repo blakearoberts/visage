@@ -207,8 +207,6 @@ export type VisageExternalIdpOptions = {
    * OIDC authorization path appended to
    * {@link VisageExternalIdpOptions.issuer}. Configure this, `token`, or `jwks`
    * to disable OIDC discovery and render explicit provider endpoints.
-   *
-   * @defaultValue Discovered from the issuer.
    */
   readonly authorization?: string;
   /**
@@ -216,8 +214,6 @@ export type VisageExternalIdpOptions = {
    * {@link VisageExternalIdpOptions.issuer}. Configure this, `authorization`,
    * or `jwks` to disable OIDC discovery and render explicit provider
    * endpoints.
-   *
-   * @defaultValue Discovered from the issuer.
    */
   readonly token?: string;
   /**
@@ -225,10 +221,14 @@ export type VisageExternalIdpOptions = {
    * {@link VisageExternalIdpOptions.issuer}. Configure this, `authorization`,
    * or `token` to disable OIDC discovery and render explicit provider
    * endpoints.
-   *
-   * @defaultValue Discovered from the issuer.
    */
   readonly jwks?: string;
+  /**
+   * OIDC end-session endpoint URL. When configured, Visage routes OAuth2 Proxy
+   * sign-out redirects through this endpoint so the provider session can be
+   * ended as part of the sign-out flow.
+   */
+  readonly end_session_endpoint?: string;
 };
 
 /**

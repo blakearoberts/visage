@@ -108,7 +108,8 @@ visage({
 ```
 
 Configure `authorization`, `token`, or `jwks` only when the provider endpoints
-must be rendered explicitly instead of discovered from the issuer.
+must be rendered explicitly instead of discovered from the issuer. Configure
+`end_session_endpoint` when the provider supports OIDC end-session redirects.
 
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
@@ -178,7 +179,6 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 ## TO-DO
 
 - [ ] Support CSRF (click-jacking) mitigations/projections.
-- [ ] Support IdP logout with post logout redirect.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

@@ -44,20 +44,28 @@ type ResolvedVisageOptions = {
 
 type OIDCEndpointConfig = {
   readonly issuer: string;
+  readonly authorization?: string;
+  readonly token?: string;
+  readonly jwks?: string;
+  readonly end_session_endpoint?: string;
+};
+
+type ManualOIDCEndpointConfig = OIDCEndpointConfig & {
   readonly authorization: string;
   readonly token: string;
   readonly jwks: string;
 };
+
 type ResolvedDexIdpConfig = {
   readonly dex: {
     readonly expiry?: VisageDexExpiry;
     readonly users: readonly VisageDexUser[];
   };
-  readonly oidc: OIDCEndpointConfig;
+  readonly oidc: ManualOIDCEndpointConfig;
   readonly upstream: { readonly dex: ResolvedUpstream };
 };
 type ResolvedExternalIdpConfig = {
-  readonly oidc: { readonly issuer: string } | OIDCEndpointConfig;
+  readonly oidc: OIDCEndpointConfig;
   readonly upstream: { readonly idp: ResolvedUpstream };
 };
 type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
@@ -156,13 +164,6 @@ const BaseUpstreamOauth2Proxy = {
       headers: {
         Cookie: '$http_cookie', // Forward session cookie.
         'X-Auth-Request-Redirect': '$request_uri',
-      },
-    },
-    '/oauth2/sign_out': {
-      auth: { enabled: false },
-      headers: {
-        Cookie: '$http_cookie', // Forward session cookie.
-        'X-Auth-Request-Redirect': '/',
       },
     },
   },
@@ -336,7 +337,28 @@ export function resolveConfig(
 ): VisageConfig {
   const idp = resolveIdpConfig(options);
   const upstreams: Record<string, ResolvedUpstream> = {
-    oauth2_proxy: BaseUpstreamOauth2Proxy,
+    oauth2_proxy: {
+      ...BaseUpstreamOauth2Proxy,
+      locations: {
+        ...BaseUpstreamOauth2Proxy.locations,
+        '/oauth2/sign_out': {
+          auth: { enabled: false },
+          headers: {
+            Cookie: '$http_cookie', // Forward session cookie.
+            'X-Auth-Request-Redirect': idp.oidc.end_session_endpoint
+              ? JSON.stringify(
+                  idp.oidc.end_session_endpoint +
+                    (idp.oidc.end_session_endpoint.includes('?') ? '&' : '?') +
+                    'id_token_hint={id_token}&post_logout_redirect_uri=' +
+                    encodeURIComponent(
+                      `https://${options.host}:${options.port}/`,
+                    ),
+                )
+              : '/',
+          },
+        },
+      },
+    },
     ...idp.upstream,
     ...options.upstreams,
   };
@@ -447,12 +469,18 @@ function resolveIdpConfig({
     } satisfies ResolvedDexIdpConfig;
   }
   const issuer = new URL(idp.issuer);
+  const oidc = {
+    issuer: idp.issuer,
+    ...(idp.end_session_endpoint === undefined
+      ? {}
+      : { end_session_endpoint: idp.end_session_endpoint }),
+  } as const;
   return {
     oidc:
       !idp.authorization && !idp.token && !idp.jwks
-        ? { issuer: idp.issuer }
+        ? oidc
         : {
-            issuer: idp.issuer,
+            ...oidc,
             authorization: idp.issuer + (idp.authorization ?? '/auth'),
             token: idp.issuer + (idp.token ?? '/token'),
             jwks: idp.issuer + (idp.jwks ?? '/keys'),

@@ -45,7 +45,7 @@ export function App() {
   const rows = useWhoami();
 
   function signOut() {
-    window.location.assign('/oauth2/sign_out?rd=%2F');
+    window.location.assign('/oauth2/sign_out');
   }
 
   return (

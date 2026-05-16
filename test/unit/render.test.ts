@@ -305,6 +305,40 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   );
 });
 
+test('writeNginxConfig keeps OAuth2-only sign-out returning to root', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
+  assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
+  assert.doesNotMatch(oauth2SignOut, /id_token_hint/);
+});
+
+test('writeNginxConfig quotes external IdP sign-out redirects', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
+  assert.match(
+    oauth2SignOut,
+    /proxy_set_header X-Auth-Request-Redirect "http:\/\/idp\.localhost:5557\/idp\/logout\?id_token_hint=\{id_token\}&post_logout_redirect_uri=https%3A%2F%2Fapp\.local\.test%3A9443%2F";/,
+  );
+});
+
 test('writeNginxConfig preserves browser host for the built-in Vite upstream', (t) => {
   const config = resolvedConfig(t);
 
@@ -646,6 +680,26 @@ test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t
   assert.equal(oauth2Proxy.login_url, undefined);
   assert.equal(oauth2Proxy.redeem_url, undefined);
   assert.equal(oauth2Proxy.oidc_jwks_url, undefined);
+});
+
+test('writeOauth2ProxyConfig whitelists external IdP end-session redirects', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+    },
+  });
+
+  writeOauth2ProxyConfig(config);
+
+  const oauth2Proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.deepEqual(oauth2Proxy.whitelist_domains, [
+    'app.local.test',
+    'app.local.test:9443',
+    'idp.localhost:5557',
+  ]);
 });
 
 test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => {

@@ -58,7 +58,13 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     cookie_csrf_per_request: true,
     cookie_csrf_per_request_limit: 16,
     email_domains: config.oauth2.emailDomains,
-    whitelist_domains: [config.host, `${config.host}:${config.port}`],
+    whitelist_domains: [
+      config.host,
+      `${config.host}:${config.port}`,
+      ...(!('dex' in config.idp) && config.idp.oidc.end_session_endpoint
+        ? [new URL(config.idp.oidc.end_session_endpoint).host]
+        : []),
+    ] satisfies string[],
     scope: config.oauth2.scopes.join(' '),
     reverse_proxy: true,
     trusted_proxy_ips: config.network.trustedProxyIps,

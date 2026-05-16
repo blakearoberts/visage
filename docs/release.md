@@ -3,13 +3,14 @@
 Releases are GitHub Actions-driven. The workflows are split by entrypoint:
 
 - The reusable `Checks` workflow contains the shared CI and E2E jobs.
-- Every `CI` workflow push to `main` runs the shared checks, then publishes the next RC for the current package version to npm with the `next` dist-tag.
+- The `CI` workflow runs the shared checks for pull requests and pushes.
+- The `Publish RC` workflow runs after a successful `CI` workflow for a push to `main`, then publishes the next RC for the current package version to npm with the `next` dist-tag.
 - Manual `Release` workflow dispatch from `main` prepares a stable version bump pull request.
 - Merging a release pull request to `main` runs the shared checks, tags the merge commit, publishes to npm, moves the `latest` dist-tag, and creates the GitHub release.
 
 ## RC builds
 
-Merging to `main` publishes an RC after CI passes. The workflow derives the RC base from `package.json` by stripping any prerelease suffix, checks the published npm versions for the highest existing `rc.N`, then publishes the next one.
+Merging to `main` publishes an RC after CI passes, except for stable release merge commits. The workflow derives the RC base from `package.json` by stripping any prerelease suffix, checks the published npm versions for the highest existing `rc.N`, then publishes the next one.
 
 For example, if `package.json` is `0.0.1-rc.5`, the next successful push to `main` publishes `0.0.1-rc.6` with the `next` dist-tag.
 

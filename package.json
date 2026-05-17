@@ -33,7 +33,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "docker-compose.images.yml"
   ],
   "engines": {
     "node": ">=20"

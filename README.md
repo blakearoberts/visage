@@ -157,11 +157,11 @@ Visage downloads [`mkcert`](https://github.com/FiloSottile/mkcert) from `dl.fili
 
 Visage pulls these as needed based on configuration:
 
-| Service                                                      | Image                                                                                               | Source                    |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------- |
-| [NGINX](https://nginx.org/)                                  | [`nginx:1.30.0-alpine`](https://hub.docker.com/_/nginx)                                             | Docker Hub                |
-| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy:v7.15.2`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | Quay                      |
-| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex:v2.45.1`](https://github.com/dexidp/dex/pkgs/container/dex)                    | GitHub Container Registry |
+| Service                                                      | Image                                                                                       | Pin                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------- |
+| [NGINX](https://nginx.org/)                                  | [`nginx`](https://hub.docker.com/_/nginx)                                                   | [manifest](docker-compose.images.yml) |
+| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | [manifest](docker-compose.images.yml) |
+| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                    | [manifest](docker-compose.images.yml) |
 
 ## Security Notes
 

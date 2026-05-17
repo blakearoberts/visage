@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+
+import { parse } from 'yaml';
+
 import type {
   VisageDexExpiry,
   VisageDexOptions,
@@ -134,21 +138,28 @@ const BaseFiles = {
   cookieSecret: ['./oauth2-cookie-secret', '/etc/oauth2-proxy/cookie-secret'],
 } as const satisfies VisageConfig['files'];
 
+const DockerImages = parse(
+  readFileSync(
+    new URL('../docker-compose.images.yml', import.meta.url),
+    'utf8',
+  ),
+).services as Record<'dex' | 'nginx' | 'oauth2_proxy', { image: string }>;
+
 const BaseServiceDex = {
-  image: 'ghcr.io/dexidp/dex:v2.45.1',
+  image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yml'],
   restart: 'always',
 } as const satisfies ResolvedService;
 
 const BaseServiceNginx = {
-  image: 'nginx:1.30.0-alpine',
+  image: DockerImages.nginx.image,
   depends_on: ['oauth2_proxy'],
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
 } as const satisfies ResolvedService;
 
 const BaseServiceOAuth2Proxy = {
-  image: 'quay.io/oauth2-proxy/oauth2-proxy:v7.15.2',
+  image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',

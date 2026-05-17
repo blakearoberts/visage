@@ -436,7 +436,6 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.host, 'app.local.test');
   assert.equal(config.port, 9443);
   assert.equal(config.cache, cache);
-  assert.equal(config.services.dex.image, 'ghcr.io/dexidp/dex:v2.45.1');
   assert.equal(config.idp.oidc.end_session_endpoint, undefined);
   assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);

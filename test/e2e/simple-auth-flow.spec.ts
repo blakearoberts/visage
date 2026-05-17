@@ -19,16 +19,16 @@ const example = join(repo, 'examples/simple');
 const appUrl = process.env.VISAGE_E2E_URL ?? 'https://localhost:9001/';
 const dexEmail = process.env.VISAGE_E2E_EMAIL ?? 'user@example.com';
 const dexPassword = process.env.VISAGE_E2E_PASSWORD ?? 'pass';
-let appComposeProject = '';
 let logFile = '';
 let vite: ChildProcessWithoutNullStreams | undefined;
 let viteOutput = '';
 
 test.describe('Visage simple authenticated upstream flow', () => {
   test.setTimeout(30_000);
+  let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = projectName('simple', testInfo.workerIndex);
+    appComposeProject = `visage_e2e_${testInfo.workerIndex}`;
     logFile = testInfo.outputPath('simple.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');
@@ -51,7 +51,7 @@ test.describe('Visage simple authenticated upstream flow', () => {
   });
 
   test.afterAll(async () => {
-    writeDockerComposeLogs();
+    writeDockerComposeLogs(appComposeProject);
     await stopVite();
   });
 
@@ -195,13 +195,7 @@ async function stopVite(): Promise<void> {
   });
 }
 
-function projectName(name: string, workerIndex: number): string {
-  return `visage_e2e_${name}_${process.pid}_${workerIndex}`;
-}
-
-function writeDockerComposeLogs(): void {
-  if (!appComposeProject) return;
-
+function writeDockerComposeLogs(appComposeProject: string): void {
   const result = spawnSync(
     'docker',
     [

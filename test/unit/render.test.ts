@@ -245,12 +245,22 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
   );
   assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
+  assert.match(nginx, /map \$http_sec_fetch_site \$csrf_api/);
+  assert.match(
+    nginx,
+    /map "\$http_sec_fetch_site:\$request_method:\$http_sec_fetch_mode:\$http_sec_fetch_dest" \$csrf_app/,
+  );
   assert.match(
     upstreamBlock(nginx, 'api'),
     /zone api 64k;\s+server api:8080 resolve;/,
   );
 
   const api = locationBlock(nginx, '/api/');
+  assert.match(
+    api,
+    /add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest" always;/,
+  );
+  assert.match(api, /if \(\$csrf_api\) {\s+return 403;\s+}/);
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
   assert.match(
     api,
@@ -273,6 +283,8 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(api, /proxy_pass https:\/\/api;/);
 
   const publicLocation = locationBlock(nginx, '/public/');
+  assert.doesNotMatch(publicLocation, /csrf_/);
+  assert.doesNotMatch(publicLocation, /add_header Vary/);
   assert.doesNotMatch(publicLocation, /auth_request/);
   assert.doesNotMatch(publicLocation, /Authorization/);
   assert.match(publicLocation, /proxy_set_header Host public\.internal;/);
@@ -291,12 +303,15 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
 
   assert.doesNotMatch(dex, /auth_request/);
   assert.doesNotMatch(dex, /Authorization/);
+  assert.doesNotMatch(dex, /csrf_/);
   assert.doesNotMatch(oauth2Proxy, /auth_request/);
   assert.doesNotMatch(oauth2Proxy, /Authorization/);
+  assert.doesNotMatch(oauth2Proxy, /csrf_/);
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2Proxy, /proxy_buffer_size 8k;/);
   assert.doesNotMatch(oauth2SignOut, /auth_request/);
   assert.doesNotMatch(oauth2SignOut, /Authorization/);
+  assert.doesNotMatch(oauth2SignOut, /csrf_/);
   assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
   assert.doesNotMatch(
@@ -348,6 +363,7 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
   const root = locationBlock(nginx, '/');
   const vite = upstreamBlock(nginx, 'vite');
 
+  assert.match(root, /if \(\$csrf_app\) {\s+return 403;\s+}/);
   assert.match(root, /proxy_set_header Host \$host;/);
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
   assert.doesNotMatch(root, /proxy_set_header Authorization/);

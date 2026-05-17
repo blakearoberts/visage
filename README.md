@@ -113,18 +113,6 @@ must be rendered explicitly instead of discovered from the issuer. Configure
 
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
-## Expected Local URLs
-
-The browser-facing Visage origin is `https://{host}:{port}`.
-
-With the default configuration, open:
-
-```text
-https://localhost:9001/
-```
-
-When using the managed Dex flow, OAuth2 Proxy serves auth endpoints under `/oauth2/` and Dex serves OIDC endpoints under `/dex/`.
-
 ## System Block Diagram
 
 ```mermaid

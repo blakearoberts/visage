@@ -362,6 +362,15 @@ export type VisageProxyPolicy = {
     readonly forward?: boolean | 'id' | 'access';
   };
   /**
+   * Browser request isolation policy for authenticated cookie-backed
+   * locations. Set this to `false` when an upstream handles CSRF itself or
+   * intentionally accepts cross-site browser requests.
+   *
+   * @defaultValue `'app'` for the built-in Vite root location; `'api'` for
+   * authenticated upstream locations; `false` for unauthenticated locations.
+   */
+  readonly csrf?: false | 'app' | 'api';
+  /**
    * Request headers to set when proxying to the upstream. Values may include
    * NGINX variables. These are merged with Visage's default proxy headers:
    * `Cookie`, `Host`, `X-Real-IP`, `X-Forwarded-For`, and

@@ -20,7 +20,6 @@ const appUrl = 'https://localhost:9002/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
 const externalDexProject = 'visage-external-idp';
-const appComposeProject = 'visage_external_idp_app';
 
 let logFile = '';
 let vite: ChildProcessWithoutNullStreams | undefined;
@@ -28,8 +27,10 @@ let viteOutput = '';
 
 test.describe('Visage external IdP authenticated upstream flow', () => {
   test.setTimeout(30_000);
+  let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
+    appComposeProject = `visage_e2e_${testInfo.workerIndex}`;
     logFile = testInfo.outputPath('external-idp.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');

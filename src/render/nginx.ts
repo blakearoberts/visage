@@ -24,6 +24,18 @@ http {
         ''      close;
     }
 
+    # Fetch Metadata CSRF guards for cookie-backed locations.
+    map $http_sec_fetch_site $csrf_api {
+        default 0;
+        same-site 1;
+        cross-site 1;
+    }
+    map "$http_sec_fetch_site:$request_method:$http_sec_fetch_mode:$http_sec_fetch_dest" $csrf_app {
+        default 0;
+        ~^(cross-site|same-site):GET:navigate:document$ 0;
+        ~^(cross-site|same-site): 1;
+    }
+
     <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
 
     upstream <%~ name %> {
@@ -50,8 +62,21 @@ http {
         error_page 497 =301 https://$http_host$request_uri;
 
         <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
-            <%_ for (const [path, location] of Object.entries(upstream.locations ?? {})) { %>
+        <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
         location <%~ path %> {
+            <%_ if (location.csrf) { %>
+            add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest" always;
+            <%_ if (location.csrf === 'app') { %>
+            if ($csrf_app) {
+                return 403;
+            }
+            <%_ } else { %>
+            if ($csrf_api) {
+                return 403;
+            }
+            <%_ } %>
+
+            <%_ } %>
             <%_ if (location.auth?.enabled) { %>
             auth_request      /oauth2/auth;
             auth_request_set  $authorization $upstream_http_authorization;
@@ -88,7 +113,7 @@ http {
             <%_ } %>
             proxy_pass <%~ upstream.scheme %>://<%~ name %>;
         }
-            <%_ } %>
+        <%_ } %>
 
         <%_ } %>
     }

@@ -1,0 +1,30 @@
+name: Auto-Merge
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable:
+    name: Enable Auto-Merge
+    runs-on: ubuntu-latest
+    if: >-
+      (
+        github.event.pull_request.head.ref == 'codex' &&
+        github.event.pull_request.user.login == 'blakearoberts'
+      ) ||
+      (
+        startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
+        github.event.pull_request.user.login == 'dependabot[bot]'
+      )
+    steps:
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --merge --delete-branch "$PR_URL"

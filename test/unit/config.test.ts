@@ -443,7 +443,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.oauth2_proxy.port, 4180);
   assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
   assert.deepEqual(config.network, {
-    name: `${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}_nginx`,
+    name: process.env.COMPOSE_PROJECT_NAME ?? 'visage',
     trustedProxyIps: [],
   });
 
@@ -452,6 +452,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     forward: 'access',
     redirect: false,
   });
+  assert.equal(config.upstreams.api.locations['/api/'].csrf, 'api');
   assert.deepEqual(config.upstreams.api.locations['/api/'].headers, {
     Cookie: '""',
     Host: 'api.internal',
@@ -470,6 +471,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     forward: false,
     redirect: false,
   });
+  assert.equal(config.upstreams.metrics.locations['/metrics/'].csrf, 'api');
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
     proxy_buffer_size: ['8k'],
   });
@@ -507,6 +509,29 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
     'access',
   );
   assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
+});
+
+test('resolveConfig applies CSRF defaults and overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    upstreams: {
+      api: {
+        locations: {
+          '/api/': {},
+          '/app/': { csrf: 'app' },
+          '/webhook/': { auth: { enabled: false } },
+          '/custom/': { csrf: false },
+        },
+      },
+    },
+  });
+
+  assert.equal(config.upstreams.vite.locations['/'].csrf, 'app');
+  assert.equal(config.upstreams.api.locations['/api/'].csrf, 'api');
+  assert.equal(config.upstreams.api.locations['/app/'].csrf, 'app');
+  assert.equal(config.upstreams.api.locations['/webhook/'].csrf, false);
+  assert.equal(config.upstreams.api.locations['/custom/'].csrf, false);
+  assert.equal(config.upstreams.dex.locations['/dex/'].csrf, false);
+  assert.equal(config.upstreams.oauth2_proxy.locations['/oauth2/'].csrf, false);
 });
 
 test('resolveConfig lets named services and upstreams override base entries', (t) => {

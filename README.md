@@ -97,6 +97,14 @@ OAuth2 Proxy identity values can also be mapped explicitly through headers such
 as `$auth_user`, `$auth_email`, `$auth_groups`, and
 `$auth_preferred_username`.
 
+Authenticated locations also get Fetch Metadata CSRF checks by default. The
+built-in Vite root location uses `csrf: 'app'`, which allows same-origin
+requests and top-level `GET` document navigations. Other authenticated upstream
+locations use `csrf: 'api'`, which blocks same-site and cross-site browser
+requests when modern Fetch Metadata headers are present. Set `csrf: 'app'` for
+an upstream that serves browser pages, or `csrf: false` when the upstream
+intentionally handles cross-site browser requests itself.
+
 ### External IdPs
 
 External OIDC providers use issuer discovery by default:
@@ -112,18 +120,6 @@ must be rendered explicitly instead of discovered from the issuer. Configure
 `end_session_endpoint` when the provider supports OIDC end-session redirects.
 
 See [`VisageOptions`](src/types.ts) for the full option surface.
-
-## Expected Local URLs
-
-The browser-facing Visage origin is `https://{host}:{port}`.
-
-With the default configuration, open:
-
-```text
-https://localhost:9001/
-```
-
-When using the managed Dex flow, OAuth2 Proxy serves auth endpoints under `/oauth2/` and Dex serves OIDC endpoints under `/dex/`.
 
 ## System Block Diagram
 
@@ -169,6 +165,11 @@ Visage is local-development tooling. It starts local auth infrastructure, termin
 
 Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infrastructure.
 
+Visage's CSRF policy is an edge request-isolation guard for cookie-backed
+locations. It is not a replacement for application-owned CSRF tokens where an
+application accepts form posts or other browser-submitted mutations. CSP,
+`frame-ancestors`, and other clickjacking controls remain application policy.
+
 ## Troubleshooting
 
 - If startup fails immediately, confirm Docker is running and `docker compose` works.
@@ -178,7 +179,6 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 
 ## TO-DO
 
-- [ ] Support CSRF (click-jacking) mitigations/projections.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

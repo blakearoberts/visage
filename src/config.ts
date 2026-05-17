@@ -85,14 +85,13 @@ type ResolvedUpstream = {
   readonly locations: Readonly<Record<string, VisageProxyPolicy>>;
 };
 
-type ResolvedAuthPolicy = {
-  readonly enabled: boolean;
-  readonly forward: false | 'id' | 'access';
-  readonly redirect: boolean;
-};
-
 type ResolvedProxyPolicy = {
-  readonly auth: ResolvedAuthPolicy;
+  readonly auth: {
+    readonly enabled: boolean;
+    readonly forward: false | 'id' | 'access';
+    readonly redirect: boolean;
+  };
+  readonly csrf: false | 'app' | 'api';
   readonly headers: Readonly<Record<string, string>>;
   readonly directives: Readonly<Record<string, readonly string[]>>;
 };
@@ -201,6 +200,7 @@ const DefaultOAuth2Client = {
 
 const DefaultProxyPolicy = {
   auth: { enabled: true, forward: false, redirect: false },
+  csrf: 'api',
   headers: {
     Cookie: '""', // Don't forward session cookie.
     Host: '$host',
@@ -211,7 +211,7 @@ const DefaultProxyPolicy = {
   directives: {
     proxy_buffer_size: ['8k'],
   },
-} as const satisfies VisageProxyPolicy;
+} as const satisfies NonNullable<VisageProxyPolicy>;
 
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const {
@@ -382,7 +382,7 @@ export function resolveConfig(
     cache,
     files: BaseFiles,
     network: {
-      name: `${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}_nginx`,
+      name: process.env.COMPOSE_PROJECT_NAME ?? 'visage',
       trustedProxyIps: [],
     },
     services: {
@@ -413,32 +413,36 @@ export function resolveConfig(
             ...upstream,
             external,
             locations: Object.fromEntries(
-              Object.entries(upstream.locations ?? {}).map(([path, policy]) => [
-                path,
-                {
-                  auth: resolveAuthPolicy(
-                    policy.auth,
-                    external && name !== 'vite',
-                  ),
-                  headers: {
-                    ...(external
-                      ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
-                      : DefaultProxyPolicy.headers),
-                    ...policy.headers,
-                  },
-                  directives: {
-                    ...DefaultProxyPolicy.directives,
-                    ...Object.fromEntries(
-                      Object.entries(policy.directives ?? {}).map(
-                        ([name, value]) => [
-                          name,
-                          Array.isArray(value) ? value : [value],
-                        ],
+              Object.entries(upstream.locations ?? {}).map(([path, policy]) => {
+                const auth = resolveAuthPolicy(
+                  policy.auth,
+                  external && name !== 'vite',
+                );
+                return [
+                  path,
+                  {
+                    auth,
+                    csrf: policy.csrf ?? (auth.enabled ? 'api' : false),
+                    headers: {
+                      ...(external
+                        ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
+                        : DefaultProxyPolicy.headers),
+                      ...policy.headers,
+                    },
+                    directives: {
+                      ...DefaultProxyPolicy.directives,
+                      ...Object.fromEntries(
+                        Object.entries(policy.directives ?? {}).map(
+                          ([name, value]) => [
+                            name,
+                            Array.isArray(value) ? value : [value],
+                          ],
+                        ),
                       ),
-                    ),
-                  },
-                },
-              ]),
+                    },
+                  } satisfies ResolvedProxyPolicy,
+                ];
+              }),
             ),
           },
         ];
@@ -510,7 +514,7 @@ function resolveIdpConfig({
 function resolveAuthPolicy(
   auth: VisageProxyPolicy['auth'] = {},
   external: boolean,
-): ResolvedAuthPolicy {
+) {
   return {
     enabled: auth.enabled ?? true,
     forward:
@@ -520,7 +524,7 @@ function resolveAuthPolicy(
           : 'id'
         : (auth.forward ?? false),
     redirect: auth.redirect ?? false,
-  };
+  } satisfies ResolvedProxyPolicy['auth'];
 }
 
 const BaseViteUpstream = {
@@ -529,6 +533,7 @@ const BaseViteUpstream = {
   locations: {
     '/': {
       auth: { redirect: true },
+      csrf: 'app',
       headers: {
         Host: '$host',
         Upgrade: '$http_upgrade',
@@ -553,16 +558,15 @@ export function resolveViteUpstream(
       ...Object.fromEntries(
         Object.entries(vite.locations ?? {}).map(([path, policy]) => {
           if (path !== '/') return [path, policy];
-          const defaults = BaseViteUpstream.locations['/'];
+          const base = BaseViteUpstream.locations['/'];
           return [
             path,
             {
-              ...defaults,
-              ...policy,
-              auth: { ...defaults.auth, ...policy.auth },
-              headers: { ...defaults.headers, ...policy.headers },
-              directives: { ...defaults.directives, ...policy.directives },
-            },
+              auth: { ...base.auth, ...policy.auth },
+              csrf: policy.csrf ?? base.csrf,
+              headers: { ...base.headers, ...policy.headers },
+              directives: { ...base.directives, ...policy.directives },
+            } satisfies VisageProxyPolicy,
           ];
         }),
       ),

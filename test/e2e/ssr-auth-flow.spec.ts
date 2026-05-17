@@ -19,16 +19,16 @@ const example = join(repo, 'examples/ssr');
 const appUrl = 'https://localhost:9003/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
-let appComposeProject = '';
 let logFile = '';
 let ssr: ChildProcessWithoutNullStreams | undefined;
 let ssrOutput = '';
 
 test.describe('Visage SSR authenticated identity flow', () => {
   test.setTimeout(30_000);
+  let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = projectName('ssr', testInfo.workerIndex);
+    appComposeProject = `visage_e2e_${testInfo.workerIndex}`;
     logFile = testInfo.outputPath('ssr.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');
@@ -51,7 +51,7 @@ test.describe('Visage SSR authenticated identity flow', () => {
   });
 
   test.afterAll(async () => {
-    writeDockerComposeLogs();
+    writeDockerComposeLogs(appComposeProject);
     await stopSsr();
   });
 
@@ -209,13 +209,7 @@ async function stopSsr(): Promise<void> {
   });
 }
 
-function projectName(name: string, workerIndex: number): string {
-  return `visage_e2e_${name}_${process.pid}_${workerIndex}`;
-}
-
-function writeDockerComposeLogs(): void {
-  if (!appComposeProject) return;
-
+function writeDockerComposeLogs(appComposeProject: string): void {
   const result = spawnSync(
     'docker',
     [

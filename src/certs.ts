@@ -8,35 +8,26 @@ import {
   rmSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-type Options = {
-  certs: string;
-  hostname: string;
-};
+import type { VisageConfig } from './config';
 
 const CACHE_HOME = process.env.XDG_CACHE_HOME || join(homedir(), '.cache');
 
-export async function ensureCerts({ certs, hostname }: Options): Promise<void> {
+export async function ensureCerts(config: VisageConfig): Promise<void> {
   const CAROOT = join(CACHE_HOME, 'visage/ca');
   mkdirSync(CAROOT, { recursive: true, mode: 0o700 });
   chmodSync(CAROOT, 0o700);
 
   const mkcert = await ensureMkCert();
-  const logs = join(dirname(certs), 'logs');
-  mkdirSync(logs, { recursive: true });
-  const log = join(logs, 'mkcert.log');
-  const output = openSync(log, 'w');
 
+  mkdirSync(join(config.cache, 'logs'), { recursive: true });
+  const out = openSync(join(config.cache, 'logs', 'mkcert.log'), 'w');
   const env = { CAROOT, TRUST_STORES: 'system', ...process.env };
   const tty = process.stdin.isTTY;
-  const stdio = [
-    tty ? 'inherit' : 'ignore',
-    output,
-    output,
-  ] satisfies StdioOptions;
+  const stdio = [tty ? 'inherit' : 'ignore', out, out] satisfies StdioOptions;
 
   if (process.env.CI !== 'true') {
     // mkcert -install is idempotent; CA files alone do not prove trust-store state.
@@ -47,6 +38,7 @@ export async function ensureCerts({ certs, hostname }: Options): Promise<void> {
     }
   }
 
+  const certs = join(config.cache, config.files.certs[0]);
   const cert = join(certs, 'tls.crt');
   const key = join(certs, 'tls.key');
 
@@ -54,7 +46,7 @@ export async function ensureCerts({ certs, hostname }: Options): Promise<void> {
   rmSync(cert, { force: true });
   rmSync(key, { force: true });
 
-  const names = [...new Set([hostname, 'localhost', '127.0.0.1', '::1'])];
+  const names = [...new Set([config.host, 'localhost', '127.0.0.1', '::1'])];
   const args = ['-cert-file', cert, '-key-file', key, ...names];
   const result = spawnSync(mkcert, args, { env, stdio });
   if (result.error) throw result.error;

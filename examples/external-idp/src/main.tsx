@@ -1,8 +1,14 @@
 import { Fragment, StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+type WhoamiState =
+  | null
+  | { loading: true; body?: never; error?: never }
+  | { body: string; loading?: never; error?: never }
+  | { error: string; loading?: never; body?: never };
+
 function App() {
-  const [whoami, setWhoami] = useState(null);
+  const [whoami, setWhoami] = useState<WhoamiState>(null);
 
   async function loadWhoami() {
     setWhoami({ loading: true });
@@ -13,7 +19,9 @@ function App() {
 
       setWhoami({ body });
     } catch (error) {
-      setWhoami({ error: error.message });
+      setWhoami({
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -71,7 +79,7 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>,

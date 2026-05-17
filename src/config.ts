@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+
+import { parse } from 'yaml';
+
 import type {
   VisageDexExpiry,
   VisageDexOptions,
@@ -21,9 +25,7 @@ type ResolvedCookiePolicy = {
 };
 
 type ResolvedIdpOption =
-  | {
-      readonly dex: VisageDexOptions;
-    }
+  | { readonly dex: VisageDexOptions }
   | VisageExternalIdpOptions;
 
 type ResolvedOAuth2Client = {
@@ -44,21 +46,31 @@ type ResolvedVisageOptions = {
   readonly upstreams: Record<string, VisageUpstream>;
 };
 
-type ResolvedBaseIdpConfig = {
-  readonly upstream: string;
+type OIDCEndpointConfig = {
   readonly issuer: string;
+  readonly authorization?: string;
+  readonly token?: string;
+  readonly jwks?: string;
+  readonly end_session_endpoint?: string;
+};
+
+type ManualOIDCEndpointConfig = OIDCEndpointConfig & {
   readonly authorization: string;
   readonly token: string;
   readonly jwks: string;
 };
-type ResolvedDexIdpConfig = ResolvedBaseIdpConfig & {
+
+type ResolvedDexIdpConfig = {
   readonly dex: {
     readonly expiry?: VisageDexExpiry;
     readonly users: readonly VisageDexUser[];
   };
+  readonly oidc: ManualOIDCEndpointConfig;
+  readonly upstream: { readonly dex: ResolvedUpstream };
 };
-type ResolvedExternalIdpConfig = ResolvedBaseIdpConfig & {
-  readonly dex?: never;
+type ResolvedExternalIdpConfig = {
+  readonly oidc: OIDCEndpointConfig;
+  readonly upstream: { readonly idp: ResolvedUpstream };
 };
 type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
 
@@ -73,8 +85,14 @@ type ResolvedUpstream = {
   readonly locations: Readonly<Record<string, VisageProxyPolicy>>;
 };
 
+type ResolvedAuthPolicy = {
+  readonly enabled: boolean;
+  readonly forward: false | 'id' | 'access';
+  readonly redirect: boolean;
+};
+
 type ResolvedProxyPolicy = {
-  readonly auth: Required<VisageProxyPolicy['auth']>;
+  readonly auth: ResolvedAuthPolicy;
   readonly headers: Readonly<Record<string, string>>;
   readonly directives: Readonly<Record<string, readonly string[]>>;
 };
@@ -101,6 +119,10 @@ export type VisageConfig = {
     readonly clientSecret: Volume;
     readonly cookieSecret: Volume;
   };
+  readonly network: {
+    readonly name: string;
+    readonly trustedProxyIps: readonly string[];
+  };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
   readonly upstreams: Readonly<Record<string, ResolvedConfigUpstream>>;
@@ -116,32 +138,32 @@ const BaseFiles = {
   cookieSecret: ['./oauth2-cookie-secret', '/etc/oauth2-proxy/cookie-secret'],
 } as const satisfies VisageConfig['files'];
 
+const DockerImages = parse(
+  readFileSync(
+    new URL('../docker-compose.images.yml', import.meta.url),
+    'utf8',
+  ),
+).services as Record<'dex' | 'nginx' | 'oauth2_proxy', { image: string }>;
+
 const BaseServiceDex = {
-  image: 'ghcr.io/dexidp/dex:v2.45.1',
+  image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yml'],
   restart: 'always',
 } as const satisfies ResolvedService;
 
 const BaseServiceNginx = {
-  image: 'nginx:1.30.0-alpine',
+  image: DockerImages.nginx.image,
   depends_on: ['oauth2_proxy'],
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
 } as const satisfies ResolvedService;
 
 const BaseServiceOAuth2Proxy = {
-  image: 'quay.io/oauth2-proxy/oauth2-proxy:v7.15.2',
+  image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
 } as const satisfies ResolvedService;
-
-const BaseUpstreamDex = {
-  host: 'dex',
-  scheme: 'http',
-  port: 5556,
-  locations: { '/dex/': { auth: { enabled: false } } },
-} as const satisfies ResolvedUpstream;
 
 const BaseUpstreamOauth2Proxy = {
   host: 'oauth2_proxy',
@@ -166,10 +188,7 @@ const DefaultCookiePolicy = {
 } as const satisfies Omit<ResolvedCookiePolicy, 'cookie_name'>;
 
 const DefaultDexUsers: readonly VisageDexUser[] = [
-  {
-    email: 'user@example.com',
-    password: 'pass',
-  },
+  { email: 'user@example.com', password: 'pass' },
 ];
 
 const DefaultOAuth2Client = {
@@ -181,7 +200,7 @@ const DefaultOAuth2Client = {
 } as const satisfies ResolvedOAuth2Client;
 
 const DefaultProxyPolicy = {
-  auth: { enabled: true, forward: 'id', redirect: false },
+  auth: { enabled: true, forward: false, redirect: false },
   headers: {
     Cookie: '""', // Don't forward session cookie.
     Host: '$host',
@@ -195,7 +214,13 @@ const DefaultProxyPolicy = {
 } as const satisfies VisageProxyPolicy;
 
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
-  const { host = 'localhost', port = 9001, cookie = {}, oauth2 = {} } = options;
+  const {
+    host = 'localhost',
+    port = 9001,
+    cookie = {},
+    idp = {},
+    oauth2 = {},
+  } = options;
   const cookieName = cookie.name ?? 'sess';
   const publicClient = oauth2.clientSecret === null;
   const services = resolveServicesOptions(options.services);
@@ -219,8 +244,21 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         ? {}
         : { cookie_domains: cookie.domains }),
       ...(cookie.path === undefined ? {} : { cookie_path: cookie.path }),
-    },
-    idp: resolveIdpOption(options.idp),
+    } satisfies ResolvedCookiePolicy,
+    idp:
+      'issuer' in idp
+        ? idp
+        : ({
+            dex: {
+              ...(idp.expiry ? { expiry: idp.expiry } : {}),
+              users: (idp.users ?? DefaultDexUsers).map((user) => ({
+                email: user.email,
+                password: user.password,
+                username: user.username ?? user.email.split('@', 1)[0],
+                userID: user.userID ?? user.email,
+              })),
+            },
+          } satisfies ResolvedIdpOption),
     oauth2: {
       id: oauth2.clientId ?? DefaultOAuth2Client.id,
       ...(publicClient
@@ -229,7 +267,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
       scopes: oauth2.scopes ?? DefaultOAuth2Client.scopes,
       emailDomains: oauth2.emailDomains ?? DefaultOAuth2Client.emailDomains,
       public: publicClient,
-    },
+    } satisfies ResolvedOAuth2Client,
     services,
     upstreams,
   };
@@ -304,97 +342,35 @@ function resolveUpstreamsOptions(
   };
 }
 
-function resolveIdpOption(
-  idp: VisageDexOptions | VisageExternalIdpOptions | undefined,
-): ResolvedIdpOption {
-  if (idp && 'issuer' in idp) {
-    return {
-      issuer: idp.issuer,
-      authorization: idp.authorization ?? '/auth',
-      token: idp.token ?? '/token',
-      jwks: idp.jwks ?? '/keys',
-    };
-  }
-  return {
-    dex: {
-      ...(idp?.expiry ? { expiry: idp.expiry } : {}),
-      users: (idp?.users ?? DefaultDexUsers).map((user) => ({
-        email: user.email,
-        password: user.password,
-        username: user.username ?? user.email.split('@', 1)[0],
-        userID: user.userID ?? user.email,
-      })),
-    },
-  };
-}
-
-function resolveDirectives(
-  directives: VisageProxyPolicy['directives'] = {},
-): Record<string, readonly string[]> {
-  return Object.fromEntries(
-    Object.entries(directives).map(([name, value]) => [
-      name,
-      Array.isArray(value) ? value : [value],
-    ]),
-  );
-}
-
-function resolveIdpConfig({
-  host,
-  port,
-  idp,
-}: ResolvedVisageOptions): ResolvedIdpConfig {
-  if ('dex' in idp) {
-    const issuer = `https://${host}:${port}/dex`;
-    const upstream = `http://dex:5556/dex`;
-    return {
-      upstream: 'dex',
-      issuer,
-      authorization: `${issuer}/auth`,
-      token: `${upstream}/token`,
-      jwks: `${upstream}/keys`,
-      dex: {
-        expiry: idp.dex.expiry,
-        users: (idp.dex?.users ?? DefaultDexUsers).map((user) => ({
-          email: user.email,
-          password: user.password,
-          username: user.username ?? user.email.split('@', 1)[0],
-          userID: user.userID ?? user.email,
-        })),
-      },
-    };
-  }
-  return {
-    upstream: 'idp',
-    issuer: idp.issuer,
-    authorization: idp.issuer + (idp.authorization ?? '/auth'),
-    token: idp.issuer + (idp.token ?? '/token'),
-    jwks: idp.issuer + (idp.jwks ?? '/keys'),
-  };
-}
-
-function resolveExternalIdpUpstream(
-  idp: ResolvedExternalIdpConfig,
-): ResolvedUpstream {
-  const issuer = new URL(idp.issuer);
-  return {
-    host: issuer.hostname,
-    locations: {},
-    scheme: issuer.protocol === 'https:' ? 'https' : 'http',
-    port: Number(issuer.port) || (issuer.protocol === 'https:' ? 443 : 80),
-  };
-}
-
 export function resolveConfig(
   options: ResolvedVisageOptions,
   cache: string,
 ): VisageConfig {
   const idp = resolveIdpConfig(options);
   const upstreams: Record<string, ResolvedUpstream> = {
-    oauth2_proxy: BaseUpstreamOauth2Proxy,
-    ...(idp.dex === undefined
-      ? { idp: resolveExternalIdpUpstream(idp) }
-      : { dex: BaseUpstreamDex }),
+    oauth2_proxy: {
+      ...BaseUpstreamOauth2Proxy,
+      locations: {
+        ...BaseUpstreamOauth2Proxy.locations,
+        '/oauth2/sign_out': {
+          auth: { enabled: false },
+          headers: {
+            Cookie: '$http_cookie', // Forward session cookie.
+            'X-Auth-Request-Redirect': idp.oidc.end_session_endpoint
+              ? JSON.stringify(
+                  idp.oidc.end_session_endpoint +
+                    (idp.oidc.end_session_endpoint.includes('?') ? '&' : '?') +
+                    'id_token_hint={id_token}&post_logout_redirect_uri=' +
+                    encodeURIComponent(
+                      `https://${options.host}:${options.port}/`,
+                    ),
+                )
+              : '/',
+          },
+        },
+      },
+    },
+    ...idp.upstream,
     ...options.upstreams,
   };
   return {
@@ -404,15 +380,19 @@ export function resolveConfig(
     idp,
     oauth2: options.oauth2,
     cache,
-    files: { ...BaseFiles },
+    files: BaseFiles,
+    network: {
+      name: `${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}_nginx`,
+      trustedProxyIps: [],
+    },
     services: {
-      ...(idp.dex === undefined
-        ? { nginx: BaseServiceNginx, oauth2_proxy: BaseServiceOAuth2Proxy }
-        : {
+      ...('dex' in idp
+        ? {
             dex: BaseServiceDex,
             nginx: { ...BaseServiceNginx, depends_on: ['dex', 'oauth2_proxy'] },
             oauth2_proxy: { ...BaseServiceOAuth2Proxy, depends_on: ['dex'] },
-          }),
+          }
+        : { nginx: BaseServiceNginx, oauth2_proxy: BaseServiceOAuth2Proxy }),
       ...Object.fromEntries(
         Object.entries(options.services).map(
           ([name, { upstream: _upstream, ...service }]) => [
@@ -436,7 +416,10 @@ export function resolveConfig(
               Object.entries(upstream.locations ?? {}).map(([path, policy]) => [
                 path,
                 {
-                  auth: { ...DefaultProxyPolicy.auth, ...policy.auth },
+                  auth: resolveAuthPolicy(
+                    policy.auth,
+                    external && name !== 'vite',
+                  ),
                   headers: {
                     ...(external
                       ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
@@ -445,7 +428,14 @@ export function resolveConfig(
                   },
                   directives: {
                     ...DefaultProxyPolicy.directives,
-                    ...resolveDirectives(policy.directives),
+                    ...Object.fromEntries(
+                      Object.entries(policy.directives ?? {}).map(
+                        ([name, value]) => [
+                          name,
+                          Array.isArray(value) ? value : [value],
+                        ],
+                      ),
+                    ),
                   },
                 },
               ]),
@@ -457,12 +447,88 @@ export function resolveConfig(
   };
 }
 
+function resolveIdpConfig({
+  host,
+  port,
+  idp,
+}: ResolvedVisageOptions): ResolvedIdpConfig {
+  if ('dex' in idp) {
+    return {
+      dex: {
+        expiry: idp.dex.expiry,
+        users: (idp.dex?.users ?? DefaultDexUsers).map((user) => ({
+          email: user.email,
+          password: user.password,
+          username: user.username ?? user.email.split('@', 1)[0],
+          userID: user.userID ?? user.email,
+        })),
+      },
+      oidc: {
+        issuer: `https://${host}:${port}/dex`,
+        authorization: `https://${host}:${port}/dex/auth`,
+        token: 'http://dex:5556/dex/token',
+        jwks: 'http://dex:5556/dex/keys',
+      },
+      upstream: {
+        dex: {
+          host: 'dex',
+          scheme: 'http',
+          port: 5556,
+          locations: { '/dex/': { auth: { enabled: false } } },
+        },
+      },
+    } satisfies ResolvedDexIdpConfig;
+  }
+  const issuer = new URL(idp.issuer);
+  const oidc = {
+    issuer: idp.issuer,
+    ...(idp.end_session_endpoint === undefined
+      ? {}
+      : { end_session_endpoint: idp.end_session_endpoint }),
+  } as const;
+  return {
+    oidc:
+      !idp.authorization && !idp.token && !idp.jwks
+        ? oidc
+        : {
+            ...oidc,
+            authorization: idp.issuer + (idp.authorization ?? '/auth'),
+            token: idp.issuer + (idp.token ?? '/token'),
+            jwks: idp.issuer + (idp.jwks ?? '/keys'),
+          },
+    upstream: {
+      idp: {
+        scheme: issuer.protocol === 'https:' ? 'https' : 'http',
+        host: issuer.hostname,
+        port: Number(issuer.port) || (issuer.protocol === 'https:' ? 443 : 80),
+        locations: {},
+      },
+    },
+  } satisfies ResolvedExternalIdpConfig;
+}
+
+function resolveAuthPolicy(
+  auth: VisageProxyPolicy['auth'] = {},
+  external: boolean,
+): ResolvedAuthPolicy {
+  return {
+    enabled: auth.enabled ?? true,
+    forward:
+      auth.forward === true
+        ? external
+          ? 'access'
+          : 'id'
+        : (auth.forward ?? false),
+    redirect: auth.redirect ?? false,
+  };
+}
+
 const BaseViteUpstream = {
   host: 'host.docker.internal',
   scheme: 'http',
   locations: {
     '/': {
-      auth: { forward: undefined, redirect: true },
+      auth: { redirect: true },
       headers: {
         Host: '$host',
         Upgrade: '$http_upgrade',

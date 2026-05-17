@@ -6,7 +6,11 @@ import { join } from 'node:path';
 import { e2eCache, repo } from './environment';
 
 test('ensureCerts prepares mkcert CA before parallel app e2e tests', async ({}, testInfo) => {
-  const certs = testInfo.outputPath('certs');
+  const config = {
+    host: 'localhost',
+    cache: testInfo.outputDir,
+    files: { certs: ['./certs'] },
+  };
   const result = spawnSync(
     process.execPath,
     [
@@ -15,7 +19,7 @@ test('ensureCerts prepares mkcert CA before parallel app e2e tests', async ({}, 
       '-e',
       [
         "import { ensureCerts } from './src/certs.ts';",
-        `await ensureCerts({ certs: ${JSON.stringify(certs)}, hostname: 'localhost' });`,
+        `await ensureCerts(${JSON.stringify(config)});`,
       ].join('\n'),
     ],
     {
@@ -35,6 +39,7 @@ test('ensureCerts prepares mkcert CA before parallel app e2e tests', async ({}, 
     throw new Error(`${result.stdout}\n${result.stderr}`);
   }
 
+  const certs = testInfo.outputPath('certs');
   expect(existsSync(join(certs, 'tls.crt'))).toBe(true);
   expect(existsSync(join(certs, 'tls.key'))).toBe(true);
 });

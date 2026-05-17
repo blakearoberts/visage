@@ -11,6 +11,8 @@ staticClients:
     public: true
     redirectURIs:
       - https://localhost:9002/oauth2/callback
+    postLogoutRedirectURIs:
+      - https://localhost:9002/
 enablePasswordDB: true
 staticPasswords:
   - email: user@example.com

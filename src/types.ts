@@ -103,11 +103,14 @@ export type VisageCookiePolicy = {
 };
 
 /**
- * Managed Dex identity provider options.
+ * Managed Dex identity provider options. Dex is the default identity provider
+ * for Visage.
  */
 export type VisageDexOptions = {
   /**
    * Token expiration and rotation settings rendered into the Dex config.
+   *
+   * @see {@link https://dexidp.io/docs/configuration/tokens/#expiration-and-rotation-settings}
    */
   readonly expiry?: VisageDexExpiry;
   /**
@@ -196,30 +199,36 @@ export type VisageDexUser = {
  */
 export type VisageExternalIdpOptions = {
   /**
-   * OIDC issuer URL used by OAuth2 Proxy.
+   * OIDC issuer URL used by OAuth2 Proxy. When no endpoint paths are
+   * configured, OAuth2 Proxy discovers provider endpoints from this issuer.
    */
   readonly issuer: string;
   /**
    * OIDC authorization path appended to
-   * {@link VisageExternalIdpOptions.issuer}.
-   *
-   * @defaultValue '/auth'
+   * {@link VisageExternalIdpOptions.issuer}. Configure this, `token`, or `jwks`
+   * to disable OIDC discovery and render explicit provider endpoints.
    */
   readonly authorization?: string;
   /**
    * OIDC token endpoint path appended to
-   * {@link VisageExternalIdpOptions.issuer}.
-   *
-   * @defaultValue '/token'
+   * {@link VisageExternalIdpOptions.issuer}. Configure this, `authorization`,
+   * or `jwks` to disable OIDC discovery and render explicit provider
+   * endpoints.
    */
   readonly token?: string;
   /**
    * OIDC JWKS endpoint path appended to
-   * {@link VisageExternalIdpOptions.issuer}.
-   *
-   * @defaultValue '/keys'
+   * {@link VisageExternalIdpOptions.issuer}. Configure this, `authorization`,
+   * or `token` to disable OIDC discovery and render explicit provider
+   * endpoints.
    */
   readonly jwks?: string;
+  /**
+   * OIDC end-session endpoint URL. When configured, Visage routes OAuth2 Proxy
+   * sign-out redirects through this endpoint so the provider session can be
+   * ended as part of the sign-out flow.
+   */
+  readonly end_session_endpoint?: string;
 };
 
 /**
@@ -341,15 +350,16 @@ export type VisageProxyPolicy = {
      */
     readonly redirect?: boolean;
     /**
-     * Token forwarding behavior for the upstream `Authorization` header.
+     * Token forwarding behavior for the upstream `Authorization` header. Set
+     * to `false` to omit a bearer token. Set to `true` to forward the
+     * default bearer token for the upstream kind: an OAuth access token for
+     * external upstreams, or an OIDC ID token for local service upstreams.
      *
-     * `'id'` forwards the authenticated OIDC ID token. `'access'` forwards the
-     * OAuth access token for legacy/resource-server integrations that
-     * explicitly require it.
+     * Use `'id'` or `'access'` to force a specific token kind.
      *
-     * @defaultValue `'id'`
+     * @defaultValue `false`
      */
-    readonly forward?: 'id' | 'access';
+    readonly forward?: boolean | 'id' | 'access';
   };
   /**
    * Request headers to set when proxying to the upstream. Values may include

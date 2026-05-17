@@ -1,14 +1,4 @@
-import type { VisageConfig } from '../config';
-import { writeComposeConfig } from './compose';
-import { writeDexConfig } from './dex';
-import { writeNginxConfig } from './nginx';
-import { writeOauth2ProxyConfig } from './oauth2-proxy';
-
-export function render(config: VisageConfig): void {
-  writeComposeConfig(config);
-  if (config.idp.dex !== undefined) {
-    writeDexConfig(config);
-  }
-  writeNginxConfig(config);
-  writeOauth2ProxyConfig(config);
-}
+export { writeComposeConfig } from './compose';
+export { writeDexConfig } from './dex';
+export { writeNginxConfig } from './nginx';
+export { writeOauth2ProxyConfig } from './oauth2-proxy';

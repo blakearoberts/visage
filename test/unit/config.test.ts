@@ -184,9 +184,6 @@ test('resolveOptions applies IdP overrides', () => {
 
   assert.deepEqual(options.idp, {
     issuer: 'http://idp.localhost:5557/idp',
-    authorization: '/auth',
-    token: '/token',
-    jwks: '/keys',
   });
 });
 
@@ -306,14 +303,42 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.equal(config.upstreams.idp.scheme, 'http');
   assert.equal(config.upstreams.idp.port, 5557);
   assert.deepEqual(config.upstreams.idp.locations, {});
-  assert.equal(config.idp.upstream, 'idp');
-  assert.equal(config.idp.issuer, 'http://idp.localhost:5557/idp');
-  assert.equal(config.idp.authorization, 'http://idp.localhost:5557/idp/auth');
-  assert.equal(config.idp.token, 'http://idp.localhost:5557/idp/token');
-  assert.equal(config.idp.jwks, 'http://idp.localhost:5557/idp/keys');
+  assert.deepEqual(config.idp.upstream, {
+    idp: {
+      host: 'idp.localhost',
+      locations: {},
+      scheme: 'http',
+      port: 5557,
+    },
+  });
+  assert.equal(config.idp.oidc.issuer, 'http://idp.localhost:5557/idp');
+  assert.equal(config.idp.oidc.end_session_endpoint, undefined);
+  assert.equal('authorization' in config.idp, false);
+  assert.equal('token' in config.idp, false);
+  assert.equal('jwks' in config.idp, false);
 });
 
-test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t) => {
+test('resolveConfig supports external IdP end-session endpoints', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+    },
+  });
+
+  assert.equal(
+    config.idp.oidc.end_session_endpoint,
+    'http://idp.localhost:5557/idp/logout',
+  );
+  assert.equal(
+    config.upstreams.oauth2_proxy.locations['/oauth2/sign_out'].headers[
+      'X-Auth-Request-Redirect'
+    ],
+    '"http://idp.localhost:5557/idp/logout?id_token_hint={id_token}&post_logout_redirect_uri=https%3A%2F%2Fapp.local.test%3A9443%2F"',
+  );
+});
+
+test('resolveConfig uses issuer scheme for external IdP upstream defaults', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
       issuer: 'https://idp.example.test/idp',
@@ -323,8 +348,9 @@ test('resolveConfig uses upstream scheme for external IdP endpoint defaults', (t
   assert.equal(config.upstreams.idp.scheme, 'https');
   assert.equal(config.upstreams.idp.port, 443);
   assert.deepEqual(config.upstreams.idp.locations, {});
-  assert.equal(config.idp.token, 'https://idp.example.test/idp/token');
-  assert.equal(config.idp.jwks, 'https://idp.example.test/idp/keys');
+  assert.equal('authorization' in config.idp, false);
+  assert.equal('token' in config.idp, false);
+  assert.equal('jwks' in config.idp, false);
 });
 
 test('resolveConfig omits external IdP upstream locations for root issuer paths', (t) => {
@@ -341,12 +367,17 @@ test('resolveConfig omits external IdP upstream locations for root issuer paths'
   assert.equal(config.upstreams.idp.scheme, 'https');
   assert.equal(config.upstreams.idp.port, 443);
   assert.deepEqual(config.upstreams.idp.locations, {});
+  assert.equal(config.idp.oidc.issuer, 'https://idp.example.test');
+  assert.ok('authorization' in config.idp.oidc);
   assert.equal(
-    config.idp.authorization,
+    config.idp.oidc.authorization,
     'https://idp.example.test/oauth2/v2/authorize?prompt=login',
   );
-  assert.equal(config.idp.token, 'https://idp.example.test/oauth2/v2/token');
-  assert.equal(config.idp.jwks, 'https://idp.example.test/oauth2/v2/jwks');
+  assert.equal(
+    config.idp.oidc.token,
+    'https://idp.example.test/oauth2/v2/token',
+  );
+  assert.equal(config.idp.oidc.jwks, 'https://idp.example.test/oauth2/v2/jwks');
 });
 
 test('resolveConfig preserves managed service defaults for partial service overrides', (t) => {
@@ -405,12 +436,16 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.host, 'app.local.test');
   assert.equal(config.port, 9443);
   assert.equal(config.cache, cache);
-  assert.equal(config.services.dex.image, 'ghcr.io/dexidp/dex:v2.45.1');
+  assert.equal(config.idp.oidc.end_session_endpoint, undefined);
   assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);
   assert.equal(config.upstreams.dex.scheme, 'http');
   assert.equal(config.upstreams.oauth2_proxy.port, 4180);
   assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
+  assert.deepEqual(config.network, {
+    name: `${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}_nginx`,
+    trustedProxyIps: [],
+  });
 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
     enabled: true,
@@ -432,7 +467,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.metrics.host, 'metrics');
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].auth, {
     enabled: true,
-    forward: 'id',
+    forward: false,
     redirect: false,
   });
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
@@ -444,6 +479,34 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
   assert.equal(config.upstreams.metrics.scheme, 'https');
   assert.equal(config.upstreams.metrics.port, 443);
+});
+
+test('resolveConfig resolves automatic token forwarding by upstream kind', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      api: {
+        image: 'example/api:test',
+        upstream: {
+          locations: { '/api/': { auth: { forward: true } } },
+        },
+      },
+    },
+    upstreams: {
+      external: {
+        locations: { '/external/': { auth: { forward: true } } },
+      },
+      vite: {
+        locations: { '/': { auth: { forward: true } } },
+      },
+    },
+  });
+
+  assert.equal(config.upstreams.api.locations['/api/'].auth.forward, 'id');
+  assert.equal(
+    config.upstreams.external.locations['/external/'].auth.forward,
+    'access',
+  );
+  assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
 });
 
 test('resolveConfig lets named services and upstreams override base entries', (t) => {

@@ -6,40 +6,43 @@ import { stringify } from 'yaml';
 import type { VisageConfig } from '../config';
 
 export function writeDexConfig(config: VisageConfig): void {
-  const file = join(config.cache, config.files.dex[0]);
   const render = renderDexConfig(config);
+  const file = join(config.cache, config.files.dex[0]);
   writeFileSync(file, render, 'utf-8');
 }
 
 function renderDexConfig(config: VisageConfig): string {
-  const { idp } = config;
-  if (idp.dex === undefined) {
-    throw new Error('Dex config is required to render Dex');
-  }
-
-  const origin = `https://${config.host}:${config.port}`;
-  const redirect = `${origin}/oauth2/callback`;
-  const upstream = config.upstreams[idp.upstream];
+  if (!('dex' in config.idp)) throw new Error('Dex config missing');
+  const {
+    host,
+    port,
+    oauth2,
+    idp: {
+      dex: { expiry, users },
+      oidc,
+      upstream,
+    },
+  } = config;
   return stringify({
-    issuer: idp.issuer,
+    issuer: oidc.issuer,
     storage: { type: 'memory' },
-    web: { http: `0.0.0.0:${upstream.port}` },
+    web: { http: `0.0.0.0:${upstream.dex.port}` },
     oauth2: { skipApprovalScreen: true },
     staticClients: [
       {
-        id: config.oauth2.id,
+        id: oauth2.id,
         name: 'Visage',
-        ...(config.oauth2.secret === undefined
+        ...(oauth2.secret === undefined
           ? { public: true }
-          : { secret: config.oauth2.secret }),
-        redirectURIs: [redirect],
+          : { secret: oauth2.secret }),
+        redirectURIs: [`https://${host}:${port}/oauth2/callback`],
       },
     ],
     enablePasswordDB: true,
-    ...(idp.dex.expiry === undefined ? {} : { expiry: idp.dex.expiry }),
-    staticPasswords: idp.dex.users.map(({ password, ...user }) => ({
+    ...(expiry === undefined ? {} : { expiry }),
+    staticPasswords: users.map(({ password, ...user }) => ({
       ...user,
-      hash: hashSync(password, 10),
+      hash: hashSync(password),
     })),
   });
 }

@@ -1,7 +1,9 @@
 services:
   idp:
-    image: ghcr.io/dexidp/dex:v2.45.1
+    image: ghcr.io/dexidp/dex:master@sha256:43a8f45c0bbcd2f5e7e941c15f31b7d92fa041bd25e4c00124f021c8da25d21e
     command: ['dex', 'serve', '/etc/dex/dex.yml']
+    environment:
+      DEX_SESSIONS_ENABLED: 'true'
     ports:
       - '5557:5557'
     volumes:

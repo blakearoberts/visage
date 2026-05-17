@@ -27,7 +27,7 @@ Start Vite normally:
 vite
 ```
 
-By default, you can reach the app at [https://localhost:9001/](https://localhost:9001/). You will be redirected to Dex to sign in. The default username and password is `user@example.com` and `pass`.
+By default, you can reach the app at `https://localhost:9001`. You will be redirected to Dex to sign in. The default username and password is `user@example.com` and `pass`.
 
 ## Why Visage
 
@@ -72,17 +72,21 @@ visage({
 });
 ```
 
-Authenticated upstream locations forward the OIDC ID token as the upstream
-`Authorization` bearer value by default. Set `auth.forward` to `'access'` for
-legacy upstreams that explicitly expect the OAuth access token as
-`Authorization: Bearer ...`.
+Authenticated upstream locations do not forward bearer tokens by default. Set
+`auth.forward` to `true` to forward the default bearer token for the upstream
+kind: external upstreams receive the OAuth access token, while local service
+upstreams receive the OIDC ID token.
+
+Hosted backend APIs that validate bearer auth should generally receive the
+access token, provided the token is issued for that API's issuer, audience, and
+scopes. Use `'access'` or `'id'` when you need to force a specific token kind.
 
 ```ts
 visage({
   upstreams: {
     api: {
       locations: {
-        '/api/': { auth: { forward: 'access' } },
+        '/api/': { auth: { forward: true } },
       },
     },
   },
@@ -92,6 +96,20 @@ visage({
 OAuth2 Proxy identity values can also be mapped explicitly through headers such
 as `$auth_user`, `$auth_email`, `$auth_groups`, and
 `$auth_preferred_username`.
+
+### External IdPs
+
+External OIDC providers use issuer discovery by default:
+
+```ts
+visage({
+  idp: { issuer: 'https://idp.example.test/oauth2/default' },
+});
+```
+
+Configure `authorization`, `token`, or `jwks` only when the provider endpoints
+must be rendered explicitly instead of discovered from the issuer. Configure
+`end_session_endpoint` when the provider supports OIDC end-session redirects.
 
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
@@ -139,11 +157,11 @@ Visage downloads [`mkcert`](https://github.com/FiloSottile/mkcert) from `dl.fili
 
 Visage pulls these as needed based on configuration:
 
-| Service                                                      | Image                                                                                               | Source                    |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------- |
-| [NGINX](https://nginx.org/)                                  | [`nginx:1.30.0-alpine`](https://hub.docker.com/_/nginx)                                             | Docker Hub                |
-| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy:v7.15.2`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | Quay                      |
-| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex:v2.45.1`](https://github.com/dexidp/dex/pkgs/container/dex)                    | GitHub Container Registry |
+| Service                                                      | Image                                                                                       | Pin                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------- |
+| [NGINX](https://nginx.org/)                                  | [`nginx`](https://hub.docker.com/_/nginx)                                                   | [manifest](docker-compose.images.yml) |
+| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | [manifest](docker-compose.images.yml) |
+| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                    | [manifest](docker-compose.images.yml) |
 
 ## Security Notes
 
@@ -160,7 +178,7 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 
 ## TO-DO
 
-- [ ] Support OIDC auto-discovery with external IdP configuration.
+- [ ] Support CSRF (click-jacking) mitigations/projections.
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

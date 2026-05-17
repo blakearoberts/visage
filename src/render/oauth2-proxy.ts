@@ -34,11 +34,15 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
   const data = {
     http_address: `0.0.0.0:${config.upstreams.oauth2_proxy.port}`,
     provider: 'oidc',
-    oidc_issuer_url: config.idp.issuer,
-    skip_oidc_discovery: true,
-    login_url: config.idp.authorization,
-    redeem_url: config.idp.token,
-    oidc_jwks_url: config.idp.jwks,
+    oidc_issuer_url: config.idp.oidc.issuer,
+    ...('authorization' in config.idp.oidc
+      ? {
+          skip_oidc_discovery: true,
+          login_url: config.idp.oidc.authorization,
+          redeem_url: config.idp.oidc.token,
+          oidc_jwks_url: config.idp.oidc.jwks,
+        }
+      : {}),
     redirect_url: `https://${config.host}:${config.port}/oauth2/callback`,
     client_id: config.oauth2.id,
     ...(config.oauth2.secret === undefined
@@ -54,9 +58,16 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     cookie_csrf_per_request: true,
     cookie_csrf_per_request_limit: 16,
     email_domains: config.oauth2.emailDomains,
-    whitelist_domains: [config.host, `${config.host}:${config.port}`],
+    whitelist_domains: [
+      config.host,
+      `${config.host}:${config.port}`,
+      ...(!('dex' in config.idp) && config.idp.oidc.end_session_endpoint
+        ? [new URL(config.idp.oidc.end_session_endpoint).host]
+        : []),
+    ] satisfies string[],
     scope: config.oauth2.scopes.join(' '),
     reverse_proxy: true,
+    trusted_proxy_ips: config.network.trustedProxyIps,
     set_xauthrequest: true,
     set_authorization_header: true,
     pass_access_token: true,

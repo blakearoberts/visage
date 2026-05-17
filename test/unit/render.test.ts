@@ -52,6 +52,19 @@ function readGenerated(config: VisageConfig, file: string) {
   return readFileSync(join(config.cache, file), 'utf8');
 }
 
+function withNetwork(
+  config: VisageConfig,
+  trustedProxyIps: readonly string[],
+): VisageConfig {
+  return {
+    ...config,
+    network: {
+      ...config.network,
+      trustedProxyIps,
+    },
+  };
+}
+
 function locationBlock(rendered: string, path: string) {
   const marker = `location ${path} {`;
   const start = rendered.indexOf(marker);
@@ -148,6 +161,12 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     command: ['serve'],
     depends_on: ['nginx'],
     restart: 'on-failure',
+  });
+  assert.deepEqual(compose.networks, {
+    default: {
+      external: true,
+      name: config.network.name,
+    },
   });
 });
 
@@ -248,7 +267,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.doesNotMatch(api, /proxy_buffer_size 8k;/);
   assert.match(api, /proxy_hide_header X-A;/);
   assert.match(api, /proxy_hide_header X-B;/);
-  assert.match(api, /proxy_set_header Authorization \$authorization;/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
@@ -268,6 +287,7 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   const nginx = readGenerated(config, config.files.nginx[0]);
   const dex = locationBlock(nginx, '/dex/');
   const oauth2Proxy = locationBlock(nginx, '/oauth2/');
+  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
 
   assert.doesNotMatch(dex, /auth_request/);
   assert.doesNotMatch(dex, /Authorization/);
@@ -275,6 +295,48 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   assert.doesNotMatch(oauth2Proxy, /Authorization/);
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2Proxy, /proxy_buffer_size 8k;/);
+  assert.doesNotMatch(oauth2SignOut, /auth_request/);
+  assert.doesNotMatch(oauth2SignOut, /Authorization/);
+  assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
+  assert.doesNotMatch(
+    oauth2SignOut,
+    /proxy_set_header X-Auth-Request-Redirect \$request_uri;/,
+  );
+});
+
+test('writeNginxConfig keeps OAuth2-only sign-out returning to root', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
+  assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
+  assert.doesNotMatch(oauth2SignOut, /id_token_hint/);
+});
+
+test('writeNginxConfig quotes external IdP sign-out redirects', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
+  assert.match(
+    oauth2SignOut,
+    /proxy_set_header X-Auth-Request-Redirect "http:\/\/idp\.localhost:5557\/idp\/logout\?id_token_hint=\{id_token\}&post_logout_redirect_uri=https%3A%2F%2Fapp\.local\.test%3A9443%2F";/,
+  );
 });
 
 test('writeNginxConfig preserves browser host for the built-in Vite upstream', (t) => {
@@ -323,10 +385,44 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
   assert.match(api, /proxy_set_header Host api\.example\.test;/);
-  assert.match(api, /proxy_set_header Authorization \$authorization;/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api\.example\.test;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
+});
+
+test('writeNginxConfig resolves automatic token forwarding by upstream kind', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      api: {
+        image: 'example/api:test',
+        upstream: {
+          locations: { '/api/': { auth: { forward: true } } },
+        },
+      },
+    },
+    upstreams: {
+      external: {
+        locations: { '/external/': { auth: { forward: true } } },
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const api = locationBlock(nginx, '/api/');
+  const external = locationBlock(nginx, '/external/');
+  assert.match(api, /proxy_set_header Authorization \$authorization;/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization "Bearer/);
+  assert.match(
+    external,
+    /proxy_set_header Authorization "Bearer \$access_token";/,
+  );
+  assert.doesNotMatch(
+    external,
+    /proxy_set_header Authorization \$authorization;/,
+  );
 });
 
 test('writeNginxConfig supports explicit access-token forwarding', (t) => {
@@ -481,7 +577,7 @@ test('writeDexConfig renders configured expiry and users', (t) => {
 });
 
 test('writeOauth2ProxyConfig renders proxy settings and random cookie secret file', (t) => {
-  const config = resolvedConfig(t);
+  const config = withNetwork(resolvedConfig(t), ['172.30.0.0/16']);
 
   writeOauth2ProxyConfig(config);
 
@@ -523,6 +619,7 @@ test('writeOauth2ProxyConfig renders proxy settings and random cookie secret fil
   assert.equal(oauth2Proxy.cookie_path, '/');
   assert.deepEqual(oauth2Proxy.email_domains, ['example.com']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
+  assert.deepEqual(oauth2Proxy.trusted_proxy_ips, ['172.30.0.0/16']);
   assert.equal(oauth2Proxy.set_xauthrequest, true);
   assert.equal(oauth2Proxy.set_authorization_header, true);
   assert.equal(oauth2Proxy.pass_access_token, true);
@@ -566,7 +663,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   assert.equal(readGenerated(config, config.files.clientSecret[0]), '');
 });
 
-test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => {
+test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t) => {
   const config = resolvedConfig(t, {
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
@@ -579,7 +676,51 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
   assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
-  assert.equal(oauth2Proxy.login_url, 'http://idp.localhost:5557/idp/auth');
+  assert.equal(oauth2Proxy.skip_oidc_discovery, undefined);
+  assert.equal(oauth2Proxy.login_url, undefined);
+  assert.equal(oauth2Proxy.redeem_url, undefined);
+  assert.equal(oauth2Proxy.oidc_jwks_url, undefined);
+});
+
+test('writeOauth2ProxyConfig whitelists external IdP end-session redirects', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+    },
+  });
+
+  writeOauth2ProxyConfig(config);
+
+  const oauth2Proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.deepEqual(oauth2Proxy.whitelist_domains, [
+    'app.local.test',
+    'app.local.test:9443',
+    'idp.localhost:5557',
+  ]);
+});
+
+test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      authorization: '/authorize',
+    },
+  });
+
+  writeOauth2ProxyConfig(config);
+
+  const oauth2Proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
+  assert.equal(oauth2Proxy.skip_oidc_discovery, true);
+  assert.equal(
+    oauth2Proxy.login_url,
+    'http://idp.localhost:5557/idp/authorize',
+  );
   assert.equal(oauth2Proxy.redeem_url, 'http://idp.localhost:5557/idp/token');
   assert.equal(oauth2Proxy.oidc_jwks_url, 'http://idp.localhost:5557/idp/keys');
 });

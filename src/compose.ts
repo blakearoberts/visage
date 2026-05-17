@@ -1,17 +1,19 @@
 import { spawn, spawnSync, StdioOptions } from 'node:child_process';
-import { mkdirSync, openSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { openSync } from 'node:fs';
+import { join } from 'node:path';
+
+import type { VisageConfig } from './config';
 
 type StopCompose = () => void;
 
 let stopRef: StopCompose | undefined;
 
-export function startCompose(file: string): StopCompose {
+export function startCompose(config: VisageConfig): StopCompose {
   stopRef?.();
   stopRef = undefined;
 
-  const logs = join(dirname(file), 'logs');
-  mkdirSync(logs, { recursive: true });
+  const file = join(config.cache, config.files.compose);
+  const logs = join(config.cache, 'logs');
   const output = openSync(join(logs, 'compose.log'), 'w');
 
   const compose = [
@@ -22,17 +24,12 @@ export function startCompose(file: string): StopCompose {
   ] as const;
   const env = { ...process.env, COMPOSE_MENU: 'false' } as const;
   const opts = {
-    cwd: dirname(file),
+    cwd: config.cache,
     stdio: ['ignore', output, output] satisfies StdioOptions,
     env,
   };
 
-  const up = [
-    ...compose,
-    'up',
-    '--abort-on-container-failure',
-    '--remove-orphans',
-  ] as const;
+  const up = [...compose, 'up', '--remove-orphans'] as const;
   const child = spawn('docker', up, opts);
 
   const stop = () => {

@@ -272,13 +272,17 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     /error_page 401 =302 \/oauth2\/start\?rd=\$scheme:\/\/\$http_host\$request_uri;/,
   );
   assert.match(api, /proxy_set_header Cookie "";/);
+  assert.match(api, /proxy_set_header X-Auth-Request-User "";/);
+  assert.match(api, /proxy_set_header X-Auth-Request-Email "";/);
+  assert.match(api, /proxy_set_header X-Auth-Request-Groups "";/);
+  assert.match(api, /proxy_set_header X-Auth-Request-Preferred-Username "";/);
+  assert.match(api, /proxy_set_header Authorization "";/);
   assert.match(api, /proxy_set_header Host api;/);
   assert.match(api, /proxy_set_header X-Service api;/);
   assert.match(api, /proxy_buffer_size 16k;/);
   assert.doesNotMatch(api, /proxy_buffer_size 8k;/);
   assert.match(api, /proxy_hide_header X-A;/);
   assert.match(api, /proxy_hide_header X-B;/);
-  assert.doesNotMatch(api, /proxy_set_header Authorization/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
@@ -287,7 +291,8 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.doesNotMatch(publicLocation, /csrf_/);
   assert.doesNotMatch(publicLocation, /add_header Vary/);
   assert.doesNotMatch(publicLocation, /auth_request/);
-  assert.doesNotMatch(publicLocation, /Authorization/);
+  assert.match(publicLocation, /proxy_set_header X-Auth-Request-User "";/);
+  assert.match(publicLocation, /proxy_set_header Authorization "";/);
   assert.match(publicLocation, /proxy_set_header Host public\.internal;/);
   assert.match(publicLocation, /proxy_buffer_size 8k;/);
 });
@@ -303,15 +308,18 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
 
   assert.doesNotMatch(dex, /auth_request/);
-  assert.doesNotMatch(dex, /Authorization/);
+  assert.match(dex, /proxy_set_header X-Auth-Request-User "";/);
+  assert.match(dex, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(dex, /csrf_/);
   assert.doesNotMatch(oauth2Proxy, /auth_request/);
-  assert.doesNotMatch(oauth2Proxy, /Authorization/);
+  assert.match(oauth2Proxy, /proxy_set_header X-Auth-Request-User "";/);
+  assert.match(oauth2Proxy, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(oauth2Proxy, /csrf_/);
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2Proxy, /proxy_buffer_size 8k;/);
   assert.doesNotMatch(oauth2SignOut, /auth_request/);
-  assert.doesNotMatch(oauth2SignOut, /Authorization/);
+  assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-User "";/);
+  assert.match(oauth2SignOut, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(oauth2SignOut, /csrf_/);
   assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
@@ -367,7 +375,11 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
   assert.match(root, /if \(\$csrf_app\) {\s+return 403;\s+}/);
   assert.match(root, /proxy_set_header Host \$host;/);
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
-  assert.doesNotMatch(root, /proxy_set_header Authorization/);
+  assert.match(root, /proxy_set_header X-Auth-Request-User \$auth_user;/);
+  assert.match(root, /proxy_set_header X-Auth-Request-Email \$auth_email;/);
+  assert.match(root, /proxy_set_header X-Auth-Request-Groups "";/);
+  assert.match(root, /proxy_set_header X-Auth-Request-Preferred-Username "";/);
+  assert.match(root, /proxy_set_header Authorization "";/);
   assert.match(root, /proxy_http_version 1\.1;/);
   assert.match(root, /proxy_read_timeout 1h;/);
   if (process.platform === 'linux') {
@@ -419,7 +431,7 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
   assert.match(api, /proxy_set_header Host api\.example\.test;/);
-  assert.doesNotMatch(api, /proxy_set_header Authorization/);
+  assert.match(api, /proxy_set_header Authorization "";/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api\.example\.test;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
@@ -448,11 +460,13 @@ test('writeNginxConfig resolves automatic token forwarding by upstream kind', (t
   const api = locationBlock(nginx, '/api/');
   const external = locationBlock(nginx, '/external/');
   assert.match(api, /proxy_set_header Authorization \$authorization;/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(api, /proxy_set_header Authorization "Bearer/);
   assert.match(
     external,
     /proxy_set_header Authorization "Bearer \$access_token";/,
   );
+  assert.doesNotMatch(external, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(
     external,
     /proxy_set_header Authorization \$authorization;/,
@@ -478,6 +492,7 @@ test('writeNginxConfig supports explicit access-token forwarding', (t) => {
   const nginx = readGenerated(config, config.files.nginx[0]);
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
+  assert.doesNotMatch(api, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(api, /proxy_set_header Authorization \$authorization;/);
 });
 

@@ -204,8 +204,17 @@ const DefaultProxyPolicy = {
   auth: { enabled: true, forward: false, redirect: false },
   csrf: 'api',
   headers: {
-    Cookie: '""', // Don't forward session cookie.
     Host: '$host',
+
+    // Mitigate header injection by clearing auth headers.
+    Authorization: '""',
+    Cookie: '""',
+    'X-Auth-Request-User': '""',
+    'X-Auth-Request-Email': '""',
+    'X-Auth-Request-Groups': '""',
+    'X-Auth-Request-Preferred-Username': '""',
+
+    // Add common proxy headers.
     'X-Real-IP': '$remote_addr',
     'X-Forwarded-For': '$proxy_add_x_forwarded_for',
     'X-Forwarded-Proto': '$scheme',
@@ -426,11 +435,16 @@ export function resolveConfig(
                     auth,
                     csrf: policy.csrf ?? (auth.enabled ? 'api' : false),
                     headers: {
-                      ...(external
-                        ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
-                        : DefaultProxyPolicy.headers),
+                      ...DefaultProxyPolicy.headers,
+                      ...(external ? { Host: upstream.host } : {}),
+                      ...(auth.enabled && auth.forward === 'id'
+                        ? { Authorization: '$authorization' }
+                        : {}),
+                      ...(auth.enabled && auth.forward === 'access'
+                        ? { Authorization: '"Bearer $access_token"' }
+                        : {}),
                       ...policy.headers,
-                    },
+                    } satisfies Record<string, string>,
                     directives: {
                       ...DefaultProxyPolicy.directives,
                       ...Object.fromEntries(
@@ -536,6 +550,8 @@ const BaseViteUpstreamRootLocation = {
     Host: '$host',
     Upgrade: '$http_upgrade',
     Connection: '$connection_upgrade',
+    'X-Auth-Request-User': '$auth_user',
+    'X-Auth-Request-Email': '$auth_email',
   },
   directives: {
     proxy_http_version: '1.1',

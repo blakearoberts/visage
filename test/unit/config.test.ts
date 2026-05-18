@@ -456,6 +456,11 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.api.locations['/api/'].csrf, 'api');
   assert.deepEqual(config.upstreams.api.locations['/api/'].headers, {
     Cookie: '""',
+    'X-Auth-Request-User': '""',
+    'X-Auth-Request-Email': '""',
+    'X-Auth-Request-Groups': '""',
+    'X-Auth-Request-Preferred-Username': '""',
+    Authorization: '"Bearer $access_token"',
     Host: 'api.internal',
     'X-Real-IP': '$remote_addr',
     'X-Forwarded-For': '$proxy_add_x_forwarded_for',
@@ -482,6 +487,14 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
   assert.equal(config.upstreams.metrics.scheme, 'https');
   assert.equal(config.upstreams.metrics.port, 443);
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers?.['X-Auth-Request-User'],
+    '$auth_user',
+  );
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers?.['X-Auth-Request-Email'],
+    '$auth_email',
+  );
 });
 
 test('resolveViteUpstream injects the edge key into Vite locations', () => {

@@ -102,11 +102,6 @@ http {
             <%~ directive %> <%~ value %>;
                 <%_ } %>
             <%_ } %>
-            <%_ if (location.auth?.enabled && location.auth.forward === 'id') { %>
-            proxy_set_header Authorization $authorization;
-            <%_ } else if (location.auth?.enabled && location.auth.forward === 'access') { %>
-            proxy_set_header Authorization "Bearer $access_token";
-            <%_ } %>
             <%_ if (upstream.scheme === 'https') { %>
             proxy_ssl_server_name on;
             proxy_ssl_name <%~ upstream.host %>;

@@ -17,6 +17,7 @@ import {
   resolveConfig,
   resolveOptions,
   resolveViteUpstream,
+  VisageEdgeKeyHeader,
   type VisageConfig,
 } from '../../src/config.ts';
 import { writeComposeConfig } from '../../src/render/compose.ts';
@@ -140,7 +141,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     './dex.yml:/etc/dex/dex.yml:ro',
   ]);
   assert.equal(compose.services.nginx.restart, 'always');
-  assert.deepEqual(compose.services.nginx.ports, ['9443:9443']);
+  assert.deepEqual(compose.services.nginx.ports, ['127.0.0.1:9443:9443']);
   assert.deepEqual(compose.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
   ]);
@@ -378,6 +379,23 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
       /zone vite 64k;\s+server host\.docker\.internal:6173 resolve;/,
     );
   }
+});
+
+test('writeNginxConfig forwards the Vite edge key', (t) => {
+  const config = resolvedConfig(t, {
+    upstreams: {
+      vite: resolveViteUpstream({ port: 6173 }, 'edge-key'),
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const root = locationBlock(nginx, '/');
+  assert.match(
+    root,
+    new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} edge-key;`),
+  );
 });
 
 test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {

@@ -127,6 +127,8 @@ export type VisageConfig = {
   readonly upstreams: Readonly<Record<string, ResolvedConfigUpstream>>;
 };
 
+export const VisageEdgeKeyHeader = 'X-Visage-Edge-Key';
+
 const BaseFiles = {
   certs: ['./certs', '/etc/nginx/certs'],
   compose: './compose.yaml',
@@ -527,47 +529,66 @@ function resolveAuthPolicy(
   } satisfies ResolvedProxyPolicy['auth'];
 }
 
+const BaseViteUpstreamRootLocation = {
+  auth: { redirect: true },
+  csrf: 'app',
+  headers: {
+    Host: '$host',
+    Upgrade: '$http_upgrade',
+    Connection: '$connection_upgrade',
+  },
+  directives: {
+    proxy_http_version: '1.1',
+    proxy_read_timeout: '1h',
+  },
+} satisfies VisageProxyPolicy;
+
 const BaseViteUpstream = {
   host: 'host.docker.internal',
   scheme: 'http',
-  locations: {
-    '/': {
-      auth: { redirect: true },
-      csrf: 'app',
-      headers: {
-        Host: '$host',
-        Upgrade: '$http_upgrade',
-        Connection: '$connection_upgrade',
-      },
-      directives: {
-        proxy_http_version: '1.1',
-        proxy_read_timeout: '1h',
-      },
-    },
-  },
-} as const satisfies Omit<ResolvedUpstream, 'port'>;
+  locations: { '/': BaseViteUpstreamRootLocation },
+} satisfies Omit<ResolvedUpstream, 'port'>;
 
 export function resolveViteUpstream(
   vite: VisageUpstream = { locations: {} },
+  edgeKey?: string,
 ): VisageUpstream {
+  function applyEdgePolicy(policy: VisageProxyPolicy): VisageProxyPolicy {
+    return {
+      ...policy,
+      headers: {
+        ...(edgeKey ? { [VisageEdgeKeyHeader]: edgeKey } : {}),
+        ...policy.headers,
+      },
+    };
+  }
   return {
     ...BaseViteUpstream,
     ...vite,
     locations: {
-      ...BaseViteUpstream.locations,
+      ...Object.fromEntries(
+        Object.entries(BaseViteUpstream.locations).map(([path, policy]) => [
+          path,
+          applyEdgePolicy(policy),
+        ]),
+      ),
       ...Object.fromEntries(
         Object.entries(vite.locations ?? {}).map(([path, policy]) => {
-          if (path !== '/') return [path, policy];
-          const base = BaseViteUpstream.locations['/'];
-          return [
-            path,
-            {
-              auth: { ...base.auth, ...policy.auth },
-              csrf: policy.csrf ?? base.csrf,
-              headers: { ...base.headers, ...policy.headers },
-              directives: { ...base.directives, ...policy.directives },
-            } satisfies VisageProxyPolicy,
-          ];
+          if (path === '/') {
+            // Merge user-defined root policy over base root location.
+            const base = applyEdgePolicy(BaseViteUpstreamRootLocation);
+            return [
+              path,
+              {
+                auth: { ...base.auth, ...policy.auth },
+                csrf: policy.csrf ?? base.csrf,
+                headers: { ...base.headers, ...policy.headers },
+                directives: { ...base.directives, ...policy.directives },
+              } satisfies VisageProxyPolicy,
+            ];
+          }
+          // Apply edge policy to all other locations.
+          return [path, applyEdgePolicy(policy)];
         }),
       ),
     },

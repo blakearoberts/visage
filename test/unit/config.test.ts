@@ -8,6 +8,7 @@ import {
   resolveConfig,
   resolveOptions,
   resolveViteUpstream,
+  VisageEdgeKeyHeader,
   type VisageConfig,
 } from '../../src/config.ts';
 import type { VisageOptions } from '../../src/types.ts';
@@ -481,6 +482,66 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
   assert.equal(config.upstreams.metrics.scheme, 'https');
   assert.equal(config.upstreams.metrics.port, 443);
+});
+
+test('resolveViteUpstream injects the edge key into Vite locations', () => {
+  const upstream = resolveViteUpstream(
+    {
+      locations: {
+        '/': {
+          headers: {
+            'X-App': 'root',
+          },
+        },
+        '/app/': {
+          headers: {
+            'X-App': 'nested',
+          },
+        },
+      },
+    },
+    'edge-key',
+  );
+
+  assert.equal(
+    upstream.locations?.['/']?.headers?.[VisageEdgeKeyHeader],
+    'edge-key',
+  );
+  assert.equal(
+    upstream.locations?.['/app/']?.headers?.[VisageEdgeKeyHeader],
+    'edge-key',
+  );
+  assert.equal(upstream.locations?.['/']?.headers?.['X-App'], 'root');
+  assert.equal(upstream.locations?.['/app/']?.headers?.['X-App'], 'nested');
+});
+
+test('resolveViteUpstream preserves explicit edge key overrides', () => {
+  const upstream = resolveViteUpstream(
+    {
+      locations: {
+        '/': {
+          headers: {
+            [VisageEdgeKeyHeader]: 'overridden',
+          },
+        },
+        '/app/': {
+          headers: {
+            [VisageEdgeKeyHeader]: 'nested-override',
+          },
+        },
+      },
+    },
+    'edge-key',
+  );
+
+  assert.equal(
+    upstream.locations?.['/']?.headers?.[VisageEdgeKeyHeader],
+    'overridden',
+  );
+  assert.equal(
+    upstream.locations?.['/app/']?.headers?.[VisageEdgeKeyHeader],
+    'nested-override',
+  );
 });
 
 test('resolveConfig resolves automatic token forwarding by upstream kind', (t) => {

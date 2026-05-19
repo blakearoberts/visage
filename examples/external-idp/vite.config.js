@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react';
 import visage from '@blakearoberts/visage';
 
 export default defineConfig({
+  server: {
+    port: 6174,
+    strictPort: true,
+  },
   plugins: [
     react(),
     visage({

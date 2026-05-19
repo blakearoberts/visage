@@ -7,7 +7,7 @@ import { test, type TestContext } from 'node:test';
 import {
   resolveConfig,
   resolveOptions,
-  resolveViteUpstream,
+  VisageEdgeKeyHeader,
   type VisageConfig,
 } from '../../src/config.ts';
 import type { VisageOptions } from '../../src/types.ts';
@@ -31,7 +31,7 @@ function resolveForTest(
         port: 9443,
         ...options,
         upstreams: {
-          vite: resolveViteUpstream({ port: 6173 }),
+          vite: { port: 6173 },
           ...options.upstreams,
         },
       }),
@@ -198,11 +198,9 @@ test('resolveOptions applies upstream defaults', () => {
   });
 
   assert.equal(options.upstreams.api.host, 'api');
-  assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
   assert.equal(options.upstreams.api.scheme, 'https');
   assert.equal(options.upstreams.api.port, 443);
   assert.equal(options.upstreams.secure.host, 'secure');
-  assert.deepEqual(options.upstreams.secure.locations, { '/secure/': {} });
   assert.equal(options.upstreams.secure.scheme, 'https');
   assert.equal(options.upstreams.secure.port, 443);
 });
@@ -247,11 +245,9 @@ test('resolveOptions derives upstreams from services', () => {
     },
   });
   assert.equal(options.upstreams.api.host, 'api.local.test');
-  assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
   assert.equal(options.upstreams.api.scheme, 'http');
   assert.equal(options.upstreams.api.port, 9000);
   assert.equal(options.upstreams.whoami.host, 'whoami');
-  assert.deepEqual(options.upstreams.whoami.locations, { '/whoami/': {} });
   assert.equal(options.upstreams.whoami.scheme, 'http');
   assert.equal(options.upstreams.whoami.port, 80);
   assert.equal(options.upstreams.secure.host, 'secure');
@@ -263,6 +259,49 @@ test('resolveOptions derives upstreams from services', () => {
   assert.equal(options.upstreams.externalHttp.host, 'externalHttp');
   assert.equal(options.upstreams.externalHttp.scheme, 'http');
   assert.equal(options.upstreams.externalHttp.port, 80);
+});
+
+test('resolveOptions applies Vite upstream defaults and merges the root location', () => {
+  const options = resolveOptions({
+    upstreams: {
+      vite: {
+        port: 6173,
+        locations: {
+          '/': {
+            auth: { forward: true },
+            headers: {
+              'X-App': 'root',
+            },
+          },
+          '/app/': {
+            headers: {
+              'X-App': 'nested',
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(options.upstreams.vite.host, 'host.docker.internal');
+  assert.equal(options.upstreams.vite.scheme, 'http');
+  assert.equal(options.upstreams.vite.port, 6173);
+  assert.deepEqual(options.upstreams.vite.locations['/'].auth, {
+    enabled: true,
+    forward: 'id',
+    redirect: true,
+  });
+  assert.equal(options.upstreams.vite.locations['/'].csrf, 'app');
+  assert.equal(options.upstreams.vite.locations['/'].headers.Host, '$host');
+  assert.equal(
+    options.upstreams.vite.locations['/'].headers.Upgrade,
+    '$http_upgrade',
+  );
+  assert.equal(options.upstreams.vite.locations['/'].headers['X-App'], 'root');
+  assert.equal(
+    options.upstreams.vite.locations['/app/'].headers['X-App'],
+    'nested',
+  );
 });
 
 test('resolveOptions supports OAuth2 public PKCE clients', () => {
@@ -455,6 +494,11 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.api.locations['/api/'].csrf, 'api');
   assert.deepEqual(config.upstreams.api.locations['/api/'].headers, {
     Cookie: '""',
+    'X-Auth-Request-User': '""',
+    'X-Auth-Request-Email': '""',
+    'X-Auth-Request-Groups': '""',
+    'X-Auth-Request-Preferred-Username': '""',
+    Authorization: '"Bearer $access_token"',
     Host: 'api.internal',
     'X-Real-IP': '$remote_addr',
     'X-Forwarded-For': '$proxy_add_x_forwarded_for',
@@ -481,6 +525,87 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
   assert.equal(config.upstreams.metrics.scheme, 'https');
   assert.equal(config.upstreams.metrics.port, 443);
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers?.['X-Auth-Request-User'],
+    '$auth_user',
+  );
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers?.['X-Auth-Request-Email'],
+    '$auth_email',
+  );
+});
+
+test('resolveConfig injects the edge key into Vite locations', (t) => {
+  const config = resolveConfig(
+    resolveOptions({
+      upstreams: {
+        vite: {
+          locations: {
+            '/': {
+              headers: {
+                'X-App': 'root',
+              },
+            },
+            '/app/': {
+              headers: {
+                'X-App': 'nested',
+              },
+            },
+          },
+        },
+      },
+    }),
+    tempCache(t),
+    'edge-key',
+  );
+
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
+    'edge-key',
+  );
+  assert.equal(
+    config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
+    'edge-key',
+  );
+  assert.equal(config.upstreams.vite.locations['/'].headers['X-App'], 'root');
+  assert.equal(
+    config.upstreams.vite.locations['/app/'].headers['X-App'],
+    'nested',
+  );
+});
+
+test('resolveConfig preserves explicit Vite edge key overrides', (t) => {
+  const config = resolveConfig(
+    resolveOptions({
+      upstreams: {
+        vite: {
+          locations: {
+            '/': {
+              headers: {
+                [VisageEdgeKeyHeader]: 'overridden',
+              },
+            },
+            '/app/': {
+              headers: {
+                [VisageEdgeKeyHeader]: 'nested-override',
+              },
+            },
+          },
+        },
+      },
+    }),
+    tempCache(t),
+    'edge-key',
+  );
+
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
+    'overridden',
+  );
+  assert.equal(
+    config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
+    'nested-override',
+  );
 });
 
 test('resolveConfig resolves automatic token forwarding by upstream kind', (t) => {
@@ -509,6 +634,25 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
     'access',
   );
   assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
+});
+
+test('resolveConfig treats the resolved Vite upstream as first-party for token forwarding', (t) => {
+  const { config } = resolveForTest(t, {
+    upstreams: {
+      vite: {
+        port: 6173,
+        locations: { '/': { auth: { forward: true } } },
+      },
+    },
+  });
+
+  assert.equal(config.upstreams.vite.host, 'host.docker.internal');
+  assert.equal(config.upstreams.vite.external, true);
+  assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers.Authorization,
+    '$authorization',
+  );
 });
 
 test('resolveConfig applies CSRF defaults and overrides', (t) => {
@@ -583,7 +727,6 @@ test('resolveConfig lets named services and upstreams override base entries', (t
 
   assert.equal(config.upstreams.vite.host, 'vite');
   assert.equal(config.upstreams.vite.port, 3000);
-  assert.deepEqual(Object.keys(config.upstreams.vite.locations), ['/app/']);
   assert.deepEqual(config.upstreams.vite.locations['/app/'].auth, {
     enabled: true,
     forward: 'access',

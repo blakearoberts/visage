@@ -1,7 +1,14 @@
+import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { isIP } from 'node:net';
 import { join } from 'node:path';
-import type { Plugin } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
 
-import { resolveConfig, resolveOptions, resolveViteUpstream } from './config';
+import { resolveConfig, resolveOptions } from './config';
+import {
+  createVisageMiddleware,
+  createVisageUpgradeHandler,
+} from './middleware';
 import { startVisageServer } from './server';
 import type { VisageOptions } from './types';
 
@@ -13,6 +20,8 @@ export function visage(options: VisageOptions = {}): Plugin {
     stop = undefined;
   };
 
+  const edgeKey = randomBytes(32).toString('base64url');
+
   return {
     name: 'visage',
     apply: 'serve',
@@ -20,53 +29,79 @@ export function visage(options: VisageOptions = {}): Plugin {
     config() {
       return {
         server: {
+          // Configure Vite to only allow traffic from the intended host.
+          allowedHosts: [resolvedOptions.host],
           hmr: {
             protocol: 'wss',
             host: resolvedOptions.host,
             clientPort: resolvedOptions.port,
           },
-          host: '0.0.0.0',
+          // Configure Vite to listen on the minimal host address to allow
+          // Docker containers to reach it. Visage (internally managed NGINX)
+          // exposes the browser-facing host/port. On non-Linux systems, this is
+          // localhost. On Linux, it's the host's bridge gateway (e.g.,
+          // 172.17.0.1).
+          host:
+            process.platform !== 'linux'
+              ? '127.0.0.1'
+              : (spawnSync(
+                  'docker',
+                  [
+                    'network',
+                    'inspect',
+                    'bridge',
+                    '--format',
+                    '{{range .IPAM.Config}}{{println .Gateway}}{{end}}',
+                  ],
+                  { encoding: 'utf8' },
+                )
+                  .stdout?.split(/\r?\n/)
+                  .map((line) => line.trim())
+                  .find((line) => isIP(line)) ?? '0.0.0.0'),
         },
       };
     },
 
-    configureServer(viteDevServer) {
-      // monkey patch vite's list of urls to include visage
+    configureServer(vite: ViteDevServer) {
+      vite.middlewares.use(createVisageMiddleware(edgeKey));
+      vite.httpServer?.prependListener(
+        'upgrade',
+        createVisageUpgradeHandler(edgeKey),
+      );
+
+      // Hide Vite's direct URL(s) because browser traffic must flow through the
+      // browser-facing NGINX managed by Visage.
       let visageUrl: string | undefined;
-      const printUrls = viteDevServer.printUrls.bind(viteDevServer);
-      viteDevServer.printUrls = () => {
-        printUrls();
-        viteDevServer.config.logger.info(visageUrl ?? 'Visage failed to start');
+      vite.printUrls = () => {
+        vite.config.logger.info(visageUrl ?? 'Visage failed to start');
       };
 
-      // monkey patch vite's listen to get vite's auto-resolved port
-      const listen = viteDevServer.listen.bind(viteDevServer);
-      viteDevServer.listen = async (port, isRestart) => {
+      // Monkey patch Vite's listen to get the server's auto-resolved port.
+      const listen = vite.listen.bind(vite);
+      vite.listen = async (port, isRestart) => {
         const result = await listen(port, isRestart);
-        const address = viteDevServer.httpServer?.address();
+        const address = vite.httpServer?.address();
         if (!address || typeof address === 'string') {
           throw new Error('Failed to resolve port for Visage');
         }
 
-        const cache = join(viteDevServer.config.cacheDir, 'visage');
+        const cache = join(vite.config.cacheDir, 'visage');
         const config = resolveConfig(
           resolveOptions({
             ...options,
             upstreams: {
               ...options.upstreams,
-              vite: resolveViteUpstream({
-                port: address.port,
-                ...options.upstreams?.vite,
-              }),
+              vite: { port: address.port, ...options.upstreams?.vite },
             },
           }),
           cache,
+          edgeKey,
         );
 
         visageUrl = formatVisageUrlLog(config.host, config.port);
 
         stop = await startVisageServer(config);
-        viteDevServer.httpServer?.once('close', closeBundle);
+        vite.httpServer?.once('close', closeBundle);
         return result;
       };
     },

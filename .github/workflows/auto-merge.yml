@@ -3,7 +3,7 @@ name: Auto-Merge
 on:
   pull_request_target:
     branches: [main]
-    types: [opened]
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: write
@@ -27,4 +27,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --merge --delete-branch "$PR_URL"
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/release.yml|.github/workflows/publish-release.yml|.github/workflows/publish-rc.yml)
+                echo "$path requires manual merge; disabling auto-merge for $PR_URL."
+                gh pr merge --disable-auto "$PR_URL" || true
+                exit 0
+                ;;
+            esac
+          done < <(gh pr diff --name-only "$PR_URL")
+
+          gh pr merge --auto --merge --delete-branch "$PR_URL"

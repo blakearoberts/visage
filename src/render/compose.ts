@@ -25,7 +25,7 @@ function renderComposeConfig(config: VisageConfig): string {
         : {}),
       nginx: {
         ...config.services.nginx,
-        ports: [`${config.port}:${config.port}`],
+        ports: [`127.0.0.1:${config.port}:${config.port}`],
         volumes: [config.files.certs, config.files.nginx].map(
           ([from, to]) => `${from}:${to}:ro`,
         ),

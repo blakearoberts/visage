@@ -21,7 +21,8 @@ be auto-deleted by GitHub after merge.
 
 Options:
   --pr-title         Required pull request title.
-  --pr-body          Required pull request body.
+  --pr-body          Required pull request body. Literal \n sequences are
+                     converted to real line breaks.
   --ignore-staged    Continue even when staged changes are present.
   --ignore-unstaged  Continue even when unstaged or untracked changes are present.
   -h, --help         Show this help.
@@ -35,6 +36,10 @@ die() {
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+normalize_pr_body() {
+  pr_body="${pr_body//\\n/$'\n'}"
 }
 
 current_branch() {
@@ -209,6 +214,8 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+normalize_pr_body
 
 [[ -n "${pr_title//[[:space:]]/}" ]] ||
   die "--pr-title is required"

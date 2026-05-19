@@ -11,6 +11,7 @@ import {
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { dirname, join } from 'node:path';
 
 import { e2eEnv, repo } from './environment';
@@ -70,6 +71,17 @@ test.describe('Visage simple authenticated upstream flow', () => {
       output,
       'Expected the rendered response body to contain the authenticated upstream whoami response.',
     ).toContainText('Hostname', { timeout: 5_000 });
+  });
+
+  test('rejects direct requests to the Vite dev server', async ({
+    request,
+  }) => {
+    const response = await request.get(viteDirectUrl(), {
+      maxRedirects: 0,
+    });
+
+    expect(response.status()).toBe(403);
+    expect(await response.text()).toBe('Forbidden');
   });
 });
 
@@ -212,6 +224,33 @@ function writeDockerComposeLogs(appComposeProject: string): void {
 
   writeLog(result.stdout);
   writeLog(result.stderr);
+}
+
+function viteDirectUrl(): string {
+  return `http://${viteDirectHost()}:6173/`;
+}
+
+function viteDirectHost(): string {
+  if (process.platform !== 'linux') return '127.0.0.1';
+
+  const result = spawnSync(
+    'docker',
+    [
+      'network',
+      'inspect',
+      'bridge',
+      '--format',
+      '{{range .IPAM.Config}}{{println .Gateway}}{{end}}',
+    ],
+    { encoding: 'utf8' },
+  );
+
+  return (
+    result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => isIP(line)) ?? '127.0.0.1'
+  );
 }
 
 function writeLog(chunk: Uint8Array | string): void {

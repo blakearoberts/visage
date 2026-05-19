@@ -36,6 +36,24 @@ type ResolvedOAuth2Client = {
   readonly public: boolean;
 };
 
+type ResolvedProxyPolicy = {
+  readonly auth: {
+    readonly enabled: boolean;
+    readonly forward: false | 'id' | 'access';
+    readonly redirect: boolean;
+  };
+  readonly csrf: false | 'app' | 'api';
+  readonly headers: Readonly<Record<string, string>>;
+  readonly directives: Readonly<Record<string, readonly string[]>>;
+};
+
+type ResolvedUpstream = {
+  readonly scheme: 'http' | 'https';
+  readonly host: string;
+  readonly port: number;
+  readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
+};
+
 type ResolvedVisageOptions = {
   readonly host: string;
   readonly port: number;
@@ -43,7 +61,7 @@ type ResolvedVisageOptions = {
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
   readonly services: Readonly<Record<string, VisageService>>;
-  readonly upstreams: Record<string, VisageUpstream>;
+  readonly upstreams: Record<string, ResolvedUpstream>;
 };
 
 type OIDCEndpointConfig = {
@@ -78,26 +96,7 @@ type ResolvedService = Omit<VisageService, 'upstream'> & {
   readonly restart: NonNullable<VisageService['restart']>;
 };
 
-type ResolvedUpstream = {
-  readonly scheme: 'http' | 'https';
-  readonly host: string;
-  readonly port: number;
-  readonly locations: Readonly<Record<string, VisageProxyPolicy>>;
-};
-
-type ResolvedProxyPolicy = {
-  readonly auth: {
-    readonly enabled: boolean;
-    readonly forward: false | 'id' | 'access';
-    readonly redirect: boolean;
-  };
-  readonly csrf: false | 'app' | 'api';
-  readonly headers: Readonly<Record<string, string>>;
-  readonly directives: Readonly<Record<string, readonly string[]>>;
-};
-
-type ResolvedConfigUpstream = Omit<ResolvedUpstream, 'locations'> & {
-  readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
+type ResolvedConfigUpstream = ResolvedUpstream & {
   readonly external: boolean;
 };
 
@@ -126,6 +125,8 @@ export type VisageConfig = {
   readonly services: Readonly<Record<string, ResolvedService>>;
   readonly upstreams: Readonly<Record<string, ResolvedConfigUpstream>>;
 };
+
+export const VisageEdgeKeyHeader = 'X-Visage-Edge-Key';
 
 const BaseFiles = {
   certs: ['./certs', '/etc/nginx/certs'],
@@ -164,18 +165,55 @@ const BaseServiceOAuth2Proxy = {
   restart: 'always',
 } as const satisfies ResolvedService;
 
+const DefaultProxyPolicy = {
+  auth: { enabled: true, forward: false, redirect: false },
+  csrf: 'api',
+  headers: {
+    Host: '$host',
+
+    // Mitigate header injection by clearing auth headers.
+    Authorization: '""',
+    Cookie: '""',
+    'X-Auth-Request-User': '""',
+    'X-Auth-Request-Email': '""',
+    'X-Auth-Request-Groups': '""',
+    'X-Auth-Request-Preferred-Username': '""',
+
+    // Add common proxy headers.
+    'X-Real-IP': '$remote_addr',
+    'X-Forwarded-For': '$proxy_add_x_forwarded_for',
+    'X-Forwarded-Proto': '$scheme',
+  },
+  directives: {
+    proxy_buffer_size: ['8k'],
+  },
+} as const satisfies ResolvedProxyPolicy;
+
 const BaseUpstreamOauth2Proxy = {
   host: 'oauth2_proxy',
   scheme: 'http',
   port: 4180,
   locations: {
     '/oauth2/': {
-      auth: { enabled: false },
+      auth: { enabled: false, forward: false, redirect: false },
+      csrf: false,
       headers: {
+        ...DefaultProxyPolicy.headers,
         Cookie: '$http_cookie', // Forward session cookie.
         'X-Auth-Request-Redirect': '$request_uri',
       },
-    },
+      directives: { ...DefaultProxyPolicy.directives },
+    } satisfies ResolvedProxyPolicy,
+    '/oauth2/sign_out': {
+      auth: { enabled: false, forward: false, redirect: false },
+      csrf: false,
+      headers: {
+        ...DefaultProxyPolicy.headers,
+        Cookie: '$http_cookie', // Forward session cookie.
+        'X-Auth-Request-Redirect': '/',
+      },
+      directives: { ...DefaultProxyPolicy.directives },
+    } satisfies ResolvedProxyPolicy,
   },
 } as const satisfies ResolvedUpstream;
 
@@ -198,21 +236,6 @@ const DefaultOAuth2Client = {
   public: false,
 } as const satisfies ResolvedOAuth2Client;
 
-const DefaultProxyPolicy = {
-  auth: { enabled: true, forward: false, redirect: false },
-  csrf: 'api',
-  headers: {
-    Cookie: '""', // Don't forward session cookie.
-    Host: '$host',
-    'X-Real-IP': '$remote_addr',
-    'X-Forwarded-For': '$proxy_add_x_forwarded_for',
-    'X-Forwarded-Proto': '$scheme',
-  },
-  directives: {
-    proxy_buffer_size: ['8k'],
-  },
-} as const satisfies NonNullable<VisageProxyPolicy>;
-
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const {
     host = 'localhost',
@@ -224,7 +247,6 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const cookieName = cookie.name ?? 'sess';
   const publicClient = oauth2.clientSecret === null;
   const services = resolveServicesOptions(options.services);
-  const upstreams = resolveUpstreamsOptions(services, options.upstreams);
   return {
     host,
     port,
@@ -269,7 +291,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
       public: publicClient,
     } satisfies ResolvedOAuth2Client,
     services,
-    upstreams,
+    upstreams: resolveUpstreamsOptions(services, options.upstreams),
   };
 }
 
@@ -304,19 +326,7 @@ function resolveServicesOptions(
 function resolveUpstreamsOptions(
   services: Record<string, VisageService>,
   upstreams: Record<string, VisageUpstream> = {},
-): Record<string, VisageUpstream> {
-  function resolveUpstream(
-    name: string,
-    upstream: { scheme: 'http' | 'https' } & VisageUpstream,
-  ): VisageUpstream {
-    return {
-      ...upstream,
-      scheme: upstream.scheme,
-      host: upstream.host ?? name,
-      port: upstream.port ?? (upstream.scheme === 'https' ? 443 : 80),
-      locations: upstream.locations ?? { [`/${name}/`]: {} },
-    };
-  }
+): Record<string, ResolvedUpstream> {
   return {
     ...Object.fromEntries(
       Object.entries(services)
@@ -327,51 +337,182 @@ function resolveUpstreamsOptions(
         )
         .map(([name, service]) => [
           name,
-          resolveUpstream(name, { scheme: 'http', ...service.upstream }),
+          resolveUpstreamOptions(name, service.upstream, false),
         ]),
     ),
     ...Object.fromEntries(
-      Object.entries(upstreams).map(([name, upstream]) => [
-        name,
-        resolveUpstream(name, {
-          scheme: services[name] === undefined ? 'https' : 'http',
-          ...upstream,
-        }),
-      ]),
+      Object.entries(upstreams).map(([name, upstream]) => {
+        if (name === 'vite') {
+          const vite = resolveViteUpstreamOptions(upstream);
+          return [name, resolveUpstreamOptions('vite', vite, true)];
+        }
+        return [
+          name,
+          resolveUpstreamOptions(name, upstream, services[name] === undefined),
+        ];
+      }),
     ),
   };
+}
+
+const BaseViteUpstreamRootLocation = {
+  auth: { enabled: true, forward: false, redirect: true },
+  csrf: 'app',
+  headers: {
+    Host: '$host',
+    Upgrade: '$http_upgrade',
+    Connection: '$connection_upgrade',
+    'X-Auth-Request-User': '$auth_user',
+    'X-Auth-Request-Email': '$auth_email',
+  },
+  directives: {
+    proxy_http_version: ['1.1'],
+    proxy_read_timeout: ['1h'],
+  },
+} satisfies ResolvedProxyPolicy;
+
+function resolveViteUpstreamOptions(upstream: VisageUpstream): VisageUpstream {
+  const base = BaseViteUpstreamRootLocation;
+  const root = upstream.locations?.['/'];
+  return {
+    host: 'host.docker.internal',
+    scheme: 'http',
+    ...upstream,
+    locations: {
+      ...(upstream.locations ?? {}),
+      '/':
+        root === undefined
+          ? { ...base }
+          : {
+              auth: { ...base.auth, ...root.auth },
+              csrf: root.csrf ?? base.csrf,
+              headers: {
+                ...base.headers,
+                ...root.headers,
+              },
+              directives: {
+                ...base.directives,
+                ...root.directives,
+              },
+            },
+    },
+  } satisfies VisageUpstream;
+}
+
+function resolveUpstreamOptions(
+  name: string,
+  upstream: VisageUpstream = {},
+  external: boolean,
+): ResolvedUpstream {
+  const scheme = upstream.scheme ?? (external ? 'https' : 'http');
+  const host = upstream.host ?? name;
+  return {
+    ...upstream,
+    scheme,
+    host,
+    port: upstream.port ?? (scheme === 'https' ? 443 : 80),
+    locations: {
+      ...Object.fromEntries(
+        Object.entries(upstream.locations ?? { [`/${name}/`]: {} }).map(
+          ([path, policy]) => [
+            path,
+            resolveUpstreamLocationOptions(name, host, policy, external),
+          ],
+        ),
+      ),
+    } satisfies Record<string, ResolvedProxyPolicy>,
+  };
+}
+
+function resolveUpstreamLocationOptions(
+  name: string,
+  host: string,
+  location: VisageProxyPolicy,
+  external: boolean,
+): ResolvedProxyPolicy {
+  const auth = resolveAuthPolicy(location.auth, external && name !== 'vite');
+  return {
+    ...DefaultProxyPolicy,
+    ...location,
+    auth,
+    csrf: location.csrf ?? (auth.enabled ? 'api' : false),
+    headers: {
+      ...DefaultProxyPolicy.headers,
+      ...(external ? { Host: host } : {}),
+      ...(auth.enabled && auth.forward === 'id'
+        ? { Authorization: '$authorization' }
+        : {}),
+      ...(auth.enabled && auth.forward === 'access'
+        ? { Authorization: '"Bearer $access_token"' }
+        : {}),
+      ...(location.headers ?? {}),
+    } satisfies ResolvedProxyPolicy['headers'],
+    directives: {
+      ...DefaultProxyPolicy.directives,
+      ...Object.fromEntries(
+        Object.entries(location.directives ?? {}).map(([name, value]) => [
+          name,
+          Array.isArray(value) ? value : [value],
+        ]),
+      ),
+    } satisfies ResolvedProxyPolicy['directives'],
+  } satisfies ResolvedProxyPolicy;
+}
+
+function resolveAuthPolicy(
+  auth: VisageProxyPolicy['auth'] = {},
+  external: boolean,
+) {
+  return {
+    enabled: auth.enabled ?? true,
+    forward:
+      auth.forward === true
+        ? external
+          ? 'access'
+          : 'id'
+        : (auth.forward ?? false),
+    redirect: auth.redirect ?? false,
+  } satisfies ResolvedProxyPolicy['auth'];
 }
 
 export function resolveConfig(
   options: ResolvedVisageOptions,
   cache: string,
+  edgeKey?: string,
 ): VisageConfig {
   const idp = resolveIdpConfig(options);
+  const end_session_endpoint = idp.oidc.end_session_endpoint;
   const upstreams: Record<string, ResolvedUpstream> = {
-    oauth2_proxy: {
-      ...BaseUpstreamOauth2Proxy,
-      locations: {
-        ...BaseUpstreamOauth2Proxy.locations,
-        '/oauth2/sign_out': {
-          auth: { enabled: false },
-          headers: {
-            Cookie: '$http_cookie', // Forward session cookie.
-            'X-Auth-Request-Redirect': idp.oidc.end_session_endpoint
-              ? JSON.stringify(
-                  idp.oidc.end_session_endpoint +
-                    (idp.oidc.end_session_endpoint.includes('?') ? '&' : '?') +
-                    'id_token_hint={id_token}&post_logout_redirect_uri=' +
-                    encodeURIComponent(
-                      `https://${options.host}:${options.port}/`,
-                    ),
-                )
-              : '/',
+    ...(end_session_endpoint === undefined
+      ? { oauth2_proxy: { ...BaseUpstreamOauth2Proxy } }
+      : {
+          oauth2_proxy: {
+            ...BaseUpstreamOauth2Proxy,
+            locations: {
+              ...BaseUpstreamOauth2Proxy.locations,
+              '/oauth2/sign_out': {
+                ...BaseUpstreamOauth2Proxy.locations['/oauth2/sign_out'],
+                headers: {
+                  ...BaseUpstreamOauth2Proxy.locations['/oauth2/sign_out']
+                    .headers,
+                  'X-Auth-Request-Redirect': JSON.stringify(
+                    end_session_endpoint +
+                      (end_session_endpoint.includes('?') ? '&' : '?') +
+                      'id_token_hint={id_token}&post_logout_redirect_uri=' +
+                      encodeURIComponent(
+                        `https://${options.host}:${options.port}/`,
+                      ),
+                  ),
+                },
+              } satisfies ResolvedProxyPolicy,
+            },
           },
-        },
-      },
-    },
+        }),
     ...idp.upstream,
     ...options.upstreams,
+    ...(edgeKey && options.upstreams.vite
+      ? { vite: resolveViteEdgeKeyConfig(options.upstreams.vite, edgeKey) }
+      : {}),
   };
   return {
     host: options.host,
@@ -409,44 +550,30 @@ export function resolveConfig(
           options.services[name] === undefined;
         return [
           name,
-          {
-            ...upstream,
-            external,
-            locations: Object.fromEntries(
-              Object.entries(upstream.locations ?? {}).map(([path, policy]) => {
-                const auth = resolveAuthPolicy(
-                  policy.auth,
-                  external && name !== 'vite',
-                );
-                return [
-                  path,
-                  {
-                    auth,
-                    csrf: policy.csrf ?? (auth.enabled ? 'api' : false),
-                    headers: {
-                      ...(external
-                        ? { ...DefaultProxyPolicy.headers, Host: upstream.host }
-                        : DefaultProxyPolicy.headers),
-                      ...policy.headers,
-                    },
-                    directives: {
-                      ...DefaultProxyPolicy.directives,
-                      ...Object.fromEntries(
-                        Object.entries(policy.directives ?? {}).map(
-                          ([name, value]) => [
-                            name,
-                            Array.isArray(value) ? value : [value],
-                          ],
-                        ),
-                      ),
-                    },
-                  } satisfies ResolvedProxyPolicy,
-                ];
-              }),
-            ),
-          },
+          { ...upstream, external } satisfies ResolvedConfigUpstream,
         ];
       }),
+    ),
+  };
+}
+
+function resolveViteEdgeKeyConfig(
+  upstream: ResolvedUpstream,
+  edgeKey: string,
+): ResolvedUpstream {
+  return {
+    ...upstream,
+    locations: Object.fromEntries(
+      Object.entries(upstream.locations).map(([path, policy]) => [
+        path,
+        {
+          ...policy,
+          headers: {
+            [VisageEdgeKeyHeader]: edgeKey,
+            ...policy.headers,
+          },
+        } satisfies ResolvedProxyPolicy,
+      ]),
     ),
   };
 }
@@ -478,7 +605,14 @@ function resolveIdpConfig({
           host: 'dex',
           scheme: 'http',
           port: 5556,
-          locations: { '/dex/': { auth: { enabled: false } } },
+          locations: {
+            '/dex/': {
+              auth: { enabled: false, forward: false, redirect: false },
+              csrf: false,
+              headers: { ...DefaultProxyPolicy.headers },
+              directives: { ...DefaultProxyPolicy.directives },
+            } satisfies ResolvedProxyPolicy,
+          },
         },
       },
     } satisfies ResolvedDexIdpConfig;
@@ -509,67 +643,4 @@ function resolveIdpConfig({
       },
     },
   } satisfies ResolvedExternalIdpConfig;
-}
-
-function resolveAuthPolicy(
-  auth: VisageProxyPolicy['auth'] = {},
-  external: boolean,
-) {
-  return {
-    enabled: auth.enabled ?? true,
-    forward:
-      auth.forward === true
-        ? external
-          ? 'access'
-          : 'id'
-        : (auth.forward ?? false),
-    redirect: auth.redirect ?? false,
-  } satisfies ResolvedProxyPolicy['auth'];
-}
-
-const BaseViteUpstream = {
-  host: 'host.docker.internal',
-  scheme: 'http',
-  locations: {
-    '/': {
-      auth: { redirect: true },
-      csrf: 'app',
-      headers: {
-        Host: '$host',
-        Upgrade: '$http_upgrade',
-        Connection: '$connection_upgrade',
-      },
-      directives: {
-        proxy_http_version: '1.1',
-        proxy_read_timeout: '1h',
-      },
-    },
-  },
-} as const satisfies Omit<ResolvedUpstream, 'port'>;
-
-export function resolveViteUpstream(
-  vite: VisageUpstream = { locations: {} },
-): VisageUpstream {
-  return {
-    ...BaseViteUpstream,
-    ...vite,
-    locations: {
-      ...BaseViteUpstream.locations,
-      ...Object.fromEntries(
-        Object.entries(vite.locations ?? {}).map(([path, policy]) => {
-          if (path !== '/') return [path, policy];
-          const base = BaseViteUpstream.locations['/'];
-          return [
-            path,
-            {
-              auth: { ...base.auth, ...policy.auth },
-              csrf: policy.csrf ?? base.csrf,
-              headers: { ...base.headers, ...policy.headers },
-              directives: { ...base.directives, ...policy.directives },
-            } satisfies VisageProxyPolicy,
-          ];
-        }),
-      ),
-    },
-  };
 }

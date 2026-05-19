@@ -168,7 +168,7 @@ Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infras
 Visage's CSRF policy is an edge request-isolation guard for cookie-backed
 locations. It is not a replacement for application-owned CSRF tokens where an
 application accepts form posts or other browser-submitted mutations. CSP,
-`frame-ancestors`, and other clickjacking controls remain application policy.
+`frame-ancestors`, and other click-jacking controls remain application policy.
 
 ## Troubleshooting
 
@@ -179,6 +179,7 @@ application accepts form posts or other browser-submitted mutations. CSP,
 
 ## TO-DO
 
+- [ ] Harden the default security posture by addressing the [security hardening backlog](docs/security-hardening.md).
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

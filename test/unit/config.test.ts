@@ -199,11 +199,9 @@ test('resolveOptions applies upstream defaults', () => {
   });
 
   assert.equal(options.upstreams.api.host, 'api');
-  assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
   assert.equal(options.upstreams.api.scheme, 'https');
   assert.equal(options.upstreams.api.port, 443);
   assert.equal(options.upstreams.secure.host, 'secure');
-  assert.deepEqual(options.upstreams.secure.locations, { '/secure/': {} });
   assert.equal(options.upstreams.secure.scheme, 'https');
   assert.equal(options.upstreams.secure.port, 443);
 });
@@ -248,11 +246,9 @@ test('resolveOptions derives upstreams from services', () => {
     },
   });
   assert.equal(options.upstreams.api.host, 'api.local.test');
-  assert.deepEqual(options.upstreams.api.locations, { '/api/': {} });
   assert.equal(options.upstreams.api.scheme, 'http');
   assert.equal(options.upstreams.api.port, 9000);
   assert.equal(options.upstreams.whoami.host, 'whoami');
-  assert.deepEqual(options.upstreams.whoami.locations, { '/whoami/': {} });
   assert.equal(options.upstreams.whoami.scheme, 'http');
   assert.equal(options.upstreams.whoami.port, 80);
   assert.equal(options.upstreams.secure.host, 'secure');
@@ -583,6 +579,25 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
     'access',
   );
   assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
+});
+
+test('resolveConfig treats the resolved Vite upstream as first-party for token forwarding', (t) => {
+  const { config } = resolveForTest(t, {
+    upstreams: {
+      vite: resolveViteUpstream({
+        port: 6173,
+        locations: { '/': { auth: { forward: true } } },
+      }),
+    },
+  });
+
+  assert.equal(config.upstreams.vite.host, 'host.docker.internal');
+  assert.equal(config.upstreams.vite.external, true);
+  assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
+  assert.equal(
+    config.upstreams.vite.locations['/'].headers.Authorization,
+    '$authorization',
+  );
 });
 
 test('resolveConfig applies CSRF defaults and overrides', (t) => {

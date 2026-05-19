@@ -273,6 +273,7 @@ git merge-base --is-ancestor "origin/$base_branch" "$sha" ||
 
 gh pr merge "$pr_number" \
   --merge \
+  --delete-branch \
   --match-head-commit "$sha" \
   --subject "$pr_title" \
   --body "$pr_body"

@@ -13,6 +13,7 @@ These Playwright tests run the example apps through the local Visage auth stack:
 - Simple app URL: `VISAGE_E2E_URL` or `https://localhost:9001/`
 - External IdP app URL: `https://localhost:9002/`
 - SSR app URL: `https://localhost:9003/`
+- Direct example ports: simple `6173`, external IdP `6174`, SSR `6175`
 - `VISAGE_E2E_EMAIL`: `user@example.com`
 - `VISAGE_E2E_PASSWORD`: `pass`
 

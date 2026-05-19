@@ -85,6 +85,15 @@ test.describe('Visage SSR authenticated identity flow', () => {
       'Expected the hydrated app to keep calling the authenticated /whoami/ upstream.',
     ).toContainText('Hostname', { timeout: 5_000 });
   });
+
+  test('rejects direct requests to the SSR app server', async ({ request }) => {
+    const response = await request.get('http://127.0.0.1:6175/', {
+      maxRedirects: 0,
+    });
+
+    expect(response.status()).toBe(403);
+    expect(await response.text()).toBe('Forbidden');
+  });
 });
 
 async function waitForApp(): Promise<void> {

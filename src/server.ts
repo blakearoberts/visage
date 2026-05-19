@@ -1,15 +1,17 @@
+import { randomBytes } from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Socket } from 'node:net';
 import { join } from 'node:path';
 
 import { ensureCerts } from './certs';
 import { startCompose } from './compose';
-import {
-  resolveConfig,
-  resolveOptions,
-  resolveViteUpstream,
-  type VisageConfig,
-} from './config';
+import { resolveConfig, resolveOptions, type VisageConfig } from './config';
 import { ensureHostEntry } from './hosts';
+import {
+  createVisageMiddleware,
+  createVisageUpgradeHandler,
+} from './middleware';
 import { ensureNginxNetwork } from './network';
 import {
   writeComposeConfig,
@@ -17,22 +19,50 @@ import {
   writeNginxConfig,
   writeOauth2ProxyConfig,
 } from './render';
-import type { VisageOptions, VisageServer } from './types';
+import type { VisageOptions } from './types';
+
+export type VisageMiddleware = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: () => void,
+) => void;
+
+export type VisageUpgradeHandler = (
+  request: IncomingMessage,
+  socket: Socket,
+) => void;
+
+/**
+ * A running Visage instance.
+ */
+export type VisageServer = {
+  /**
+   * Reject requests that did not pass through the Visage-managed NGINX edge.
+   */
+  middleware: VisageMiddleware;
+  /**
+   * Reject upgrade requests that did not pass through the Visage-managed NGINX
+   * edge.
+   */
+  upgrade: VisageUpgradeHandler;
+  /**
+   * Start the Visage managed services (NGINX, OAuth2 Proxy, and sometimes Dex).
+   */
+  listen(): Promise<void>;
+  /**
+   * Stop the Visage managed services.
+   */
+  close(): void;
+};
 
 export function createVisageServer(options: VisageOptions): VisageServer {
   const cache = join(process.cwd(), '.visage');
-  const config = resolveConfig(
-    resolveOptions({
-      ...options,
-      upstreams: {
-        ...options.upstreams,
-        vite: resolveViteUpstream(options.upstreams?.vite),
-      },
-    }),
-    cache,
-  );
+  const edgeKey = randomBytes(32).toString('base64url');
+  const config = resolveConfig(resolveOptions(options), cache, edgeKey);
   let stop: (() => void) | undefined;
   return {
+    middleware: createVisageMiddleware(edgeKey),
+    upgrade: createVisageUpgradeHandler(edgeKey),
     async listen() {
       stop ??= await startVisageServer(config);
     },

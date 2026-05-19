@@ -7,10 +7,9 @@ export type {
   VisageOAuth2Client,
   VisageOptions,
   VisageProxyPolicy,
-  VisageServer,
   VisageService,
   VisageUpstream,
 } from './types';
 
 export { default, visage } from './plugin';
-export { createVisageServer } from './server';
+export { createVisageServer, type VisageServer } from './server';

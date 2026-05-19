@@ -16,7 +16,6 @@ import { parse } from 'yaml';
 import {
   resolveConfig,
   resolveOptions,
-  resolveViteUpstream,
   VisageEdgeKeyHeader,
   type VisageConfig,
 } from '../../src/config.ts';
@@ -29,6 +28,7 @@ import type { VisageOptions } from '../../src/types.ts';
 function resolvedConfig(
   t: TestContext,
   options: VisageOptions = {},
+  edgeKey?: string,
 ): VisageConfig {
   const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
   t.after(() => rmSync(cache, { recursive: true, force: true }));
@@ -39,11 +39,12 @@ function resolvedConfig(
       port: 9443,
       ...options,
       upstreams: {
-        vite: resolveViteUpstream({ port: 6173 }),
+        vite: { port: 6173 },
         ...options.upstreams,
       },
     }),
     cache,
+    edgeKey,
   );
   mkdirSync(config.cache, { recursive: true });
   return config;
@@ -394,11 +395,15 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
 });
 
 test('writeNginxConfig forwards the Vite edge key', (t) => {
-  const config = resolvedConfig(t, {
-    upstreams: {
-      vite: resolveViteUpstream({ port: 6173 }, 'edge-key'),
+  const config = resolvedConfig(
+    t,
+    {
+      upstreams: {
+        vite: { port: 6173 },
+      },
     },
-  });
+    'edge-key',
+  );
 
   writeNginxConfig(config);
 

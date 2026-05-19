@@ -7,7 +7,6 @@ import { test, type TestContext } from 'node:test';
 import {
   resolveConfig,
   resolveOptions,
-  resolveViteUpstream,
   VisageEdgeKeyHeader,
   type VisageConfig,
 } from '../../src/config.ts';
@@ -32,7 +31,7 @@ function resolveForTest(
         port: 9443,
         ...options,
         upstreams: {
-          vite: resolveViteUpstream({ port: 6173 }),
+          vite: { port: 6173 },
           ...options.upstreams,
         },
       }),
@@ -536,62 +535,75 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
 });
 
-test('resolveViteUpstream injects the edge key into Vite locations', () => {
-  const upstream = resolveViteUpstream(
-    {
-      locations: {
-        '/': {
-          headers: {
-            'X-App': 'root',
-          },
-        },
-        '/app/': {
-          headers: {
-            'X-App': 'nested',
+test('resolveConfig injects the edge key into Vite locations', (t) => {
+  const config = resolveConfig(
+    resolveOptions({
+      upstreams: {
+        vite: {
+          locations: {
+            '/': {
+              headers: {
+                'X-App': 'root',
+              },
+            },
+            '/app/': {
+              headers: {
+                'X-App': 'nested',
+              },
+            },
           },
         },
       },
-    },
+    }),
+    tempCache(t),
     'edge-key',
   );
 
   assert.equal(
-    upstream.locations?.['/']?.headers?.[VisageEdgeKeyHeader],
+    config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
     'edge-key',
   );
   assert.equal(
-    upstream.locations?.['/app/']?.headers?.[VisageEdgeKeyHeader],
+    config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
     'edge-key',
   );
-  assert.equal(upstream.locations?.['/']?.headers?.['X-App'], 'root');
-  assert.equal(upstream.locations?.['/app/']?.headers?.['X-App'], 'nested');
+  assert.equal(config.upstreams.vite.locations['/'].headers['X-App'], 'root');
+  assert.equal(
+    config.upstreams.vite.locations['/app/'].headers['X-App'],
+    'nested',
+  );
 });
 
-test('resolveViteUpstream preserves explicit edge key overrides', () => {
-  const upstream = resolveViteUpstream(
-    {
-      locations: {
-        '/': {
-          headers: {
-            [VisageEdgeKeyHeader]: 'overridden',
-          },
-        },
-        '/app/': {
-          headers: {
-            [VisageEdgeKeyHeader]: 'nested-override',
+test('resolveConfig preserves explicit Vite edge key overrides', (t) => {
+  const config = resolveConfig(
+    resolveOptions({
+      upstreams: {
+        vite: {
+          locations: {
+            '/': {
+              headers: {
+                [VisageEdgeKeyHeader]: 'overridden',
+              },
+            },
+            '/app/': {
+              headers: {
+                [VisageEdgeKeyHeader]: 'nested-override',
+              },
+            },
           },
         },
       },
-    },
+    }),
+    tempCache(t),
     'edge-key',
   );
 
   assert.equal(
-    upstream.locations?.['/']?.headers?.[VisageEdgeKeyHeader],
+    config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
     'overridden',
   );
   assert.equal(
-    upstream.locations?.['/app/']?.headers?.[VisageEdgeKeyHeader],
+    config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
     'nested-override',
   );
 });
@@ -627,10 +639,10 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
 test('resolveConfig treats the resolved Vite upstream as first-party for token forwarding', (t) => {
   const { config } = resolveForTest(t, {
     upstreams: {
-      vite: resolveViteUpstream({
+      vite: {
         port: 6173,
         locations: { '/': { auth: { forward: true } } },
-      }),
+      },
     },
   });
 

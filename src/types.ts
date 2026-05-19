@@ -1,18 +1,4 @@
 /**
- * A running Visage instance.
- */
-export type VisageServer = {
-  /**
-   * Start the Visage managed services (NGINX, OAuth2 Proxy, and sometimes Dex).
-   */
-  listen(): Promise<void>;
-  /**
-   * Stop the Visage managed services.
-   */
-  close(): void;
-};
-
-/**
  * User-configurable options for the Visage Vite plugin.
  */
 export type VisageOptions = {

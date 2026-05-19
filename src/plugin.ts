@@ -4,12 +4,11 @@ import { isIP } from 'node:net';
 import { join } from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 
+import { resolveConfig, resolveOptions } from './config';
 import {
-  resolveConfig,
-  resolveOptions,
-  resolveViteUpstream,
-  VisageEdgeKeyHeader,
-} from './config';
+  createVisageMiddleware,
+  createVisageUpgradeHandler,
+} from './middleware';
 import { startVisageServer } from './server';
 import type { VisageOptions } from './types';
 
@@ -64,26 +63,11 @@ export function visage(options: VisageOptions = {}): Plugin {
     },
 
     configureServer(vite: ViteDevServer) {
-      // Install HTTP request edge guard.
-      vite.middlewares.use((request, response, next) => {
-        if (request.headers[VisageEdgeKeyHeader.toLowerCase()] === edgeKey) {
-          next();
-          return;
-        }
-        response.statusCode = 403;
-        response.end('Forbidden');
-      });
-
-      // Install WebSocket connect edge guard.
-      vite.httpServer?.prependListener('upgrade', (request, socket) => {
-        if (request.headers[VisageEdgeKeyHeader.toLowerCase()] === edgeKey) {
-          return;
-        }
-        socket.write(
-          'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
-        );
-        socket.destroy();
-      });
+      vite.middlewares.use(createVisageMiddleware(edgeKey));
+      vite.httpServer?.prependListener(
+        'upgrade',
+        createVisageUpgradeHandler(edgeKey),
+      );
 
       // Hide Vite's direct URL(s) because browser traffic must flow through the
       // browser-facing NGINX managed by Visage.
@@ -107,13 +91,11 @@ export function visage(options: VisageOptions = {}): Plugin {
             ...options,
             upstreams: {
               ...options.upstreams,
-              vite: resolveViteUpstream(
-                { port: address.port, ...options.upstreams?.vite },
-                edgeKey,
-              ),
+              vite: { port: address.port, ...options.upstreams?.vite },
             },
           }),
           cache,
+          edgeKey,
         );
 
         visageUrl = formatVisageUrlLog(config.host, config.port);

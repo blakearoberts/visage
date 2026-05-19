@@ -4,9 +4,18 @@ import { createVisageServer } from '@blakearoberts/visage';
 import connect from 'connect';
 import { createServer as createViteServer, type ViteDevServer } from 'vite';
 
-const port = 8080;
+const port = 6175;
 const app = connect();
 const server = app.listen(port);
+
+const visage = createVisageServer({
+  port: 9003,
+  services: { whoami: { image: 'traefik/whoami' } },
+  upstreams: { vite: { port } },
+});
+app.use(visage.middleware);
+server.prependListener('upgrade', visage.upgrade);
+await visage.listen();
 
 const vite = await createViteServer({
   server: { middlewareMode: true, hmr: { server } },
@@ -14,13 +23,6 @@ const vite = await createViteServer({
 });
 app.use(vite.middlewares);
 app.use(ssrHandler(vite));
-
-const visage = createVisageServer({
-  port: 9003,
-  services: { whoami: { image: 'traefik/whoami' } },
-  upstreams: { vite: { port } },
-});
-await visage.listen();
 
 process.once('SIGINT', () => {
   visage.close();

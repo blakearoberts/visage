@@ -204,6 +204,16 @@ const BaseUpstreamOauth2Proxy = {
       },
       directives: { ...DefaultProxyPolicy.directives },
     } satisfies ResolvedProxyPolicy,
+    '/oauth2/sign_out': {
+      auth: { enabled: false, forward: false, redirect: false },
+      csrf: false,
+      headers: {
+        ...DefaultProxyPolicy.headers,
+        Cookie: '$http_cookie', // Forward session cookie.
+        'X-Auth-Request-Redirect': '/',
+      },
+      directives: { ...DefaultProxyPolicy.directives },
+    } satisfies ResolvedProxyPolicy,
   },
 } as const satisfies ResolvedUpstream;
 
@@ -468,36 +478,41 @@ function resolveAuthPolicy(
 export function resolveConfig(
   options: ResolvedVisageOptions,
   cache: string,
+  edgeKey?: string,
 ): VisageConfig {
   const idp = resolveIdpConfig(options);
+  const end_session_endpoint = idp.oidc.end_session_endpoint;
   const upstreams: Record<string, ResolvedUpstream> = {
-    oauth2_proxy: {
-      ...BaseUpstreamOauth2Proxy,
-      locations: {
-        ...BaseUpstreamOauth2Proxy.locations,
-        '/oauth2/sign_out': {
-          auth: { enabled: false, forward: false, redirect: false },
-          csrf: false,
-          headers: {
-            ...DefaultProxyPolicy.headers,
-            Cookie: '$http_cookie', // Forward session cookie.
-            'X-Auth-Request-Redirect': idp.oidc.end_session_endpoint
-              ? JSON.stringify(
-                  idp.oidc.end_session_endpoint +
-                    (idp.oidc.end_session_endpoint.includes('?') ? '&' : '?') +
-                    'id_token_hint={id_token}&post_logout_redirect_uri=' +
-                    encodeURIComponent(
-                      `https://${options.host}:${options.port}/`,
-                    ),
-                )
-              : '/',
+    ...(end_session_endpoint === undefined
+      ? { oauth2_proxy: { ...BaseUpstreamOauth2Proxy } }
+      : {
+          oauth2_proxy: {
+            ...BaseUpstreamOauth2Proxy,
+            locations: {
+              ...BaseUpstreamOauth2Proxy.locations,
+              '/oauth2/sign_out': {
+                ...BaseUpstreamOauth2Proxy.locations['/oauth2/sign_out'],
+                headers: {
+                  ...BaseUpstreamOauth2Proxy.locations['/oauth2/sign_out']
+                    .headers,
+                  'X-Auth-Request-Redirect': JSON.stringify(
+                    end_session_endpoint +
+                      (end_session_endpoint.includes('?') ? '&' : '?') +
+                      'id_token_hint={id_token}&post_logout_redirect_uri=' +
+                      encodeURIComponent(
+                        `https://${options.host}:${options.port}/`,
+                      ),
+                  ),
+                },
+              } satisfies ResolvedProxyPolicy,
+            },
           },
-          directives: { ...DefaultProxyPolicy.directives },
-        } satisfies ResolvedProxyPolicy,
-      },
-    },
+        }),
     ...idp.upstream,
     ...options.upstreams,
+    ...(edgeKey && options.upstreams.vite
+      ? { vite: resolveViteEdgeKeyConfig(options.upstreams.vite, edgeKey) }
+      : {}),
   };
   return {
     host: options.host,
@@ -538,6 +553,27 @@ export function resolveConfig(
           { ...upstream, external } satisfies ResolvedConfigUpstream,
         ];
       }),
+    ),
+  };
+}
+
+function resolveViteEdgeKeyConfig(
+  upstream: ResolvedUpstream,
+  edgeKey: string,
+): ResolvedUpstream {
+  return {
+    ...upstream,
+    locations: Object.fromEntries(
+      Object.entries(upstream.locations).map(([path, policy]) => [
+        path,
+        {
+          ...policy,
+          headers: {
+            [VisageEdgeKeyHeader]: edgeKey,
+            ...policy.headers,
+          },
+        } satisfies ResolvedProxyPolicy,
+      ]),
     ),
   };
 }
@@ -607,28 +643,4 @@ function resolveIdpConfig({
       },
     },
   } satisfies ResolvedExternalIdpConfig;
-}
-
-export function resolveViteUpstream(
-  vite: VisageUpstream = {},
-  edgeKey?: string,
-): VisageUpstream {
-  if (!edgeKey) return vite;
-  return {
-    ...vite,
-    locations: Object.fromEntries(
-      Object.entries({ '/': {} as VisageProxyPolicy, ...vite.locations }).map(
-        ([path, policy]) => [
-          path,
-          {
-            ...policy,
-            headers: {
-              [VisageEdgeKeyHeader]: edgeKey,
-              ...policy.headers,
-            },
-          },
-        ],
-      ),
-    ),
-  };
 }

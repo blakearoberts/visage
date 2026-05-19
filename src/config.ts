@@ -331,12 +331,62 @@ function resolveUpstreamsOptions(
         ]),
     ),
     ...Object.fromEntries(
-      Object.entries(upstreams).map(([name, upstream]) => [
-        name,
-        resolveUpstreamOptions(name, upstream, services[name] === undefined),
-      ]),
+      Object.entries(upstreams).map(([name, upstream]) => {
+        if (name === 'vite') {
+          const vite = resolveViteUpstreamOptions(upstream);
+          return [name, resolveUpstreamOptions('vite', vite, true)];
+        }
+        return [
+          name,
+          resolveUpstreamOptions(name, upstream, services[name] === undefined),
+        ];
+      }),
     ),
   };
+}
+
+const BaseViteUpstreamRootLocation = {
+  auth: { enabled: true, forward: false, redirect: true },
+  csrf: 'app',
+  headers: {
+    Host: '$host',
+    Upgrade: '$http_upgrade',
+    Connection: '$connection_upgrade',
+    'X-Auth-Request-User': '$auth_user',
+    'X-Auth-Request-Email': '$auth_email',
+  },
+  directives: {
+    proxy_http_version: ['1.1'],
+    proxy_read_timeout: ['1h'],
+  },
+} satisfies ResolvedProxyPolicy;
+
+function resolveViteUpstreamOptions(upstream: VisageUpstream): VisageUpstream {
+  const base = BaseViteUpstreamRootLocation;
+  const root = upstream.locations?.['/'];
+  return {
+    host: 'host.docker.internal',
+    scheme: 'http',
+    ...upstream,
+    locations: {
+      ...(upstream.locations ?? {}),
+      '/':
+        root === undefined
+          ? { ...base }
+          : {
+              auth: { ...base.auth, ...root.auth },
+              csrf: root.csrf ?? base.csrf,
+              headers: {
+                ...base.headers,
+                ...root.headers,
+              },
+              directives: {
+                ...base.directives,
+                ...root.directives,
+              },
+            },
+    },
+  } satisfies VisageUpstream;
 }
 
 function resolveUpstreamOptions(
@@ -559,70 +609,26 @@ function resolveIdpConfig({
   } satisfies ResolvedExternalIdpConfig;
 }
 
-const BaseViteUpstreamRootLocation = {
-  auth: { enabled: true, forward: false, redirect: true },
-  csrf: 'app',
-  headers: {
-    Host: '$host',
-    Upgrade: '$http_upgrade',
-    Connection: '$connection_upgrade',
-    'X-Auth-Request-User': '$auth_user',
-    'X-Auth-Request-Email': '$auth_email',
-  },
-  directives: {
-    proxy_http_version: ['1.1'],
-    proxy_read_timeout: ['1h'],
-  },
-} satisfies ResolvedProxyPolicy;
-
-const BaseViteUpstream = {
-  host: 'host.docker.internal',
-  scheme: 'http',
-  locations: { '/': BaseViteUpstreamRootLocation },
-} satisfies Omit<ResolvedUpstream, 'port'>;
-
 export function resolveViteUpstream(
-  vite: VisageUpstream = { locations: {} },
+  vite: VisageUpstream = {},
   edgeKey?: string,
 ): VisageUpstream {
-  function applyEdgePolicy(policy: VisageProxyPolicy): VisageProxyPolicy {
-    return {
-      ...policy,
-      headers: {
-        ...(edgeKey ? { [VisageEdgeKeyHeader]: edgeKey } : {}),
-        ...policy.headers,
-      },
-    };
-  }
+  if (!edgeKey) return vite;
   return {
-    ...BaseViteUpstream,
     ...vite,
-    locations: {
-      ...Object.fromEntries(
-        Object.entries(BaseViteUpstream.locations).map(([path, policy]) => [
+    locations: Object.fromEntries(
+      Object.entries({ '/': {} as VisageProxyPolicy, ...vite.locations }).map(
+        ([path, policy]) => [
           path,
-          applyEdgePolicy(policy),
-        ]),
+          {
+            ...policy,
+            headers: {
+              [VisageEdgeKeyHeader]: edgeKey,
+              ...policy.headers,
+            },
+          },
+        ],
       ),
-      ...Object.fromEntries(
-        Object.entries(vite.locations ?? {}).map(([path, policy]) => {
-          if (path === '/') {
-            // Merge user-defined root policy over base root location.
-            const base = applyEdgePolicy(BaseViteUpstreamRootLocation);
-            return [
-              path,
-              {
-                auth: { ...base.auth, ...policy.auth },
-                csrf: policy.csrf ?? base.csrf,
-                headers: { ...base.headers, ...policy.headers },
-                directives: { ...base.directives, ...policy.directives },
-              } satisfies VisageProxyPolicy,
-            ];
-          }
-          // Apply edge policy to all other locations.
-          return [path, applyEdgePolicy(policy)];
-        }),
-      ),
-    },
+    ),
   };
 }

@@ -262,6 +262,49 @@ test('resolveOptions derives upstreams from services', () => {
   assert.equal(options.upstreams.externalHttp.port, 80);
 });
 
+test('resolveOptions applies Vite upstream defaults and merges the root location', () => {
+  const options = resolveOptions({
+    upstreams: {
+      vite: {
+        port: 6173,
+        locations: {
+          '/': {
+            auth: { forward: true },
+            headers: {
+              'X-App': 'root',
+            },
+          },
+          '/app/': {
+            headers: {
+              'X-App': 'nested',
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(options.upstreams.vite.host, 'host.docker.internal');
+  assert.equal(options.upstreams.vite.scheme, 'http');
+  assert.equal(options.upstreams.vite.port, 6173);
+  assert.deepEqual(options.upstreams.vite.locations['/'].auth, {
+    enabled: true,
+    forward: 'id',
+    redirect: true,
+  });
+  assert.equal(options.upstreams.vite.locations['/'].csrf, 'app');
+  assert.equal(options.upstreams.vite.locations['/'].headers.Host, '$host');
+  assert.equal(
+    options.upstreams.vite.locations['/'].headers.Upgrade,
+    '$http_upgrade',
+  );
+  assert.equal(options.upstreams.vite.locations['/'].headers['X-App'], 'root');
+  assert.equal(
+    options.upstreams.vite.locations['/app/'].headers['X-App'],
+    'nested',
+  );
+});
+
 test('resolveOptions supports OAuth2 public PKCE clients', () => {
   const options = resolveOptions({
     oauth2: {
@@ -672,7 +715,6 @@ test('resolveConfig lets named services and upstreams override base entries', (t
 
   assert.equal(config.upstreams.vite.host, 'vite');
   assert.equal(config.upstreams.vite.port, 3000);
-  assert.deepEqual(Object.keys(config.upstreams.vite.locations), ['/app/']);
   assert.deepEqual(config.upstreams.vite.locations['/app/'].auth, {
     enabled: true,
     forward: 'access',

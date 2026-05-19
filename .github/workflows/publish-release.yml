@@ -145,10 +145,19 @@ jobs:
       contents: write
       id-token: write
     steps:
+      - name: Create app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@v6
         with:
@@ -231,7 +240,7 @@ jobs:
 
       - name: Publish GitHub release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PACKAGE_NAME: ${{ needs.resolve-release.outputs.package-name }}
           PACKAGE_VERSION: ${{ needs.resolve-release.outputs.version }}
           RELEASE_TAG: ${{ needs.resolve-release.outputs.tag }}

@@ -1,4 +1,5 @@
 import { spawn, spawnSync, StdioOptions } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { openSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -22,7 +23,11 @@ export function startCompose(config: VisageConfig): StopCompose {
     `--file=${file}`,
     `--project-name=${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}`,
   ] as const;
-  const env = { ...process.env, COMPOSE_MENU: 'false' } as const;
+  const env = {
+    COMPOSE_MENU: 'false',
+    [config.secrets.cookieSecret]: randomBytes(32).toString('base64url'),
+    ...process.env,
+  } as const;
   const opts = {
     cwd: config.cache,
     stdio: ['ignore', output, output] satisfies StdioOptions,

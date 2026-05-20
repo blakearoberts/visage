@@ -21,7 +21,6 @@ type ResolvedCookiePolicy = {
   readonly cookie_refresh: string;
   readonly cookie_domains?: readonly string[];
   readonly cookie_path: string;
-  readonly cookie_secret_file: string;
 };
 
 type ResolvedIdpOption =
@@ -115,7 +114,9 @@ export type VisageConfig = {
     readonly nginx: Volume;
     readonly oauth2Proxy: Volume;
     readonly clientSecret: Volume;
-    readonly cookieSecret: Volume;
+  };
+  readonly secrets: {
+    readonly cookieSecret: string;
   };
   readonly network: {
     readonly name: string;
@@ -135,8 +136,11 @@ const BaseFiles = {
   nginx: ['./nginx.conf', '/etc/nginx/nginx.conf'],
   oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
   clientSecret: ['./oauth2-client-secret', '/etc/oauth2-proxy/client-secret'],
-  cookieSecret: ['./oauth2-cookie-secret', '/etc/oauth2-proxy/cookie-secret'],
 } as const satisfies VisageConfig['files'];
+
+const BaseSecrets = {
+  cookieSecret: 'OAUTH2_PROXY_COOKIE_SECRET',
+} as const satisfies VisageConfig['secrets'];
 
 const DockerImages = parse(
   readFileSync(
@@ -221,7 +225,6 @@ const DefaultCookiePolicy = {
   cookie_expire: '8h',
   cookie_refresh: '15m',
   cookie_path: '/',
-  cookie_secret_file: BaseFiles.cookieSecret[1],
 } as const satisfies Omit<ResolvedCookiePolicy, 'cookie_name'>;
 
 const DefaultDexUsers: readonly VisageDexUser[] = [
@@ -522,6 +525,7 @@ export function resolveConfig(
     oauth2: options.oauth2,
     cache,
     files: BaseFiles,
+    secrets: BaseSecrets,
     network: {
       name: process.env.COMPOSE_PROJECT_NAME ?? 'visage',
       trustedProxyIps: [],

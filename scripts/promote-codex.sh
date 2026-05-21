@@ -3,7 +3,7 @@ set -euo pipefail
 
 base_branch="${PROMOTE_CODEX_BASE_BRANCH:-main}"
 staging_branch="${PROMOTE_CODEX_BRANCH:-codex}"
-workflow_name="${PROMOTE_CODEX_WORKFLOW:-CI}"
+ci_workflow_name="${PROMOTE_CODEX_WORKFLOW:-CI}"
 pr_title=""
 pr_body=""
 ignore_staged=false
@@ -15,9 +15,10 @@ usage() {
 Usage: npm run promote:codex -- --pr-title "PR title" --pr-body "PR body" [options]
 
 Pushes codex, opens or updates a pull request from codex into main, waits for
-required PR checks, merges the PR, waits for the main CI run on the merge
-commit, then fast-forwards local codex to main. The remote codex PR branch may
-be auto-deleted by GitHub after merge.
+auto-merge and required PR checks, waits for the main CI run on the merge
+commit, fast-forwards local codex to main, then watches the downstream publish
+workflow on the merge commit. The remote codex PR branch may be auto-deleted
+by GitHub after merge.
 
 Options:
   --pr-title         Required pull request title.
@@ -55,10 +56,11 @@ cleanup() {
 }
 
 find_run_id() {
-  local branch="$1"
-  local sha="$2"
+  local workflow_name="$1"
+  local branch="$2"
+  local sha="$3"
 
-  gh run list \
+  ghx run list \
     --branch "$branch" \
     --limit 20 \
     --json databaseId,headSha,workflowName \
@@ -67,12 +69,16 @@ find_run_id() {
 }
 
 wait_for_run() {
-  local branch="$1"
-  local sha="$2"
+  local workflow_name="$1"
+  local branch="$2"
+  local sha="$3"
   local run_id=""
+  local conclusion=""
+  local head_sha=""
+  local run_url=""
 
   for _ in {1..60}; do
-    run_id="$(find_run_id "$branch" "$sha")"
+    run_id="$(find_run_id "$workflow_name" "$branch" "$sha")"
     if [[ -n "$run_id" ]]; then
       break
     fi
@@ -82,16 +88,27 @@ wait_for_run() {
   [[ -n "$run_id" ]] ||
     die "could not find $workflow_name run for $branch at $sha"
 
-  gh run watch "$run_id" --exit-status
+  echo "Watching $workflow_name run $run_id for $branch at $sha"
 
-  local conclusion
-  local head_sha
-  conclusion="$(gh run view "$run_id" --json conclusion --jq .conclusion)"
-  head_sha="$(gh run view "$run_id" --json headSha --jq .headSha)"
+  if ! ghx run watch "$run_id" --exit-status; then
+    conclusion="$(ghx run view "$run_id" --json conclusion --jq .conclusion)"
+    run_url="$(ghx run view "$run_id" --json url --jq .url)"
+    die "$workflow_name run $run_id concluded with $conclusion: $run_url"
+  fi
+
+  conclusion="$(ghx run view "$run_id" --json conclusion --jq .conclusion)"
+  head_sha="$(ghx run view "$run_id" --json headSha --jq .headSha)"
   [[ "$head_sha" == "$sha" ]] ||
     die "$workflow_name run $run_id used $head_sha, expected $sha"
   [[ "$conclusion" == "success" ]] ||
     die "$workflow_name run $run_id concluded with $conclusion"
+}
+
+wait_for_publish_workflow() {
+  local branch="$1"
+  local sha="$2"
+
+  wait_for_run "Publish" "$branch" "$sha"
 }
 
 wait_for_required_checks() {
@@ -102,7 +119,7 @@ wait_for_required_checks() {
 
   for _ in {1..60}; do
     checks_count="$(
-      gh pr checks "$pr_number" \
+      ghx pr checks "$pr_number" \
         --required \
         --json event,name \
         --jq '[.[] | select(.event == "pull_request")] | length' 2>/dev/null || true
@@ -119,7 +136,7 @@ wait_for_required_checks() {
 
   while true; do
     failed="$(
-      gh pr checks "$pr_number" \
+      ghx pr checks "$pr_number" \
         --required \
         --json bucket,event,link,name,state \
         --jq '.[] | select(.event == "pull_request" and (.bucket == "fail" or .bucket == "cancel")) | "\(.name): \(.state) \(.link)"'
@@ -128,7 +145,7 @@ wait_for_required_checks() {
       die "required checks did not pass for PR #$pr_number: $failed"
 
     pending="$(
-      gh pr checks "$pr_number" \
+      ghx pr checks "$pr_number" \
         --required \
         --json bucket,event,name \
         --jq '.[] | select(.event == "pull_request" and .bucket == "pending") | .name'
@@ -149,7 +166,7 @@ upsert_pull_request() {
   printf '%s\n' "$body" >"$tmp_body_file"
 
   pr_number="$(
-    gh pr list \
+    ghx pr list \
       --state open \
       --head "$staging_branch" \
       --base "$base_branch" \
@@ -158,22 +175,82 @@ upsert_pull_request() {
   )"
 
   if [[ -n "$pr_number" ]]; then
-    gh pr edit "$pr_number" \
+    ghx pr edit "$pr_number" \
       --title "$title" \
       --body-file "$tmp_body_file" >/dev/null
   else
     local pr_url
     pr_url="$(
-      gh pr create \
+      ghx pr create \
         --base "$base_branch" \
         --head "$staging_branch" \
         --title "$title" \
         --body-file "$tmp_body_file"
     )"
-    pr_number="$(gh pr view "$pr_url" --json number --jq .number)"
+    pr_number="$(ghx pr view "$pr_url" --json number --jq .number)"
   fi
 
   echo "$pr_number"
+}
+
+wait_for_auto_merge_enabled() {
+  local pr_number="$1"
+  local auto_merge_enabled=""
+  local merge_sha=""
+  local state=""
+
+  for _ in {1..30}; do
+    IFS=$'\037' read -r state auto_merge_enabled merge_sha <<<"$(
+      ghx pr view "$pr_number" \
+        --json autoMergeRequest,mergeCommit,state \
+        --jq '[.state, ((.autoMergeRequest != null) | tostring), (.mergeCommit.oid // "")] | join("\u001f")'
+    )"
+
+    if [[ "$state" == "MERGED" && -n "$merge_sha" ]]; then
+      return 0
+    fi
+    if [[ "$auto_merge_enabled" == "true" ]]; then
+      return 0
+    fi
+
+    echo "Waiting for auto-merge to be enabled for PR #$pr_number"
+    sleep 2
+  done
+
+  die "auto-merge was not enabled for PR #$pr_number"
+}
+
+wait_for_auto_merge() {
+  local pr_number="$1"
+  local expected_head="$2"
+  local head_ref_oid=""
+  local merge_sha=""
+  local state=""
+
+  for _ in {1..120}; do
+    IFS=$'\037' read -r state merge_sha head_ref_oid <<<"$(
+      ghx pr view "$pr_number" \
+        --json headRefOid,mergeCommit,state \
+        --jq '[.state, (.mergeCommit.oid // ""), .headRefOid] | join("\u001f")'
+    )"
+
+    if [[ -n "$head_ref_oid" && "$head_ref_oid" != "$expected_head" ]]; then
+      die "PR #$pr_number head changed to $head_ref_oid, expected $expected_head"
+    fi
+
+    if [[ "$state" == "MERGED" && -n "$merge_sha" ]]; then
+      echo "$merge_sha"
+      return 0
+    fi
+    if [[ "$state" == "CLOSED" ]]; then
+      die "PR #$pr_number was closed without merging"
+    fi
+
+    echo "Waiting for auto-merge to merge PR #$pr_number" >&2
+    sleep 5
+  done
+
+  die "auto-merge did not merge PR #$pr_number"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -223,7 +300,7 @@ normalize_pr_body
   die "--pr-body is required"
 
 require_command git
-require_command gh
+require_command ghx
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
@@ -248,12 +325,12 @@ if [[ -n "$unstaged_paths" && "$ignore_unstaged" != true ]]; then
   die "unstaged or untracked changes are present; commit, stash, or remove them before promotion, or rerun with --ignore-unstaged: $unstaged_paths"
 fi
 
-gh auth status >/dev/null
+ghx auth status >/dev/null
 
-repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
-can_push="$(gh api "repos/$repo" --jq '.permissions.push')"
+repo="$(ghx repo view --json nameWithOwner --jq .nameWithOwner)"
+can_push="$(ghx api "repos/$repo" --jq '.permissions.push')"
 [[ "$can_push" == "true" ]] ||
-  die "the active gh account must have write access to $repo"
+  die "the active ghx account must have write access to $repo"
 
 git fetch origin "$base_branch:refs/remotes/origin/$base_branch"
 git merge-base --is-ancestor "origin/$base_branch" HEAD ||
@@ -265,36 +342,12 @@ git push -u origin "$staging_branch"
 pr_number="$(upsert_pull_request "$pr_title" "$pr_body")"
 echo "Promote PR: #$pr_number"
 
+wait_for_auto_merge_enabled "$pr_number"
 wait_for_required_checks "$pr_number"
 
-git fetch origin "$base_branch:refs/remotes/origin/$base_branch"
-git merge-base --is-ancestor "origin/$base_branch" "$sha" ||
-  die "$base_branch moved while checks were running; update $staging_branch before promotion"
+merge_sha="$(wait_for_auto_merge "$pr_number" "$sha")"
 
-gh pr merge "$pr_number" \
-  --merge \
-  --delete-branch \
-  --match-head-commit "$sha" \
-  --subject "$pr_title" \
-  --body "$pr_body"
-
-merge_sha=""
-for _ in {1..30}; do
-  merge_sha="$(
-    gh pr view "$pr_number" \
-      --json mergeCommit \
-      --jq '.mergeCommit.oid // empty'
-  )"
-  if [[ -n "$merge_sha" ]]; then
-    break
-  fi
-  sleep 2
-done
-
-[[ -n "$merge_sha" ]] ||
-  die "could not resolve merge commit for PR #$pr_number"
-
-wait_for_run "$base_branch" "$merge_sha"
+wait_for_run "$ci_workflow_name" "$base_branch" "$merge_sha"
 
 git fetch --prune origin
 git checkout "$staging_branch"
@@ -303,3 +356,5 @@ git merge --ff-only "origin/$base_branch"
 if ! git rev-parse --verify --quiet "refs/remotes/origin/$staging_branch" >/dev/null; then
   git branch --unset-upstream "$staging_branch" >/dev/null 2>&1 || true
 fi
+
+wait_for_publish_workflow "$base_branch" "$merge_sha"

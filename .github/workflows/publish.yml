@@ -1,0 +1,191 @@
+name: Publish
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: visage-publish-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish Package
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve publish inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+
+          package_name="$(npm pkg get name | tr -d '"')"
+          checkout_version="$(npm pkg get version | tr -d '"')"
+
+          merge_pr="$(
+            gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/pulls" \
+              --jq '.[] | select(.base.ref == "main") | .head.ref' |
+              head -n 1
+          )"
+
+          {
+            echo "CHECKOUT_VERSION=$checkout_version"
+            echo "MERGE_PR=$merge_pr"
+            echo "PACKAGE_NAME=$package_name"
+            echo "WORKFLOW_HEAD_BRANCH=$WORKFLOW_HEAD_BRANCH"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve publish target
+        run: |
+          set -euo pipefail
+
+          if [[ "$WORKFLOW_HEAD_BRANCH" == "main" && "$MERGE_PR" == "release/v$CHECKOUT_VERSION" && "$CHECKOUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            {
+              echo "NPM_DIST_TAG=latest"
+              echo "PUBLISH_MODE=stable"
+              echo "PUBLISH_VERSION=$CHECKOUT_VERSION"
+            } >> "$GITHUB_ENV"
+            echo "Resolved stable publish for $PACKAGE_NAME@$CHECKOUT_VERSION from $MERGE_PR to $WORKFLOW_HEAD_BRANCH."
+            exit 0
+          fi
+
+          if [[ "$CHECKOUT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.([0-9]+))?$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            committed_rc="${BASH_REMATCH[5]:-}"
+          else
+            echo "Unsupported package version: $CHECKOUT_VERSION" >&2
+            exit 1
+          fi
+
+          if [[ -n "$committed_rc" ]]; then
+            rc_base="$major.$minor.$patch"
+            minimum_rc=$((10#$committed_rc))
+          else
+            rc_base="$major.$minor.$((patch + 1))"
+            minimum_rc=0
+          fi
+
+          escaped_rc_base="${rc_base//./\\.}"
+          max_rc=-1
+          while IFS= read -r published_version; do
+            if [[ "$published_version" =~ ^$escaped_rc_base-rc\.([0-9]+)$ ]]; then
+              published_rc=$((10#${BASH_REMATCH[1]}))
+              if (( published_rc > max_rc )); then
+                max_rc="$published_rc"
+              fi
+            fi
+          done < <(npm view "$PACKAGE_NAME" versions --parseable 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+' || true)
+
+          next_rc=$((max_rc + 1))
+          if (( next_rc < minimum_rc )); then
+            next_rc="$minimum_rc"
+          fi
+          rc_version="$rc_base-rc.$next_rc"
+
+          {
+            echo "NPM_DIST_TAG=next"
+            echo "PUBLISH_MODE=rc"
+            echo "PUBLISH_VERSION=$rc_version"
+          } >> "$GITHUB_ENV"
+          echo "Resolved RC publish for $PACKAGE_NAME@$rc_version from $MERGE_PR to $WORKFLOW_HEAD_BRANCH."
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: package
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Prepare package
+        run: |
+          set -euo pipefail
+
+          rm -rf package-publish package-work
+          mkdir -p package-publish
+
+          if [[ "$PUBLISH_MODE" == "rc" ]]; then
+            mkdir -p package-work
+            tar -xzf package/*.tgz -C package-work
+            (
+              cd package-work/package
+              npm version "$PUBLISH_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
+            )
+            npm pack ./package-work/package --pack-destination package-publish
+          else
+            cp package/*.tgz package-publish/
+          fi
+
+      - name: Publish package to npm
+        run: |
+          set -euo pipefail
+
+          if npm view "$PACKAGE_NAME@$PUBLISH_VERSION" version >/dev/null 2>&1; then
+            published_dist_tag="$(npm view "$PACKAGE_NAME" "dist-tags.$NPM_DIST_TAG" 2>/dev/null || true)"
+            if [[ "$published_dist_tag" != "$PUBLISH_VERSION" ]]; then
+              echo "$PACKAGE_NAME@$PUBLISH_VERSION is published, but the $NPM_DIST_TAG dist-tag points to $published_dist_tag." >&2
+              exit 1
+            fi
+
+            echo "$PACKAGE_NAME@$PUBLISH_VERSION is already published with the $NPM_DIST_TAG dist-tag."
+          else
+            npm publish ./package-publish/*.tgz --access public --tag "$NPM_DIST_TAG" --provenance
+          fi
+
+      - name: Create app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          release_tag="v$PUBLISH_VERSION"
+
+          authenticated_origin="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git tag "$release_tag" "$RELEASE_COMMIT"
+          git push "$authenticated_origin" "$release_tag"
+
+          notes="Published [$PACKAGE_NAME@$PUBLISH_VERSION](https://www.npmjs.com/package/$PACKAGE_NAME/v/$PUBLISH_VERSION) to npm with the \`$NPM_DIST_TAG\` dist-tag."
+          prerelease=()
+          if [[ "$PUBLISH_MODE" == "rc" ]]; then
+            prerelease=(--prerelease)
+          fi
+
+          gh release create "$release_tag" \
+            --verify-tag \
+            "${prerelease[@]}" \
+            --title "$release_tag" \
+            --notes "$notes"

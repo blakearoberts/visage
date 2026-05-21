@@ -41,7 +41,7 @@ jobs:
 
           while IFS= read -r path; do
             case "$path" in
-              .github/workflows/release.yml|.github/workflows/publish-release.yml|.github/workflows/publish-rc.yml)
+              .github/workflows/release.yml|.github/workflows/publish.yml)
                 echo "$path requires manual merge; disabling auto-merge for $PR_URL."
                 gh pr merge --disable-auto "$PR_URL" || true
                 exit 0

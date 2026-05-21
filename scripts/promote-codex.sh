@@ -16,8 +16,8 @@ Usage: npm run promote:codex -- --pr-title "PR title" --pr-body "PR body" [optio
 
 Pushes codex, opens or updates a pull request from codex into main, waits for
 auto-merge and required PR checks, waits for the main CI run on the merge
-commit, fast-forwards local codex to main, then watches downstream publish
-workflows on the merge commit. The remote codex PR branch may be auto-deleted
+commit, fast-forwards local codex to main, then watches the downstream publish
+workflow on the merge commit. The remote codex PR branch may be auto-deleted
 by GitHub after merge.
 
 Options:
@@ -104,12 +104,11 @@ wait_for_run() {
     die "$workflow_name run $run_id concluded with $conclusion"
 }
 
-wait_for_publish_workflows() {
+wait_for_publish_workflow() {
   local branch="$1"
   local sha="$2"
 
-  wait_for_run "Publish RC" "$branch" "$sha"
-  wait_for_run "Publish Release" "$branch" "$sha"
+  wait_for_run "Publish" "$branch" "$sha"
 }
 
 wait_for_required_checks() {
@@ -358,4 +357,4 @@ if ! git rev-parse --verify --quiet "refs/remotes/origin/$staging_branch" >/dev/
   git branch --unset-upstream "$staging_branch" >/dev/null 2>&1 || true
 fi
 
-wait_for_publish_workflows "$base_branch" "$merge_sha"
+wait_for_publish_workflow "$base_branch" "$merge_sha"

@@ -134,7 +134,7 @@ jobs:
 
           printf '%s\n\n%s\n' \
             "Prepares $PACKAGE_NAME@$PACKAGE_VERSION for stable release." \
-            "After this PR's checks pass, GitHub auto-merges it to main. After CI passes on that main merge commit, the Publish Release workflow tags the merge commit, creates the GitHub release, publishes to npm with provenance, and moves the latest and next dist-tags." \
+            "After this PR's checks pass, GitHub auto-merges it to main. After CI passes on that main merge commit, the Publish workflow publishes to npm through trusted publishing with the latest dist-tag, then tags the merge commit and creates the GitHub release." \
             > release-pr.md
 
           if pr_url="$(gh pr view "$RELEASE_BRANCH" --json url --jq .url 2>/dev/null)"; then

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { e2eCache, repo } from './environment';
@@ -42,4 +42,11 @@ test('ensureCerts prepares mkcert CA before parallel app e2e tests', async ({}, 
   const certs = testInfo.outputPath('certs');
   expect(existsSync(join(certs, 'tls.crt'))).toBe(true);
   expect(existsSync(join(certs, 'tls.key'))).toBe(true);
+  expect(statMode(certs)).toBe(0o700);
+  expect(statMode(join(certs, 'tls.crt'))).toBe(0o600);
+  expect(statMode(join(certs, 'tls.key'))).toBe(0o600);
 });
+
+function statMode(path: string): number {
+  return statSync(path).mode & 0o777;
+}

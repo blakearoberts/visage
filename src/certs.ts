@@ -23,7 +23,6 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
 
   const mkcert = await ensureMkCert();
 
-  mkdirSync(join(config.cache, 'logs'), { recursive: true });
   const out = openSync(join(config.cache, 'logs', 'mkcert.log'), 'w');
   const env = { CAROOT, TRUST_STORES: 'system', ...process.env };
   const tty = process.stdin.isTTY;
@@ -42,7 +41,8 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
   const cert = join(certs, 'tls.crt');
   const key = join(certs, 'tls.key');
 
-  mkdirSync(certs, { recursive: true });
+  mkdirSync(certs, { recursive: true, mode: 0o700 });
+  chmodSync(certs, 0o700);
   rmSync(cert, { force: true });
   rmSync(key, { force: true });
 
@@ -53,6 +53,8 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
   if (result.status !== 0) {
     throw new Error('Failed to generate TLS certificates');
   }
+  chmodSync(cert, 0o600);
+  chmodSync(key, 0o600);
 }
 
 async function ensureMkCert(): Promise<string> {

@@ -1,14 +1,19 @@
-import { expect, test } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { chmodSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { e2eCache, repo } from './environment';
 
-test('ensureCerts prepares mkcert CA before parallel app e2e tests', async ({}, testInfo) => {
+export default function globalSetup(): void {
+  const cache = join(repo, 'test-results/e2e-global-setup');
+  const logs = join(cache, 'logs');
+  rmSync(cache, { recursive: true, force: true });
+  mkdirSync(logs, { recursive: true, mode: 0o700 });
+  chmodSync(logs, 0o700);
+
   const config = {
     host: 'localhost',
-    cache: testInfo.outputDir,
+    cache,
     files: { certs: ['./certs'] },
   };
   const result = spawnSync(
@@ -32,14 +37,8 @@ test('ensureCerts prepares mkcert CA before parallel app e2e tests', async ({}, 
     },
   );
 
-  if (result.error) {
-    throw result.error;
-  }
+  if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(`${result.stdout}\n${result.stderr}`);
   }
-
-  const certs = testInfo.outputPath('certs');
-  expect(existsSync(join(certs, 'tls.crt'))).toBe(true);
-  expect(existsSync(join(certs, 'tls.key'))).toBe(true);
-});
+}

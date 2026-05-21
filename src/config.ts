@@ -21,7 +21,6 @@ type ResolvedCookiePolicy = {
   readonly cookie_refresh: string;
   readonly cookie_domains?: readonly string[];
   readonly cookie_path: string;
-  readonly cookie_secret_file: string;
 };
 
 type ResolvedIdpOption =
@@ -114,8 +113,10 @@ export type VisageConfig = {
     readonly dex: Volume;
     readonly nginx: Volume;
     readonly oauth2Proxy: Volume;
-    readonly clientSecret: Volume;
-    readonly cookieSecret: Volume;
+  };
+  readonly secrets: {
+    readonly cookieSecret: string;
+    readonly clientSecret: string;
   };
   readonly network: {
     readonly name: string;
@@ -128,16 +129,6 @@ export type VisageConfig = {
 
 export const VisageEdgeKeyHeader = 'X-Visage-Edge-Key';
 
-const BaseFiles = {
-  certs: ['./certs', '/etc/nginx/certs'],
-  compose: './compose.yaml',
-  dex: ['./dex.yml', '/etc/dex/dex.yml'],
-  nginx: ['./nginx.conf', '/etc/nginx/nginx.conf'],
-  oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
-  clientSecret: ['./oauth2-client-secret', '/etc/oauth2-proxy/client-secret'],
-  cookieSecret: ['./oauth2-cookie-secret', '/etc/oauth2-proxy/cookie-secret'],
-} as const satisfies VisageConfig['files'];
-
 const DockerImages = parse(
   readFileSync(
     new URL('../docker-compose.images.yml', import.meta.url),
@@ -147,7 +138,7 @@ const DockerImages = parse(
 
 const BaseServiceDex = {
   image: DockerImages.dex.image,
-  command: ['dex', 'serve', '/etc/dex/dex.yml'],
+  command: ['dex', 'serve', '/etc/dex/dex.yaml'],
   restart: 'always',
 } as const satisfies ResolvedService;
 
@@ -221,7 +212,6 @@ const DefaultCookiePolicy = {
   cookie_expire: '8h',
   cookie_refresh: '15m',
   cookie_path: '/',
-  cookie_secret_file: BaseFiles.cookieSecret[1],
 } as const satisfies Omit<ResolvedCookiePolicy, 'cookie_name'>;
 
 const DefaultDexUsers: readonly VisageDexUser[] = [
@@ -521,7 +511,17 @@ export function resolveConfig(
     idp,
     oauth2: options.oauth2,
     cache,
-    files: BaseFiles,
+    files: {
+      certs: ['./certs', '/etc/nginx/certs'],
+      compose: './compose.yaml',
+      dex: ['./dex.yaml', '/etc/dex/dex.yaml'],
+      nginx: ['./nginx.conf', '/etc/nginx/nginx.conf'],
+      oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
+    },
+    secrets: {
+      cookieSecret: 'OAUTH2_PROXY_COOKIE_SECRET',
+      clientSecret: 'OAUTH2_CLIENT_SECRET',
+    },
     network: {
       name: process.env.COMPOSE_PROJECT_NAME ?? 'visage',
       trustedProxyIps: [],

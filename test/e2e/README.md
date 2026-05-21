@@ -19,7 +19,7 @@ These Playwright tests run the example apps through the local Visage auth stack:
 
 ## Runtime
 
-The Playwright setup project first runs real `ensureCerts()` calls to download
+Playwright global setup first runs real `ensureCerts()` calls to download
 `mkcert`, prepare the local CA, and generate TLS material. In CI, Visage skips
 trust-store installation by default and Playwright ignores local HTTPS errors.
 After that, the simple, SSR, and external-IdP specs run in parallel with their

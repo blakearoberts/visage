@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, rmSync } from 'node:fs';
+import { chmodSync, mkdirSync, rmSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import { join } from 'node:path';
@@ -78,7 +78,8 @@ export async function startVisageServer(
 ): Promise<() => void> {
   const logs = join(config.cache, 'logs');
   rmSync(logs, { recursive: true, force: true });
-  mkdirSync(logs, { recursive: true });
+  mkdirSync(logs, { recursive: true, mode: 0o700 });
+  chmodSync(logs, 0o700);
 
   await ensureCerts(config);
   ensureHostEntry(config);

@@ -50,7 +50,6 @@ test('resolveOptions applies public defaults', () => {
     cookie_expire: '8h',
     cookie_refresh: '15m',
     cookie_path: '/',
-    cookie_secret_file: '/etc/oauth2-proxy/cookie-secret',
   });
   assert.deepEqual(options.idp, {
     dex: {
@@ -96,7 +95,6 @@ test('resolveOptions applies cookie overrides', () => {
     cookie_refresh: '5m',
     cookie_domains: ['.local.test', 'app.local.test'],
     cookie_path: '/app/',
-    cookie_secret_file: '/etc/oauth2-proxy/cookie-secret',
   });
 });
 

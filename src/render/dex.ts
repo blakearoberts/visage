@@ -17,6 +17,7 @@ function renderDexConfig(config: VisageConfig): string {
     host,
     port,
     oauth2,
+    secrets,
     idp: {
       dex: { expiry, users },
       oidc,
@@ -31,10 +32,12 @@ function renderDexConfig(config: VisageConfig): string {
     staticClients: [
       {
         id: oauth2.id,
-        name: 'Visage',
-        ...(oauth2.secret === undefined
+        name: oauth2.id,
+        ...(oauth2.public
           ? { public: true }
-          : { secret: oauth2.secret }),
+          : {
+              secret: `{{ file.Read "/run/secrets/${secrets.clientSecret}" }}`,
+            }),
         redirectURIs: [`https://${host}:${port}/oauth2/callback`],
       },
     ],

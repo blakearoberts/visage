@@ -5,18 +5,8 @@ const browserChannel =
 
 export default defineConfig({
   testDir: 'test/e2e',
+  globalSetup: './test/e2e/global-setup.ts',
   workers: 4,
-  projects: [
-    {
-      name: 'certs-setup',
-      testMatch: /certs-setup\.spec\.ts/,
-    },
-    {
-      name: 'e2e',
-      dependencies: ['certs-setup'],
-      testIgnore: /certs-setup\.spec\.ts/,
-    },
-  ],
   use: {
     ignoreHTTPSErrors: true,
     ...(browserChannel === undefined ? {} : { channel: browserChannel }),

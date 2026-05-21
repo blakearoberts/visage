@@ -26,6 +26,9 @@ export function startCompose(config: VisageConfig): StopCompose {
   const env = {
     COMPOSE_MENU: 'false',
     [config.secrets.cookieSecret]: randomBytes(32).toString('base64url'),
+    ...(config.oauth2.public
+      ? {}
+      : { [config.secrets.clientSecret]: config.oauth2.secret }),
     ...process.env,
   } as const;
   const opts = {

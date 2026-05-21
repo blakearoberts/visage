@@ -16,10 +16,6 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
   const file = join(config.cache, config.files.oauth2Proxy[0]);
   const render = renderOauth2ProxyConfig(config);
   writeFileSync(file, render, 'utf-8');
-
-  if (config.oauth2.public) {
-    writeFileSync(join(config.cache, config.files.clientSecret[0]), '');
-  }
 }
 
 function renderOauth2ProxyConfig(config: VisageConfig): string {
@@ -37,12 +33,12 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
       : {}),
     redirect_url: `https://${config.host}:${config.port}/oauth2/callback`,
     client_id: config.oauth2.id,
-    ...(config.oauth2.secret === undefined
+    ...(config.oauth2.public
       ? {
-          client_secret_file: config.files.clientSecret[1],
           code_challenge_method: 'S256',
+          client_secret_file: '/dev/null',
         }
-      : { client_secret: config.oauth2.secret }),
+      : { client_secret_file: `/run/secrets/${config.secrets.clientSecret}` }),
     ...config.cookie,
     cookie_secret_file: `/run/secrets/${config.secrets.cookieSecret}`,
     cookie_httponly: true,

@@ -129,12 +129,13 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.dex.command, [
     'dex',
     'serve',
-    '/etc/dex/dex.yml',
+    '/etc/dex/dex.yaml',
   ]);
   assert.equal(compose.services.dex.restart, 'always');
   assert.deepEqual(compose.services.dex.volumes, [
-    './dex.yml:/etc/dex/dex.yml:ro',
+    './dex.yaml:/etc/dex/dex.yaml:ro',
   ]);
+  assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.ports, ['127.0.0.1:9443:9443']);
   assert.deepEqual(compose.services.nginx.extra_hosts, [
@@ -153,6 +154,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
+    'OAUTH2_CLIENT_SECRET',
   ]);
   assert.deepEqual(compose.services.api, {
     image: 'example/api:test',
@@ -170,10 +172,13 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
     },
+    OAUTH2_CLIENT_SECRET: {
+      environment: 'OAUTH2_CLIENT_SECRET',
+    },
   });
 });
 
-test('writeComposeConfig mounts empty OAuth2 client secret file for public clients', (t) => {
+test('writeComposeConfig renders public clients without Dex client secret env', (t) => {
   const config = resolvedConfig(t, {
     oauth2: { clientSecret: null },
   });
@@ -183,8 +188,16 @@ test('writeComposeConfig mounts empty OAuth2 client secret file for public clien
   const compose = parse(readGenerated(config, config.files.compose));
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
-    './oauth2-client-secret:/etc/oauth2-proxy/client-secret:ro',
   ]);
+  assert.deepEqual(compose.services.oauth2_proxy.secrets, [
+    'OAUTH2_PROXY_COOKIE_SECRET',
+  ]);
+  assert.equal(compose.services.dex.secrets, undefined);
+  assert.deepEqual(compose.secrets, {
+    OAUTH2_PROXY_COOKIE_SECRET: {
+      environment: 'OAUTH2_PROXY_COOKIE_SECRET',
+    },
+  });
 });
 
 test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
@@ -544,8 +557,8 @@ test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) =>
   assert.deepEqual(dex.staticClients, [
     {
       id: 'visage',
-      name: 'Visage',
-      secret: 'visage-secret',
+      name: 'visage',
+      secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
       redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
     },
   ]);
@@ -570,7 +583,7 @@ test('writeDexConfig renders configured OAuth2 public client', (t) => {
   assert.deepEqual(dex.staticClients, [
     {
       id: 'local-app',
-      name: 'Visage',
+      name: 'local-app',
       public: true,
       redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
     },
@@ -649,7 +662,11 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
     'https://app.local.test:9443/oauth2/callback',
   );
   assert.equal(oauth2Proxy.client_id, 'visage');
-  assert.equal(oauth2Proxy.client_secret, 'visage-secret');
+  assert.equal(oauth2Proxy.client_secret, undefined);
+  assert.equal(
+    oauth2Proxy.client_secret_file,
+    '/run/secrets/OAUTH2_CLIENT_SECRET',
+  );
   assert.equal(oauth2Proxy.cookie_secret, undefined);
   assert.equal(
     oauth2Proxy.cookie_secret_file,
@@ -696,14 +713,10 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   );
   assert.equal(oauth2Proxy.client_id, 'local-app');
   assert.equal(oauth2Proxy.client_secret, undefined);
-  assert.equal(
-    oauth2Proxy.client_secret_file,
-    '/etc/oauth2-proxy/client-secret',
-  );
+  assert.equal(oauth2Proxy.client_secret_file, '/dev/null');
   assert.equal(oauth2Proxy.code_challenge_method, 'S256');
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
   assert.deepEqual(oauth2Proxy.email_domains, ['example.test']);
-  assert.equal(readGenerated(config, config.files.clientSecret[0]), '');
 });
 
 test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t) => {

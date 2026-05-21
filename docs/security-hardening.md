@@ -3,7 +3,7 @@
 These items track outstanding work to improve Visage's default local-development security posture, in priority order.
 
 1. Fix secret permissions.
-   Use `0700` for cache directories and `0600` for generated secrets and configs. Do not render confidential OAuth2 client secrets inline.
+   Use `0700` for cache directories and `0600` for generated secrets and configs.
 
 2. Verify mkcert downloads.
    Pin the downloaded `mkcert` version and verify its checksum before execution.

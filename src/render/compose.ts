@@ -12,21 +12,29 @@ export function writeComposeConfig(config: VisageConfig): void {
 
 function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = config.services;
-  const secrets = Object.values(config.secrets).map((name) => ({
-    environment: name,
-    key: name,
-  }));
   return stringify({
     networks: { default: { external: true, name: config.network.name } },
-    secrets: Object.fromEntries(
-      secrets.map(({ environment, key }) => [key, { environment }]),
-    ),
+    secrets: {
+      [config.secrets.cookieSecret]: {
+        environment: config.secrets.cookieSecret,
+      },
+      ...(config.oauth2.public
+        ? {}
+        : {
+            [config.secrets.clientSecret]: {
+              environment: config.secrets.clientSecret,
+            },
+          }),
+    },
     services: {
       ...('dex' in config.idp
         ? {
             dex: {
               ...config.services.dex,
               volumes: [`${config.files.dex[0]}:${config.files.dex[1]}:ro`],
+              ...(config.oauth2.public
+                ? {}
+                : { secrets: [config.secrets.clientSecret] }),
             },
           }
         : {}),
@@ -41,13 +49,11 @@ function renderComposeConfig(config: VisageConfig): string {
         ...config.services.oauth2_proxy,
         volumes: [
           `${config.files.oauth2Proxy[0]}:${config.files.oauth2Proxy[1]}:ro`,
-          ...(config.oauth2.public
-            ? [
-                `${config.files.clientSecret[0]}:${config.files.clientSecret[1]}:ro`,
-              ]
-            : []),
         ],
-        secrets: secrets.map(({ key }) => key),
+        secrets: [
+          config.secrets.cookieSecret,
+          ...(config.oauth2.public ? [] : [config.secrets.clientSecret]),
+        ],
       },
       ...services,
     },

@@ -1,6 +1,7 @@
 # Visage
 
-Visage (`/vit·ɛdʒ/`) is a Vite plugin for local development with HMR and OIDC session cookie lifecycle semantics.
+Visage (`/vit·ɛdʒ/`) is a Vite plugin for local development with HMR and OIDC
+session cookie lifecycle semantics.
 
 ## Getting Started
 
@@ -27,21 +28,32 @@ Start Vite normally:
 vite
 ```
 
-By default, you can reach the app at `https://localhost:9001`. You will be redirected to Dex to sign in. The default username and password is `user@example.com` and `pass`.
+By default, you can reach the app at `https://localhost:9001`. You will be
+redirected to Dex to sign in. The default username and password is
+`user@example.com` and `pass`.
 
 ## Why Visage
 
-Visage is a local development harness for web apps that run behind an auth-protected edge, where browser sessions are represented by secure cookies backed by OIDC tokens.
+Visage is a local development harness for web apps that run behind an
+auth-protected edge, where browser sessions are represented by secure cookies
+backed by OIDC tokens.
 
-Visage narrows the gap between local development, automated tests, and production by bringing production-like session lifecycle semantics to local Vite development without giving up HMR. That makes it practical to iterate on SSR identity injection, session timeout recovery, lock screens, and authenticated API calls.
+Visage narrows the gap between local development, automated tests, and
+production by bringing production-like session lifecycle semantics to local Vite
+development without giving up HMR. That makes it practical to iterate on SSR
+identity injection, session timeout recovery, lock screens, and authenticated
+API calls.
 
-Visage can also use a hosted IdP, so local frontend code can call hosted backend APIs with real credentials. That avoids frontend-only auth mocks or backend-only local bypasses: code can be written for production and still work locally.
+Visage can also use a hosted IdP, so local frontend code can call hosted backend
+APIs with real credentials. That avoids frontend-only auth mocks or backend-only
+local bypasses: code can be written for production and still work locally.
 
 ## Configuration
 
 Visage is configured through `visage(options?)` in `vite.config.ts`.
 
-The top-level `host` and `port` configure the local Visage origin that the browser visits:
+The top-level `host` and `port` configure the local Visage origin that the
+browser visits:
 
 ```ts
 visage({ host: 'localhost', port: 9001 });
@@ -94,8 +106,7 @@ visage({
 ```
 
 OAuth2 Proxy identity values can also be mapped explicitly through headers such
-as `$auth_user`, `$auth_email`, `$auth_groups`, and
-`$auth_preferred_username`.
+as `$auth_user`, `$auth_email`, `$auth_groups`, and `$auth_preferred_username`.
 
 Authenticated locations also get Fetch Metadata CSRF checks by default. The
 built-in Vite root location uses `csrf: 'app'`, which allows same-origin
@@ -141,15 +152,12 @@ flowchart LR
 
 ## Required Tools
 
-- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2 support through `docker compose`.
+- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2
+  support through `docker compose`.
+- [`mkcert`](https://github.com/FiloSottile/mkcert#installation) installed on
+  `PATH`, or configured with `VISAGE_MKCERT=/path/to/mkcert`.
 
-## Managed Tools
-
-### mkcert
-
-Visage downloads [`mkcert`](https://github.com/FiloSottile/mkcert) from `dl.filippo.io` into `$XDG_CACHE_HOME/visage/bin/mkcert-<platform>-<arch>` when the Vite dev server starts. Visage uses it to install a local certificate authority and generate HTTPS certificates for the local proxy.
-
-### Docker Images
+## Managed Docker Images
 
 Visage pulls these as needed based on configuration:
 
@@ -161,9 +169,15 @@ Visage pulls these as needed based on configuration:
 
 ## Security Notes
 
-Visage is local-development tooling. It starts local auth infrastructure, terminates local HTTPS, and forwards authenticated identity or token material to configured upstreams.
+Visage is local-development tooling. It starts local auth infrastructure,
+terminates local HTTPS, and forwards authenticated identity or token material to
+configured upstreams.
 
-Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infrastructure.
+Please report suspected vulnerabilities through GitHub private vulnerability
+reporting as described in [Security Policy](SECURITY.md).
+
+Do not treat the managed Dex and OAuth2 Proxy defaults as production auth
+infrastructure.
 
 Visage's CSRF policy is an edge request-isolation guard for cookie-backed
 locations. It is not a replacement for application-owned CSRF tokens where an
@@ -172,14 +186,19 @@ application accepts form posts or other browser-submitted mutations. CSP,
 
 ## Troubleshooting
 
-- If startup fails immediately, confirm Docker is running and `docker compose` works.
+- If startup fails immediately, confirm Docker is running and `docker compose`
+  works.
 - If NGINX cannot start, check whether the configured `port` is already in use.
-- If the hostname cannot be resolved, Visage may need permission to update `/etc/hosts`.
-- If the browser rejects the certificate, allow the local certificate authority prompt from `mkcert`; CI test runners should be configured to ignore local HTTPS errors.
+- If the hostname cannot be resolved, Visage may need permission to update
+  `/etc/hosts`.
+- If the browser rejects the certificate, allow the local certificate authority
+  prompt from `mkcert`; CI test runners should be configured to ignore local
+  HTTPS errors.
 
 ## TO-DO
 
-- [ ] Harden the default security posture by addressing the [security hardening backlog](docs/security-hardening.md).
+- [ ] Harden the default security posture by addressing the
+      [security hardening backlog](docs/security-hardening.md).
 - [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).

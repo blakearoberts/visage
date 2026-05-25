@@ -15,7 +15,7 @@ type MockResponse = ServerResponse & {
 
 type MockSocket = Socket & {
   chunks: string[];
-  wasDestroyed: boolean;
+  destroyed: boolean;
 };
 
 function request(headers: IncomingMessage['headers']): IncomingMessage {
@@ -23,33 +23,44 @@ function request(headers: IncomingMessage['headers']): IncomingMessage {
 }
 
 function response(): MockResponse {
-  const mock = {
+  let body: string | undefined;
+  let ended = false;
+  return {
     statusCode: 200,
-    ended: false,
-    body: undefined as string | undefined,
-    end(chunk?: unknown) {
-      mock.ended = true;
-      mock.body = typeof chunk === 'string' ? chunk : undefined;
-      return mock;
+    get ended() {
+      return ended;
     },
-  };
-  return mock as MockResponse;
+    get body() {
+      return body;
+    },
+    end(chunk?: unknown) {
+      ended = true;
+      body = typeof chunk === 'string' ? chunk : undefined;
+      return this;
+    },
+  } as MockResponse;
 }
 
 function socket(): MockSocket {
-  const mock = {
-    chunks: [] as string[],
-    wasDestroyed: false,
+  const chunks: string[] = [];
+  let destroyed = false;
+  return {
+    chunks,
     write(chunk: string) {
-      mock.chunks.push(chunk);
+      if (destroyed) {
+        throw new Error('Cannot write to destroyed socket');
+      }
+      chunks.push(chunk);
       return true;
     },
-    destroy() {
-      mock.wasDestroyed = true;
-      return mock;
+    get destroyed() {
+      return destroyed;
     },
-  };
-  return mock as MockSocket;
+    destroy() {
+      destroyed = true;
+      return this;
+    },
+  } as MockSocket;
 }
 
 test('createVisageMiddleware allows edge requests', () => {
@@ -86,7 +97,7 @@ test('createVisageUpgradeHandler allows edge upgrades', () => {
   upgrade(request({ 'x-visage-edge-key': 'edge-key' }), upgradeSocket);
 
   assert.deepEqual(upgradeSocket.chunks, []);
-  assert.equal(upgradeSocket.wasDestroyed, false);
+  assert.equal(upgradeSocket.destroyed, false);
 });
 
 test('createVisageUpgradeHandler rejects non-edge upgrades', () => {
@@ -96,5 +107,5 @@ test('createVisageUpgradeHandler rejects non-edge upgrades', () => {
   upgrade(request({}), upgradeSocket);
 
   assert.match(upgradeSocket.chunks.join(''), /^HTTP\/1\.1 403 Forbidden/);
-  assert.equal(upgradeSocket.wasDestroyed, true);
+  assert.equal(upgradeSocket.destroyed, true);
 });

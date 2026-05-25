@@ -1,30 +1,30 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
+  - package-ecosystem: 'npm'
     directories:
-      - "/"
-      - "/examples/external-idp"
-      - "/examples/simple"
-      - "/examples/ssr"
+      - '/'
+      - '/examples/external-idp'
+      - '/examples/simple'
+      - '/examples/ssr'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     groups:
       npm-dependencies:
         patterns:
-          - "*"
-  - package-ecosystem: "github-actions"
-    directory: "/"
+          - '*'
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     groups:
       github-actions:
         patterns:
-          - "*"
-  - package-ecosystem: "docker-compose"
-    directory: "/"
+          - '*'
+  - package-ecosystem: 'docker-compose'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     groups:
       docker-images:
         patterns:
-          - "*"
+          - '*'

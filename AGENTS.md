@@ -18,8 +18,8 @@ This file is intended for LLM based collaborators.
 - Before editing, identify the intended behavior change and the files that
   should change. Keep the final diff inside that boundary.
 - When the user provides a code snippet or target shape, treat it as the source
-  of truth. Keep implementation structurally close to it; justify any
-  deviation before adding it.
+  of truth. Keep implementation structurally close to it; justify any deviation
+  before adding it.
 - Do not add fallback values, helper functions, lifecycle handling,
   dependencies, configuration, or abstractions unless they are required for the
   requested behavior.
@@ -37,14 +37,13 @@ This file is intended for LLM based collaborators.
   5. Wait for the required pull request status checks to pass.
   6. Merge the pull request through GitHub.
   7. Wait for the remote `CI` workflow on the exact `main` merge commit.
-  8. Fast-forward local `codex` to the `main` merge commit before finishing,
-     and let GitHub auto-delete the remote `codex` PR branch.
+  8. Fast-forward local `codex` to the `main` merge commit before finishing, and
+     let GitHub auto-delete the remote `codex` PR branch.
   9. Or, use
      `npm run promote:codex -- --pr-title "<pull request title>" --pr-body "<pull request description>"`.
-     The script does not commit changes. By default it refuses staged,
-     unstaged, or untracked local changes; use `--ignore-staged` or
-     `--ignore-unstaged` only after confirming those changes are unrelated to
-     the promotion.
+     The script does not commit changes. By default it refuses staged, unstaged,
+     or untracked local changes; use `--ignore-staged` or `--ignore-unstaged`
+     only after confirming those changes are unrelated to the promotion.
 
 ## Programmatic checks
 

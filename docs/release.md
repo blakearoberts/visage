@@ -28,6 +28,11 @@ npm version 0.1.0-rc.0 --no-git-tag-version --ignore-scripts
 When that PR merges and CI passes on `main`, the publish workflow publishes the
 next RC for that seeded train.
 
+The RC git tag points at the `main` commit that passed CI. The GitHub prerelease
+body starts with the npm publication sentence, then includes GitHub-generated
+release notes from the previous reachable `v*` tag, including merged pull
+request links and the compare link.
+
 ## Stable releases
 
 Use the `Prepare Release` workflow's manual dispatch from the `main` branch.
@@ -55,8 +60,14 @@ After the release pull request checks pass, GitHub auto-merges it to `main` with
 a merge commit. The `CI` workflow runs the shared checks on that merged `main`
 commit. After those checks pass, the publish workflow uses
 [Publish target resolution](#publish-target-resolution) to publish with the
-`latest` dist-tag, then tags the merged `main` commit and creates or updates the
-GitHub release.
+`latest` dist-tag, then tags the merged `main` commit and creates the GitHub
+release. The release body starts with the npm publication sentence, then
+includes GitHub-generated release notes from the previous reachable `v*` tag,
+including merged pull request links and the compare link.
+
+The release pull request title is `chore(release): v<version>`, its commit
+message matches that title, and its generated body describes the operational
+release flow rather than acting as the changelog source.
 
 The stable release success state is aligned across source and stable package
 artifacts: the `main` merge commit, git tag, GitHub release, npm package

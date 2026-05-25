@@ -142,14 +142,9 @@ flowchart LR
 ## Required Tools
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2 support through `docker compose`.
+- [`mkcert`](https://github.com/FiloSottile/mkcert#installation) installed on `PATH`, or configured with `VISAGE_MKCERT=/path/to/mkcert`.
 
-## Managed Tools
-
-### mkcert
-
-Visage downloads [`mkcert`](https://github.com/FiloSottile/mkcert) from `dl.filippo.io` into `$XDG_CACHE_HOME/visage/bin/mkcert-<platform>-<arch>` when the Vite dev server starts. Visage uses it to install a local certificate authority and generate HTTPS certificates for the local proxy.
-
-### Docker Images
+## Managed Docker Images
 
 Visage pulls these as needed based on configuration:
 

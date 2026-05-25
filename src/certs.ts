@@ -1,16 +1,7 @@
 import { spawnSync, type StdioOptions } from 'node:child_process';
-import {
-  chmodSync,
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  openSync,
-  rmSync,
-} from 'node:fs';
+import { chmodSync, mkdirSync, openSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 
 import type { VisageConfig } from './config';
 
@@ -21,7 +12,7 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
   mkdirSync(CAROOT, { recursive: true, mode: 0o700 });
   chmodSync(CAROOT, 0o700);
 
-  const mkcert = await ensureMkCert();
+  const mkcert = resolveMkcert();
 
   const out = openSync(join(config.cache, 'logs', 'mkcert.log'), 'w');
   const env = { CAROOT, TRUST_STORES: 'system', ...process.env };
@@ -29,7 +20,8 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
   const stdio = [tty ? 'inherit' : 'ignore', out, out] satisfies StdioOptions;
 
   if (process.env.CI !== 'true') {
-    // mkcert -install is idempotent; CA files alone do not prove trust-store state.
+    // mkcert -install is idempotent;
+    // CA files alone don't prove trust-store state.
     const result = spawnSync(mkcert, ['-install'], { env, stdio });
     if (result.error) throw result.error;
     if (result.status !== 0) {
@@ -57,24 +49,92 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
   chmodSync(key, 0o600);
 }
 
-async function ensureMkCert(): Promise<string> {
-  const bin = join(CACHE_HOME, 'visage/bin');
-  const file = join(bin, `mkcert-${process.platform}-${process.arch}`);
-  if (existsSync(file)) return file;
+function resolveMkcert(): string {
+  const env = process.env;
+  const options = { encoding: 'utf8', env } as const;
+  const mkcert = findMkcert();
 
-  mkdirSync(bin, { recursive: true });
-
-  const base = 'https://dl.filippo.io/mkcert/latest';
-  const arch = process.arch === 'x64' ? 'amd64' : process.arch;
-  const params = `?for=${process.platform}/${arch}`;
-  const url = new URL(params, base);
-
-  const response = await fetch(url);
-  if (!response.ok || !response.body) {
-    throw new Error('Failed to download mkcert');
+  const result = spawnSync(mkcert, ['-version'], options);
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      [
+        `Visage found mkcert at "${mkcert}", but could not execute it.`,
+        '',
+        mkcertInstallInstructions(),
+      ].join('\n'),
+    );
   }
 
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(file));
-  chmodSync(file, 0o755);
-  return file;
+  return mkcert;
+}
+
+function findMkcert(): string {
+  const env = process.env;
+  const exec = env.VISAGE_MKCERT || 'mkcert';
+  const options = { encoding: 'utf8', env } as const;
+
+  const result =
+    process.platform === 'win32'
+      ? spawnSync('where', [exec], options)
+      : spawnSync('sh', ['-c', `command -v ${exec}`], options);
+
+  const path = result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  if (result.error || result.status !== 0 || !path) {
+    throw new Error(
+      [
+        'Visage requires mkcert to configure HTTPS, but mkcert was not found.',
+        '',
+        mkcertInstallInstructions(),
+      ].join('\n'),
+    );
+  }
+
+  return path;
+}
+
+function mkcertInstallInstructions(): string {
+  const common = [
+    'After installing mkcert, run `mkcert -install` once when local ' +
+      'certificates should be trusted.',
+    'Install docs: https://github.com/FiloSottile/mkcert#installation',
+    'Set VISAGE_MKCERT=/path/to/mkcert to use a custom executable.',
+  ];
+  const platform = process.platform;
+
+  if (platform === 'darwin') {
+    return [
+      'Install mkcert with Homebrew:',
+      '  brew install mkcert',
+      '  brew install nss # optional, for Firefox',
+      ...common,
+    ].join('\n');
+  }
+
+  if (platform === 'win32') {
+    return [
+      'Install mkcert with Chocolatey or Scoop:',
+      '  choco install mkcert',
+      '  scoop install mkcert',
+      ...common,
+    ].join('\n');
+  }
+
+  if (platform === 'linux') {
+    return [
+      'Install mkcert with your Linux package manager. Common commands:',
+      '  sudo apt install mkcert libnss3-tools',
+      '  sudo dnf install mkcert nss-tools',
+      '  sudo pacman -Syu mkcert nss',
+      ...common,
+    ].join('\n');
+  }
+
+  return [
+    'Install mkcert for your operating system and make it available on PATH.',
+    ...common,
+  ].join('\n');
 }

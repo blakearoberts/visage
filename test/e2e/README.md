@@ -19,12 +19,12 @@ These Playwright tests run the example apps through the local Visage auth stack:
 
 ## Runtime
 
-Playwright global setup first runs real `ensureCerts()` calls to download
-`mkcert`, prepare the local CA, and generate TLS material. In CI, Visage skips
-trust-store installation by default and Playwright ignores local HTTPS errors.
-After that, the simple, SSR, and external-IdP specs run in parallel with their
-own app processes and Docker Compose projects. The simple spec uses the
-plugin-managed Dex stack, the SSR spec starts Visage through
+Playwright global setup first runs real `ensureCerts()` calls with the installed
+`mkcert` executable to prepare the local CA and generate TLS material. In CI,
+Visage skips trust-store installation by default and Playwright ignores local
+HTTPS errors. After that, the simple, SSR, and external-IdP specs run in
+parallel with their own app processes and Docker Compose projects. The simple
+spec uses the plugin-managed Dex stack, the SSR spec starts Visage through
 `createVisageServer()`, and the external IdP spec starts Dex separately from
 `examples/external-idp`. From there, Visage serves each app through NGINX.
 

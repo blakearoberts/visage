@@ -28,7 +28,7 @@ test.describe('Visage SSR authenticated identity flow', () => {
   let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = `visage_e2e_${testInfo.workerIndex}`;
+    appComposeProject = `visage_e2e_${testInfo.parallelIndex}`;
     logFile = testInfo.outputPath('ssr.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');

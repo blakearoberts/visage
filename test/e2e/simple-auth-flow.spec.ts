@@ -29,7 +29,7 @@ test.describe('Visage simple authenticated upstream flow', () => {
   let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = `visage_e2e_${testInfo.workerIndex}`;
+    appComposeProject = `visage_e2e_${testInfo.parallelIndex}`;
     logFile = testInfo.outputPath('simple.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');

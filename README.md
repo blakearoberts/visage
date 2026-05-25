@@ -158,6 +158,9 @@ Visage pulls these as needed based on configuration:
 
 Visage is local-development tooling. It starts local auth infrastructure, terminates local HTTPS, and forwards authenticated identity or token material to configured upstreams.
 
+Please report suspected vulnerabilities through GitHub private vulnerability
+reporting as described in [Security Policy](SECURITY.md).
+
 Do not treat the managed Dex and OAuth2 Proxy defaults as production auth infrastructure.
 
 Visage's CSRF policy is an edge request-isolation guard for cookie-backed

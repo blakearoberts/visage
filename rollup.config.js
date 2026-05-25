@@ -12,5 +12,5 @@ export default {
     file: 'dist/index.js',
     format: 'esm',
   },
-  plugins: [typescript({ tsconfig: './tsconfig.json' })],
+  plugins: [typescript({ tsconfig: './tsconfig.build.json' })],
 };

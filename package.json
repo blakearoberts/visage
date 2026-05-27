@@ -1,6 +1,6 @@
 {
   "name": "@blakearoberts/visage",
-  "version": "0.0.1-rc.5",
+  "version": "0.0.1",
   "description": "Vite plugin for local development with HMR and OIDC session cookie lifecycle semantics.",
   "type": "module",
   "author": "Blake Roberts",

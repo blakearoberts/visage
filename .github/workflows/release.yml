@@ -19,14 +19,11 @@ jobs:
   prepare:
     name: Prepare Release PR
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-node@v6
         with:
@@ -112,9 +109,18 @@ jobs:
             exit 1
           fi
 
+      - name: Create app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create release pull request
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
           PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
           RELEASE_BRANCH: ${{ steps.release-version.outputs.branch }}
@@ -129,12 +135,16 @@ jobs:
           git add package.json package-lock.json
           git commit -m "chore(release): $RELEASE_TAG"
 
+          authenticated_origin="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git fetch origin "refs/heads/$RELEASE_BRANCH:refs/remotes/origin/$RELEASE_BRANCH" || true
-          git push --force-with-lease="refs/heads/$RELEASE_BRANCH" origin HEAD:"$RELEASE_BRANCH"
+          git -c "remote.origin.url=$authenticated_origin" push \
+            --force-with-lease="refs/heads/$RELEASE_BRANCH" \
+            origin \
+            HEAD:"$RELEASE_BRANCH"
 
           printf '%s\n\n%s\n' \
             "Prepares $PACKAGE_NAME@$PACKAGE_VERSION for stable release." \
-            "After this PR's checks pass, GitHub auto-merges it to main. After CI passes on that main merge commit, the Publish workflow publishes to npm through trusted publishing with the latest dist-tag, then tags the merge commit and creates the GitHub release." \
+            "After this PR's checks pass, the Auto-Merge workflow merges it to main. After CI passes on that main merge commit, the Publish workflow publishes to npm through trusted publishing with the latest dist-tag, then tags the merge commit and creates the GitHub release." \
             > release-pr.md
 
           if pr_url="$(gh pr view "$RELEASE_BRANCH" --json url --jq .url 2>/dev/null)"; then
@@ -152,5 +162,3 @@ jobs:
           fi
 
           echo "Release PR: $pr_url"
-          gh workflow run CI --ref "$RELEASE_BRANCH"
-          gh pr merge --auto --merge --delete-branch "$pr_url"

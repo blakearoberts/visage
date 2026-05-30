@@ -54,4 +54,5 @@ This file is intended for LLM based collaborators.
 
 ## Environment setup
 
-<!-- TODO -->
+- `npm run promote:codex` requires the GitHub CLI (`gh`) to be installed,
+  authenticated, and authorized to push to this repository.

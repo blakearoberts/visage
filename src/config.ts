@@ -195,6 +195,20 @@ const BaseUpstreamOauth2Proxy = {
       },
       directives: { ...DefaultProxyPolicy.directives },
     } satisfies ResolvedProxyPolicy,
+    '= /oauth2/auth': {
+      auth: { enabled: false, forward: false, redirect: false },
+      csrf: false,
+      headers: {
+        ...DefaultProxyPolicy.headers,
+        Cookie: '$http_cookie', // Forward session cookie.
+        'Content-Length': '""',
+      },
+      directives: {
+        ...DefaultProxyPolicy.directives,
+        internal: [''],
+        proxy_pass_request_body: ['off'],
+      },
+    } satisfies ResolvedProxyPolicy,
     '/oauth2/sign_out': {
       auth: { enabled: false, forward: false, redirect: false },
       csrf: false,

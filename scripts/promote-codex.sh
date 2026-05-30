@@ -60,7 +60,7 @@ find_run_id() {
   local branch="$2"
   local sha="$3"
 
-  ghx run list \
+  gh run list \
     --branch "$branch" \
     --limit 20 \
     --json databaseId,headSha,workflowName \
@@ -90,14 +90,14 @@ wait_for_run() {
 
   echo "Watching $workflow_name run $run_id for $branch at $sha"
 
-  if ! ghx run watch "$run_id" --exit-status; then
-    conclusion="$(ghx run view "$run_id" --json conclusion --jq .conclusion)"
-    run_url="$(ghx run view "$run_id" --json url --jq .url)"
+  if ! gh run watch "$run_id" --exit-status; then
+    conclusion="$(gh run view "$run_id" --json conclusion --jq .conclusion)"
+    run_url="$(gh run view "$run_id" --json url --jq .url)"
     die "$workflow_name run $run_id concluded with $conclusion: $run_url"
   fi
 
-  conclusion="$(ghx run view "$run_id" --json conclusion --jq .conclusion)"
-  head_sha="$(ghx run view "$run_id" --json headSha --jq .headSha)"
+  conclusion="$(gh run view "$run_id" --json conclusion --jq .conclusion)"
+  head_sha="$(gh run view "$run_id" --json headSha --jq .headSha)"
   [[ "$head_sha" == "$sha" ]] ||
     die "$workflow_name run $run_id used $head_sha, expected $sha"
   [[ "$conclusion" == "success" ]] ||
@@ -119,7 +119,7 @@ wait_for_required_checks() {
 
   for _ in {1..60}; do
     checks_count="$(
-      ghx pr checks "$pr_number" \
+      gh pr checks "$pr_number" \
         --required \
         --json event,name \
         --jq '[.[] | select(.event == "pull_request")] | length' 2>/dev/null || true
@@ -136,7 +136,7 @@ wait_for_required_checks() {
 
   while true; do
     failed="$(
-      ghx pr checks "$pr_number" \
+      gh pr checks "$pr_number" \
         --required \
         --json bucket,event,link,name,state \
         --jq '.[] | select(.event == "pull_request" and (.bucket == "fail" or .bucket == "cancel")) | "\(.name): \(.state) \(.link)"'
@@ -145,7 +145,7 @@ wait_for_required_checks() {
       die "required checks did not pass for PR #$pr_number: $failed"
 
     pending="$(
-      ghx pr checks "$pr_number" \
+      gh pr checks "$pr_number" \
         --required \
         --json bucket,event,name \
         --jq '.[] | select(.event == "pull_request" and .bucket == "pending") | .name'
@@ -166,7 +166,7 @@ upsert_pull_request() {
   printf '%s\n' "$body" >"$tmp_body_file"
 
   pr_number="$(
-    ghx pr list \
+    gh pr list \
       --state open \
       --head "$staging_branch" \
       --base "$base_branch" \
@@ -175,19 +175,19 @@ upsert_pull_request() {
   )"
 
   if [[ -n "$pr_number" ]]; then
-    ghx pr edit "$pr_number" \
+    gh pr edit "$pr_number" \
       --title "$title" \
       --body-file "$tmp_body_file" >/dev/null
   else
     local pr_url
     pr_url="$(
-      ghx pr create \
+      gh pr create \
         --base "$base_branch" \
         --head "$staging_branch" \
         --title "$title" \
         --body-file "$tmp_body_file"
     )"
-    pr_number="$(ghx pr view "$pr_url" --json number --jq .number)"
+    pr_number="$(gh pr view "$pr_url" --json number --jq .number)"
   fi
 
   echo "$pr_number"
@@ -201,7 +201,7 @@ wait_for_auto_merge_enabled() {
 
   for _ in {1..30}; do
     IFS=$'\037' read -r state auto_merge_enabled merge_sha <<<"$(
-      ghx pr view "$pr_number" \
+      gh pr view "$pr_number" \
         --json autoMergeRequest,mergeCommit,state \
         --jq '[.state, ((.autoMergeRequest != null) | tostring), (.mergeCommit.oid // "")] | join("\u001f")'
     )"
@@ -229,7 +229,7 @@ wait_for_auto_merge() {
 
   for _ in {1..120}; do
     IFS=$'\037' read -r state merge_sha head_ref_oid <<<"$(
-      ghx pr view "$pr_number" \
+      gh pr view "$pr_number" \
         --json headRefOid,mergeCommit,state \
         --jq '[.state, (.mergeCommit.oid // ""), .headRefOid] | join("\u001f")'
     )"
@@ -300,7 +300,7 @@ normalize_pr_body
   die "--pr-body is required"
 
 require_command git
-require_command ghx
+require_command gh
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
@@ -325,12 +325,12 @@ if [[ -n "$unstaged_paths" && "$ignore_unstaged" != true ]]; then
   die "unstaged or untracked changes are present; commit, stash, or remove them before promotion, or rerun with --ignore-unstaged: $unstaged_paths"
 fi
 
-ghx auth status >/dev/null
+gh auth status >/dev/null
 
-repo="$(ghx repo view --json nameWithOwner --jq .nameWithOwner)"
-can_push="$(ghx api "repos/$repo" --jq '.permissions.push')"
+repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+can_push="$(gh api "repos/$repo" --jq '.permissions.push')"
 [[ "$can_push" == "true" ]] ||
-  die "the active ghx account must have write access to $repo"
+  die "the active gh account must have write access to $repo"
 
 git fetch origin "$base_branch:refs/remotes/origin/$base_branch"
 git merge-base --is-ancestor "origin/$base_branch" HEAD ||

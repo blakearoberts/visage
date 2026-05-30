@@ -1,4 +1,4 @@
-import { spawn, spawnSync, StdioOptions } from 'node:child_process';
+import { spawn, spawnSync, type StdioOptions } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { openSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import type { VisageConfig } from './config';
 type StopCompose = () => void;
 
 let stopRef: StopCompose | undefined;
+let cookieSecret: string | undefined;
 
 export function startCompose(config: VisageConfig): StopCompose {
   stopRef?.();
@@ -25,11 +26,12 @@ export function startCompose(config: VisageConfig): StopCompose {
   ] as const;
   const env = {
     COMPOSE_MENU: 'false',
-    [config.secrets.cookieSecret]: randomBytes(32).toString('base64url'),
     ...(config.oauth2.public
       ? {}
       : { [config.secrets.clientSecret]: config.oauth2.secret }),
     ...process.env,
+    [config.secrets.cookieSecret]: (cookieSecret ??=
+      randomBytes(32).toString('base64url')),
   } as const;
   const opts = {
     cwd: config.cache,
@@ -37,7 +39,12 @@ export function startCompose(config: VisageConfig): StopCompose {
     env,
   };
 
-  const up = [...compose, 'up', '--remove-orphans'] as const;
+  const up = [
+    ...compose,
+    'up',
+    '--force-recreate',
+    '--remove-orphans',
+  ] as const;
   const child = spawn('docker', up, opts);
 
   const stop = () => {

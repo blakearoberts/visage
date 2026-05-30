@@ -37,7 +37,12 @@ export function startCompose(config: VisageConfig): StopCompose {
     env,
   };
 
-  const up = [...compose, 'up', '--remove-orphans'] as const;
+  const up = [
+    ...compose,
+    'up',
+    '--force-recreate',
+    '--remove-orphans',
+  ] as const;
   const child = spawn('docker', up, opts);
 
   const stop = () => {

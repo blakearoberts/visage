@@ -199,6 +199,7 @@ application accepts form posts or other browser-submitted mutations. CSP,
 
 - [ ] Harden the default security posture by addressing the
       [security hardening backlog](docs/security-hardening.md).
-- [ ] Support configuring [Dex connectors](https://dexidp.io/docs/connectors/).
-- [ ] Support configuring Dex on a distinct subdomain, such as `auth.localhost`.
-- [ ] Support optional [HTTP mode without local TLS](docs/tls-http-mode.md).
+- [ ] Support [runtime config reloads](docs/config-reload.md).
+- [ ] Support [Dex connectors](https://dexidp.io/docs/connectors/).
+- [ ] Support Dex on a distinct subdomain, such as `auth.localhost`.
+- [ ] Support [HTTP mode without local TLS](docs/tls-http-mode.md).

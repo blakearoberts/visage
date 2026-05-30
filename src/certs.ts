@@ -85,11 +85,7 @@ function findMkcert(): string {
 
   if (result.error || result.status !== 0 || !path) {
     throw new Error(
-      [
-        'Visage requires mkcert to configure HTTPS, but mkcert was not found.',
-        '',
-        mkcertInstallInstructions(),
-      ].join('\n'),
+      ['mkcert not found', '', mkcertInstallInstructions()].join('\n'),
     );
   }
 
@@ -97,44 +93,38 @@ function findMkcert(): string {
 }
 
 function mkcertInstallInstructions(): string {
-  const common = [
-    'After installing mkcert, run `mkcert -install` once when local ' +
-      'certificates should be trusted.',
-    'Install docs: https://github.com/FiloSottile/mkcert#installation',
-    'Set VISAGE_MKCERT=/path/to/mkcert to use a custom executable.',
-  ];
-  const platform = process.platform;
-
-  if (platform === 'darwin') {
-    return [
-      'Install mkcert with Homebrew:',
-      '  brew install mkcert',
-      '  brew install nss # optional, for Firefox',
-      ...common,
-    ].join('\n');
-  }
-
-  if (platform === 'win32') {
-    return [
-      'Install mkcert with Chocolatey or Scoop:',
-      '  choco install mkcert',
-      '  scoop install mkcert',
-      ...common,
-    ].join('\n');
-  }
-
-  if (platform === 'linux') {
-    return [
-      'Install mkcert with your Linux package manager. Common commands:',
-      '  sudo apt install mkcert libnss3-tools',
-      '  sudo dnf install mkcert nss-tools',
-      '  sudo pacman -Syu mkcert nss',
-      ...common,
-    ].join('\n');
+  let install: string[];
+  switch (process.platform) {
+    case 'darwin':
+      install = ['Install mkcert with Homebrew:', '  brew install mkcert'];
+      break;
+    case 'win32':
+      install = [
+        'Install mkcert with Chocolatey or Scoop:',
+        '  choco install mkcert',
+        '  scoop install mkcert',
+      ];
+      break;
+    case 'linux':
+      install = [
+        'Install mkcert with your Linux package manager. Common commands:',
+        '  sudo apt install mkcert libnss3-tools',
+        '  sudo dnf install mkcert nss-tools',
+        '  sudo pacman -Syu mkcert nss',
+      ];
+      break;
+    default:
+      install = [
+        'Install mkcert for your operating system and make it available on PATH.',
+      ];
+      break;
   }
 
   return [
-    'Install mkcert for your operating system and make it available on PATH.',
-    ...common,
+    'Visage requires mkcert to configure HTTPS.',
+    '',
+    ...install,
+    '',
+    'See https://github.com/FiloSottile/mkcert#installation for more information.',
   ].join('\n');
 }

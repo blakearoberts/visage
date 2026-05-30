@@ -31,6 +31,23 @@ spec uses the plugin-managed Dex stack, the SSR spec starts Visage through
 Child process and container lifecycle output is written to each test's
 Playwright output directory as `simple.log`, `ssr.log`, or `external-idp.log`.
 
+## First-Time Setup
+
+Install project dependencies, make sure `mkcert` is available, and install the
+Playwright Chromium browser before running the suite on a new machine. On macOS:
+
+```console
+brew install mkcert
+npm run test:e2e:setup
+```
+
+`npm run test:e2e` runs `test:e2e:setup` first through npm's `pretest:e2e`
+script, so each run rebuilds `dist` from local source changes and a first run
+can install example-app dependencies and download Chromium automatically before
+the slower Docker-backed tests begin. Run `npm run test:e2e:setup` directly when
+you want to rebuild and prepare the example apps and browser cache without
+starting the suite.
+
 Run the suite from the repo root:
 
 ```console

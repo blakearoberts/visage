@@ -99,7 +99,7 @@ http {
             <%_ } %>
             <%_ for (const [directive, values] of Object.entries(location.directives ?? {})) { %>
                 <%_ for (const value of values) { %>
-            <%~ directive %> <%~ value %>;
+            <%~ directive %><%~ value === '' ? '' : ' ' + value %>;
                 <%_ } %>
             <%_ } %>
             <%_ if (upstream.scheme === 'https') { %>

@@ -319,6 +319,7 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   const nginx = readGenerated(config, config.files.nginx[0]);
   const dex = locationBlock(nginx, '/dex/');
   const oauth2Proxy = locationBlock(nginx, '/oauth2/');
+  const oauth2Auth = locationBlock(nginx, '= /oauth2/auth');
   const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
 
   assert.doesNotMatch(dex, /auth_request/);
@@ -331,6 +332,11 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   assert.doesNotMatch(oauth2Proxy, /csrf_/);
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2Proxy, /proxy_buffer_size 8k;/);
+  assert.doesNotMatch(oauth2Auth, /auth_request/);
+  assert.match(oauth2Auth, /internal;/);
+  assert.match(oauth2Auth, /proxy_pass_request_body off;/);
+  assert.match(oauth2Auth, /proxy_set_header Content-Length "";/);
+  assert.match(oauth2Auth, /proxy_set_header Cookie \$http_cookie;/);
   assert.doesNotMatch(oauth2SignOut, /auth_request/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(oauth2SignOut, /proxy_set_header Authorization "";/);

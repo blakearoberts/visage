@@ -4,13 +4,12 @@ This file is intended for LLM based collaborators.
 
 ## Guidelines
 
-- Use the local `codex` branch as the shared staging branch for next-type work
-  that needs hosted CI before it is merged to `main`.
+- Use the `codex` branch as the shared staging branch for work that needs hosted
+  CI before it is merged to `main`.
 - LLM collaborators may push or recreate the remote `codex` branch for that
-  staging purpose. Do not push directly to `main` unless the user explicitly
-  requests it.
-- The remote `codex` branch is disposable after its pull request merges; GitHub
-  may auto-delete it. npm dist-tags are moved by `main` and release workflows.
+  staging purpose. Do not push directly to `main`.
+- The remote `codex` branch is disposable after its changes merge; GitHub may
+  auto-delete it. npm dist-tags are moved by `main` and release workflows.
 
 ## Code change discipline
 

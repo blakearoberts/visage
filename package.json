@@ -57,7 +57,7 @@
     "test:e2e": "playwright test test/e2e",
     "test:e2e:setup": "npm run build && npm run test:e2e:setup:examples && playwright install chromium",
     "test:e2e:setup:examples": "npm --prefix examples/simple install --no-audit --no-fund && npm --prefix examples/ssr install --no-audit --no-fund && npm --prefix examples/external-idp install --no-audit --no-fund",
-    "test:unit": "node --experimental-strip-types --test test/unit/*.test.ts",
+    "test:unit": "tsx --test test/unit/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -75,6 +75,7 @@
     "prettier": "^3.8.3",
     "rollup": "^4.60.4",
     "tslib": "^2.8.1",
+    "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.13"
   }

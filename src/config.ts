@@ -103,6 +103,7 @@ export type VisageConfig = {
   readonly host: string;
   readonly port: number;
   readonly cookie: ResolvedCookiePolicy;
+  readonly edgeKey?: string;
   readonly idp: ResolvedIdpConfig;
   readonly oauth2: ResolvedOAuth2Client;
 
@@ -112,11 +113,13 @@ export type VisageConfig = {
     readonly compose: string;
     readonly dex: Volume;
     readonly nginx: Volume;
+    readonly nginxEdgeKeyJS: Volume;
     readonly oauth2Proxy: Volume;
   };
   readonly secrets: {
     readonly cookieSecret: string;
     readonly clientSecret: string;
+    readonly edgeKey: string;
   };
   readonly network: {
     readonly name: string;
@@ -514,14 +517,12 @@ export function resolveConfig(
         }),
     ...idp.upstream,
     ...options.upstreams,
-    ...(edgeKey && options.upstreams.vite
-      ? { vite: resolveViteEdgeKeyConfig(options.upstreams.vite, edgeKey) }
-      : {}),
   };
   return {
     host: options.host,
     port: options.port,
     cookie: options.cookie,
+    edgeKey,
     idp,
     oauth2: options.oauth2,
     cache,
@@ -530,11 +531,13 @@ export function resolveConfig(
       compose: './compose.yaml',
       dex: ['./dex.yaml', '/etc/dex/dex.yaml'],
       nginx: ['./nginx.conf', '/etc/nginx/nginx.conf'],
+      nginxEdgeKeyJS: ['./nginx-edge-key.js', '/etc/nginx/edge-key.js'],
       oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
     },
     secrets: {
       cookieSecret: 'OAUTH2_PROXY_COOKIE_SECRET',
       clientSecret: 'OAUTH2_CLIENT_SECRET',
+      edgeKey: 'VISAGE_EDGE_KEY',
     },
     network: {
       name: process.env.COMPOSE_PROJECT_NAME ?? 'visage',
@@ -567,27 +570,6 @@ export function resolveConfig(
           { ...upstream, external } satisfies ResolvedConfigUpstream,
         ];
       }),
-    ),
-  };
-}
-
-function resolveViteEdgeKeyConfig(
-  upstream: ResolvedUpstream,
-  edgeKey: string,
-): ResolvedUpstream {
-  return {
-    ...upstream,
-    locations: Object.fromEntries(
-      Object.entries(upstream.locations).map(([path, policy]) => [
-        path,
-        {
-          ...policy,
-          headers: {
-            [VisageEdgeKeyHeader]: edgeKey,
-            ...policy.headers,
-          },
-        } satisfies ResolvedProxyPolicy,
-      ]),
     ),
   };
 }

@@ -30,6 +30,9 @@ export function startCompose(config: VisageConfig): StopCompose {
       ? {}
       : { [config.secrets.clientSecret]: config.oauth2.secret }),
     ...process.env,
+    ...(config.edgeKey === undefined
+      ? {}
+      : { [config.secrets.edgeKey]: config.edgeKey }),
     [config.secrets.cookieSecret]: (cookieSecret ??=
       randomBytes(32).toString('base64url')),
   } as const;

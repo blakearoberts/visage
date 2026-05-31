@@ -533,7 +533,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
 });
 
-test('resolveConfig injects the edge key into Vite locations', (t) => {
+test('resolveConfig preserves the edge key without mutating Vite headers', (t) => {
   const config = resolveConfig(
     resolveOptions({
       upstreams: {
@@ -557,13 +557,15 @@ test('resolveConfig injects the edge key into Vite locations', (t) => {
     'edge-key',
   );
 
+  assert.equal(config.edgeKey, 'edge-key');
+  assert.equal(config.secrets.edgeKey, 'VISAGE_EDGE_KEY');
   assert.equal(
     config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
-    'edge-key',
+    undefined,
   );
   assert.equal(
     config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
-    'edge-key',
+    undefined,
   );
   assert.equal(config.upstreams.vite.locations['/'].headers['X-App'], 'root');
   assert.equal(

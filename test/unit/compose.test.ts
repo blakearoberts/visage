@@ -18,15 +18,22 @@ type SpawnCall = {
   readonly env?: NodeJS.ProcessEnv;
 };
 
-test('startCompose restarts Compose while preserving the cookie secret', async (t) => {
-  const config = resolveConfig(resolveOptions({}), '');
+test('startCompose restarts Compose with in-memory edge and cookie secrets', async (t) => {
+  const config = resolveConfig(resolveOptions({}), '', 'edge-key');
   const previousCookieSecret = process.env[config.secrets.cookieSecret];
+  const previousEdgeKey = process.env[config.secrets.edgeKey];
   delete process.env[config.secrets.cookieSecret];
+  delete process.env[config.secrets.edgeKey];
   t.after(() => {
     if (previousCookieSecret === undefined) {
       delete process.env[config.secrets.cookieSecret];
     } else {
       process.env[config.secrets.cookieSecret] = previousCookieSecret;
+    }
+    if (previousEdgeKey === undefined) {
+      delete process.env[config.secrets.edgeKey];
+    } else {
+      process.env[config.secrets.edgeKey] = previousEdgeKey;
     }
   });
 
@@ -65,10 +72,13 @@ test('startCompose restarts Compose while preserving the cookie secret', async (
   try {
     startCompose(config);
     const firstSecret = spawnCalls[0]?.env?.[config.secrets.cookieSecret];
+    const firstEdgeKey = spawnCalls[0]?.env?.[config.secrets.edgeKey];
 
     process.env[config.secrets.cookieSecret] = 'changed-cookie-secret';
+    process.env[config.secrets.edgeKey] = 'changed-edge-key';
     stop = startCompose(config);
     const secondSecret = spawnCalls[1]?.env?.[config.secrets.cookieSecret];
+    const secondEdgeKey = spawnCalls[1]?.env?.[config.secrets.edgeKey];
 
     assert.equal(spawnCalls.length, 2);
     assert.equal(spawnCalls[0]?.command, 'docker');
@@ -86,6 +96,9 @@ test('startCompose restarts Compose while preserving the cookie secret', async (
     assert.ok(firstSecret);
     assert.equal(secondSecret, firstSecret);
     assert.notEqual(secondSecret, 'changed-cookie-secret');
+    assert.equal(firstEdgeKey, 'edge-key');
+    assert.equal(secondEdgeKey, 'edge-key');
+    assert.notEqual(secondEdgeKey, 'changed-edge-key');
 
     stop();
     stop = undefined;

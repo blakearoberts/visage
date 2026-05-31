@@ -60,6 +60,7 @@ jobs:
         env:
           PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
           PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
+          RELEASE_BRANCH: ${{ steps.release-version.outputs.branch }}
           RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
         run: |
           set -euo pipefail
@@ -88,6 +89,11 @@ jobs:
 
           if git ls-remote --exit-code --tags origin "$RELEASE_TAG" >/dev/null 2>&1; then
             echo "Tag $RELEASE_TAG already exists on origin." >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --heads origin "$RELEASE_BRANCH" >/dev/null 2>&1; then
+            echo "Release branch $RELEASE_BRANCH already exists on origin. Inspect the existing branch or pull request before retrying." >&2
             exit 1
           fi
 
@@ -131,34 +137,47 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          release_notes_args=(-f "tag_name=$RELEASE_TAG")
+          previous_tag="$(
+            git for-each-ref \
+              --merged HEAD \
+              --sort=-version:refname \
+              --format='%(refname:strip=2)' \
+              refs/tags |
+              grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+              head -n 1 || true
+          )"
+          if [[ -n "$previous_tag" ]]; then
+            release_notes_args+=(-f "previous_tag_name=$previous_tag")
+          fi
+
           git checkout -B "$RELEASE_BRANCH"
           git add package.json package-lock.json
           git commit -m "chore(release): $RELEASE_TAG"
 
+          npm_url="https://www.npmjs.com/package/${PACKAGE_NAME}/v/${PACKAGE_VERSION}"
+          release_url="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+          release_notes_args+=(-f "target_commitish=$(git rev-parse HEAD^)")
+          release_notes="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" "${release_notes_args[@]}" --jq .body)"
+
+          {
+            echo "## Release"
+            echo
+            echo "- Package: [$PACKAGE_NAME@$PACKAGE_VERSION]($npm_url)"
+            echo "- GitHub release: [$RELEASE_TAG]($release_url)"
+            echo
+            printf '%s\n' "$release_notes"
+          } > release-pr.md
+
           authenticated_origin="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git fetch origin "refs/heads/$RELEASE_BRANCH:refs/remotes/origin/$RELEASE_BRANCH" || true
-          git -c "remote.origin.url=$authenticated_origin" push \
-            --force-with-lease="refs/heads/$RELEASE_BRANCH" \
-            origin \
-            HEAD:"$RELEASE_BRANCH"
+          git push "$authenticated_origin" HEAD:"$RELEASE_BRANCH"
 
-          printf '%s\n\n%s\n' \
-            "Prepares $PACKAGE_NAME@$PACKAGE_VERSION for stable release." \
-            "After this PR's checks pass, the Auto-Merge workflow merges it to main. After CI passes on that main merge commit, the Publish workflow publishes to npm through trusted publishing with the latest dist-tag, then tags the merge commit and creates the GitHub release." \
-            > release-pr.md
-
-          if pr_url="$(gh pr view "$RELEASE_BRANCH" --json url --jq .url 2>/dev/null)"; then
-            gh pr edit "$RELEASE_BRANCH" \
+          pr_url="$(
+            gh pr create \
+              --base main \
+              --head "$RELEASE_BRANCH" \
               --title "chore(release): $RELEASE_TAG" \
               --body-file release-pr.md
-          else
-            pr_url="$(
-              gh pr create \
-                --base main \
-                --head "$RELEASE_BRANCH" \
-                --title "chore(release): $RELEASE_TAG" \
-                --body-file release-pr.md
-            )"
-          fi
+          )"
 
           echo "Release PR: $pr_url"

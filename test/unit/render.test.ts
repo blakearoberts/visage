@@ -110,18 +110,22 @@ function parseKeyValueConfig(contents: string) {
 }
 
 test('writeComposeConfig renders base services and custom services', (t) => {
-  const config = resolvedConfig(t, {
-    services: {
-      api: {
-        image: 'example/api:test',
-        command: ['serve'],
-        depends_on: ['nginx'],
-        upstream: {
-          locations: { '/api/': {} },
+  const config = resolvedConfig(
+    t,
+    {
+      services: {
+        api: {
+          image: 'example/api:test',
+          command: ['serve'],
+          depends_on: ['nginx'],
+          upstream: {
+            locations: { '/api/': {} },
+          },
         },
       },
     },
-  });
+    'edge-key',
+  );
 
   writeComposeConfig(config);
 
@@ -137,6 +141,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
+  assert.deepEqual(compose.services.nginx.secrets, ['VISAGE_EDGE_KEY']);
   assert.deepEqual(compose.services.nginx.ports, ['127.0.0.1:9443:9443']);
   assert.deepEqual(compose.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
@@ -144,6 +149,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.nginx.volumes, [
     './certs:/etc/nginx/certs:ro',
     './nginx.conf:/etc/nginx/nginx.conf:ro',
+    './nginx-edge-key.js:/etc/nginx/edge-key.js:ro',
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
     'host.docker.internal:host-gateway',
@@ -171,6 +177,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
+    },
+    VISAGE_EDGE_KEY: {
+      environment: 'VISAGE_EDGE_KEY',
     },
     OAUTH2_CLIENT_SECRET: {
       environment: 'OAUTH2_CLIENT_SECRET',
@@ -413,7 +422,7 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
   }
 });
 
-test('writeNginxConfig forwards the Vite edge key', (t) => {
+test('writeNginxConfig forwards the Vite edge key from njs', (t) => {
   const config = resolvedConfig(
     t,
     {
@@ -428,9 +437,60 @@ test('writeNginxConfig forwards the Vite edge key', (t) => {
 
   const nginx = readGenerated(config, config.files.nginx[0]);
   const root = locationBlock(nginx, '/');
+  assert.match(nginx, /load_module modules\/ngx_http_js_module\.so;/);
+  assert.match(nginx, /js_import edge_key from \/etc\/nginx\/edge-key\.js;/);
+  assert.match(nginx, /js_shared_dict_zone zone=edge_key:32k;/);
+  assert.match(nginx, /js_set \$edge_key edge_key;/);
   assert.match(
     root,
-    new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} edge-key;`),
+    new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} \\$edge_key;`),
+  );
+  assert.doesNotMatch(root, /edge-key/);
+  assert.equal(
+    readGenerated(config, config.files.nginxEdgeKeyJS[0]),
+    `import fs from 'fs';
+export default function value() {
+  let key = ngx.shared.edge_key.get('edge_key');
+  if (key === undefined) {
+    key = fs.readFileSync('/run/secrets/VISAGE_EDGE_KEY', 'utf8').trim();
+    ngx.shared.edge_key.set('edge_key', key);
+  }
+  return key;
+}
+`,
+  );
+});
+
+test('writeNginxConfig renders explicit Vite edge key overrides after the managed edge key', (t) => {
+  const config = resolvedConfig(
+    t,
+    {
+      upstreams: {
+        vite: {
+          port: 6173,
+          locations: {
+            '/': {
+              headers: {
+                [VisageEdgeKeyHeader]: 'overridden',
+              },
+            },
+          },
+        },
+      },
+    },
+    'edge-key',
+  );
+
+  writeNginxConfig(config);
+
+  const root = locationBlock(readGenerated(config, config.files.nginx[0]), '/');
+  assert.match(
+    root,
+    new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} overridden;`),
+  );
+  assert.match(
+    root,
+    new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} \\$edge_key;`),
   );
 });
 

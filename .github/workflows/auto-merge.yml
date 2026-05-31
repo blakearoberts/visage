@@ -23,8 +23,7 @@ jobs:
         (
           startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
           github.event.pull_request.user.login == 'dependabot[bot]'
-        ) ||
-        startsWith(github.event.pull_request.head.ref, 'release/v')
+        )
       )
     steps:
       - name: Create app token
@@ -46,14 +45,6 @@ jobs:
 
           mapfile -t changed_paths < <(gh pr diff --name-only "$PR_URL")
 
-          if [[ "$PR_HEAD_REF" == release/v* ]]; then
-            if [[ ! "$PR_HEAD_REF" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "$PR_HEAD_REF is not a stable release branch."
-              gh pr merge --disable-auto "$PR_URL" || true
-              exit 0
-            fi
-          fi
-
           for path in "${changed_paths[@]}"; do
             case "$path" in
               .github/workflows/release.yml|.github/workflows/publish.yml)
@@ -62,18 +53,6 @@ jobs:
                 exit 0
                 ;;
             esac
-
-            if [[ "$PR_HEAD_REF" == release/v* ]]; then
-              case "$path" in
-                package.json|package-lock.json)
-                  ;;
-                *)
-                  echo "$path requires manual merge for release PR $PR_URL."
-                  gh pr merge --disable-auto "$PR_URL" || true
-                  exit 0
-                  ;;
-              esac
-            fi
           done
 
           gh pr merge --auto --merge --delete-branch "$PR_URL"

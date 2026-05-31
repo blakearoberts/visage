@@ -57,9 +57,8 @@ This file is intended for LLM based collaborators.
      published to npm.
   4. Trigger the `Prepare Release` workflow from `main` with the inferred
      version.
-  5. Wait for the workflow to create or update the `release/vX.Y.Z` pull
-     request, then report the pull request link to the user for manual review
-     and merge.
+  5. Wait for the workflow to create the `release/vX.Y.Z` pull request, then
+     report the pull request link to the user for manual review and merge.
   6. Do not merge the release pull request, force-push release branches, move or
      recreate tags, publish to npm manually, edit release or publish workflows,
      bypass checks, or otherwise force the release through.
@@ -70,7 +69,10 @@ This file is intended for LLM based collaborators.
      the Git tag exists, and the GitHub release exists.
   10. If anything fails unexpectedly, stop, collect the relevant workflow links
       and log excerpts, identify the likely root cause, and report the safest
-      next action.
+      next action. Do not continue the release by creating or updating release
+      branches, pull requests, tags, or npm publications through one-off local
+      fallbacks unless the user explicitly approves that fallback after the
+      root-cause report.
 
 ## Programmatic checks
 

@@ -118,6 +118,11 @@ http {
             <%_ if (upstream.scheme === 'https') { %>
             proxy_ssl_server_name on;
             proxy_ssl_name <%~ upstream.host %>;
+            <%_ if (upstream.external) { %>
+            proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+            proxy_ssl_verify on;
+            proxy_ssl_verify_depth 3;
+            <%_ } %>
             <%_ } %>
             proxy_pass <%~ upstream.scheme %>://<%~ name %>;
         }

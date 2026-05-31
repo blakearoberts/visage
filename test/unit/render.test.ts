@@ -494,7 +494,7 @@ test('writeNginxConfig renders explicit Vite edge key overrides after the manage
   );
 });
 
-test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
+test('writeNginxConfig renders external HTTPS upstreams with SNI and certificate verification', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
       api: {
@@ -518,7 +518,37 @@ test('writeNginxConfig renders HTTPS upstreams with SNI', (t) => {
   assert.match(api, /proxy_set_header Authorization "";/);
   assert.match(api, /proxy_ssl_server_name on;/);
   assert.match(api, /proxy_ssl_name api\.example\.test;/);
+  assert.match(
+    api,
+    /proxy_ssl_trusted_certificate \/etc\/ssl\/certs\/ca-certificates\.crt;/,
+  );
+  assert.match(api, /proxy_ssl_verify on;/);
+  assert.match(api, /proxy_ssl_verify_depth 3;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
+});
+
+test('writeNginxConfig does not verify local HTTPS service upstreams by default', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      secure: {
+        image: 'example/secure:test',
+        upstream: {
+          scheme: 'https',
+        },
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const secure = locationBlock(nginx, '/secure/');
+  assert.match(secure, /proxy_ssl_server_name on;/);
+  assert.match(secure, /proxy_ssl_name secure;/);
+  assert.doesNotMatch(secure, /proxy_ssl_trusted_certificate/);
+  assert.doesNotMatch(secure, /proxy_ssl_verify on;/);
+  assert.doesNotMatch(secure, /proxy_ssl_verify_depth/);
+  assert.match(secure, /proxy_pass https:\/\/secure;/);
 });
 
 test('writeNginxConfig resolves automatic token forwarding by upstream kind', (t) => {

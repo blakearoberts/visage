@@ -19,25 +19,22 @@ const example = join(repo, 'examples/ssr');
 const appUrl = 'https://localhost:9003/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
+const appComposeProject = 'visage-ssr-example-visage';
 let logFile = '';
 let ssr: ChildProcessWithoutNullStreams | undefined;
 let ssrOutput = '';
 
 test.describe('Visage SSR authenticated identity flow', () => {
   test.setTimeout(30_000);
-  let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = `visage_e2e_${testInfo.parallelIndex}`;
     logFile = testInfo.outputPath('ssr.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');
 
     ssr = spawn('npm', ['run', 'dev'], {
       cwd: example,
-      env: e2eEnv({
-        COMPOSE_PROJECT_NAME: appComposeProject,
-      }),
+      env: e2eEnv(),
     });
 
     ssr.stdout.on('data', (chunk) => {

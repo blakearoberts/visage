@@ -56,7 +56,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     ] satisfies string[],
     scope: config.oauth2.scopes.join(' '),
     reverse_proxy: true,
-    trusted_proxy_ips: config.network.trustedProxyIps,
+    trusted_proxy_ips: config.compose.network.trustedProxyIps,
     set_xauthrequest: true,
     set_authorization_header: true,
     pass_access_token: true,

@@ -85,18 +85,18 @@ export function visage(options: VisageOptions = {}): Plugin {
           throw new Error('Failed to resolve port for Visage');
         }
 
-        const cache = join(vite.config.cacheDir, 'visage');
-        const config = resolveConfig(
-          resolveOptions({
+        const config = resolveConfig({
+          ...resolveOptions({
             ...options,
             upstreams: {
               ...options.upstreams,
               vite: { port: address.port, ...options.upstreams?.vite },
             },
           }),
-          cache,
+          root: vite.config.root,
+          cache: join(vite.config.cacheDir, 'visage'),
           edgeKey,
-        );
+        });
 
         visageUrl = formatVisageUrlLog(config.host, config.port);
 

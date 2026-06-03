@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 
 import { parse } from 'yaml';
 
@@ -103,7 +104,7 @@ export type VisageConfig = {
   readonly host: string;
   readonly port: number;
   readonly cookie: ResolvedCookiePolicy;
-  readonly edgeKey?: string;
+  readonly edgeKey: string;
   readonly idp: ResolvedIdpConfig;
   readonly oauth2: ResolvedOAuth2Client;
 
@@ -121,9 +122,11 @@ export type VisageConfig = {
     readonly clientSecret: string;
     readonly edgeKey: string;
   };
-  readonly network: {
+  readonly compose: {
     readonly name: string;
-    readonly trustedProxyIps: readonly string[];
+    readonly network: {
+      readonly trustedProxyIps: readonly string[];
+    };
   };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
@@ -299,7 +302,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     } satisfies ResolvedOAuth2Client,
     services,
     upstreams: resolveUpstreamsOptions(services, options.upstreams),
-  };
+  } satisfies ResolvedVisageOptions;
 }
 
 function resolveServicesOptions(
@@ -483,9 +486,11 @@ function resolveAuthPolicy(
 }
 
 export function resolveConfig(
-  options: ResolvedVisageOptions,
-  cache: string,
-  edgeKey?: string,
+  options: ResolvedVisageOptions & {
+    readonly root: string;
+    readonly cache: string;
+    readonly edgeKey: string;
+  },
 ): VisageConfig {
   const idp = resolveIdpConfig(options);
   const end_session_endpoint = idp.oidc.end_session_endpoint;
@@ -522,10 +527,10 @@ export function resolveConfig(
     host: options.host,
     port: options.port,
     cookie: options.cookie,
-    edgeKey,
+    edgeKey: options.edgeKey,
     idp,
     oauth2: options.oauth2,
-    cache,
+    cache: options.cache,
     files: {
       certs: ['./certs', '/etc/nginx/certs'],
       compose: './compose.yaml',
@@ -539,9 +544,9 @@ export function resolveConfig(
       clientSecret: 'OAUTH2_CLIENT_SECRET',
       edgeKey: 'VISAGE_EDGE_KEY',
     },
-    network: {
-      name: process.env.COMPOSE_PROJECT_NAME ?? 'visage',
-      trustedProxyIps: [],
+    compose: {
+      name: resolveComposeName(options.root),
+      network: { trustedProxyIps: [] },
     },
     services: {
       ...('dex' in idp
@@ -572,6 +577,24 @@ export function resolveConfig(
       }),
     ),
   };
+}
+
+function resolveComposeName(root: string): string {
+  const name = (packageName(root) ?? basename(resolve(root)))
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
+  return `${name}-visage`;
+}
+
+function packageName(root: string): string | undefined {
+  try {
+    return JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ).name.trim();
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveIdpConfig({

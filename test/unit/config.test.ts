@@ -25,8 +25,8 @@ function resolveForTest(
   const cache = tempCache(t);
   return {
     cache,
-    config: resolveConfig(
-      resolveOptions({
+    config: resolveConfig({
+      ...resolveOptions({
         host: 'app.local.test',
         port: 9443,
         ...options,
@@ -36,7 +36,9 @@ function resolveForTest(
         },
       }),
       cache,
-    ),
+      root: 'test-app',
+      edgeKey: 'edge-key',
+    }),
   };
 }
 
@@ -479,9 +481,9 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.dex.scheme, 'http');
   assert.equal(config.upstreams.oauth2_proxy.port, 4180);
   assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
-  assert.deepEqual(config.network, {
-    name: process.env.COMPOSE_PROJECT_NAME ?? 'visage',
-    trustedProxyIps: [],
+  assert.deepEqual(config.compose, {
+    name: 'test-app-visage',
+    network: { trustedProxyIps: [] },
   });
 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
@@ -534,8 +536,9 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
 });
 
 test('resolveConfig preserves the edge key without mutating Vite headers', (t) => {
-  const config = resolveConfig(
-    resolveOptions({
+  const cache = tempCache(t);
+  const config = resolveConfig({
+    ...resolveOptions({
       upstreams: {
         vite: {
           locations: {
@@ -553,9 +556,10 @@ test('resolveConfig preserves the edge key without mutating Vite headers', (t) =
         },
       },
     }),
-    tempCache(t),
-    'edge-key',
-  );
+    cache,
+    root: 'edge-test',
+    edgeKey: 'edge-key',
+  });
 
   assert.equal(config.edgeKey, 'edge-key');
   assert.equal(config.secrets.edgeKey, 'VISAGE_EDGE_KEY');
@@ -575,8 +579,9 @@ test('resolveConfig preserves the edge key without mutating Vite headers', (t) =
 });
 
 test('resolveConfig preserves explicit Vite edge key overrides', (t) => {
-  const config = resolveConfig(
-    resolveOptions({
+  const cache = tempCache(t);
+  const config = resolveConfig({
+    ...resolveOptions({
       upstreams: {
         vite: {
           locations: {
@@ -594,9 +599,10 @@ test('resolveConfig preserves explicit Vite edge key overrides', (t) => {
         },
       },
     }),
-    tempCache(t),
-    'edge-key',
-  );
+    cache,
+    root: 'edge-test',
+    edgeKey: 'edge-key',
+  });
 
   assert.equal(
     config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],

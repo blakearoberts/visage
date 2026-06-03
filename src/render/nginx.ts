@@ -5,19 +5,15 @@ import { join } from 'node:path';
 import { VisageEdgeKeyHeader, type VisageConfig } from '../config';
 
 const template = `
-<%_ if (it.edgeKey) { %>
 load_module modules/ngx_http_js_module.so;
 
-<%_ } %>
 events {}
 
 http {
-    <%_ if (it.edgeKey) { %>
     js_import edge_key from <%~ it.edgeKey.script %>;
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 
-    <%_ } %>
     # Disable IPv6 DNS lookups that may fail to resolve upstream hostnames.
     resolver 127.0.0.11 ipv6=off;
 
@@ -104,7 +100,7 @@ http {
             error_page 401 =302 /oauth2/start?rd=$scheme://$http_host$request_uri;
             <%_ } %>
             <%_ } %>
-            <%_ if (it.edgeKey && name === 'vite') { %>
+            <%_ if (name === 'vite') { %>
             proxy_set_header <%~ it.edgeKey.header %> $edge_key;
             <%_ } %>
             <%_ for (const [header, value] of Object.entries(location.headers ?? {})) { %>
@@ -149,11 +145,9 @@ export function writeNginxConfig(config: VisageConfig): void {
   const render = renderNginxConfig(config);
   writeFileSync(file, render, 'utf-8');
 
-  if (config.edgeKey !== undefined) {
-    const file = join(config.cache, config.files.nginxEdgeKeyJS[0]);
-    const render = renderEdgeKeyJS(config.secrets.edgeKey);
-    writeFileSync(file, render, 'utf-8');
-  }
+  const edgeKeyFile = join(config.cache, config.files.nginxEdgeKeyJS[0]);
+  const edgeKeyRender = renderEdgeKeyJS(config.secrets.edgeKey);
+  writeFileSync(edgeKeyFile, edgeKeyRender, 'utf-8');
 }
 
 function renderNginxConfig(config: VisageConfig): string {
@@ -164,14 +158,10 @@ function renderNginxConfig(config: VisageConfig): string {
       cert: join(config.files.certs[1], 'tls.crt'),
       key: join(config.files.certs[1], 'tls.key'),
     },
-    ...(config.edgeKey === undefined
-      ? {}
-      : {
-          edgeKey: {
-            header: VisageEdgeKeyHeader,
-            script: config.files.nginxEdgeKeyJS[1],
-          },
-        }),
+    edgeKey: {
+      header: VisageEdgeKeyHeader,
+      script: config.files.nginxEdgeKeyJS[1],
+    },
     upstreams: Object.fromEntries(
       Object.entries(config.upstreams).map(([name, upstream]) => [
         name,

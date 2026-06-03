@@ -19,6 +19,7 @@ const example = join(repo, 'examples/external-idp');
 const appUrl = 'https://localhost:9002/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
+const appComposeProject = 'visage-external-idp-example-visage';
 const externalDexProject = 'visage-external-idp';
 
 let logFile = '';
@@ -27,10 +28,8 @@ let viteOutput = '';
 
 test.describe('Visage external IdP authenticated upstream flow', () => {
   test.setTimeout(30_000);
-  let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = `visage_e2e_${testInfo.parallelIndex}`;
     logFile = testInfo.outputPath('external-idp.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');
@@ -40,9 +39,7 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
 
     vite = spawn('npm', ['run', 'dev'], {
       cwd: example,
-      env: e2eEnv({
-        COMPOSE_PROJECT_NAME: appComposeProject,
-      }),
+      env: e2eEnv(),
     });
 
     vite.stdout.on('data', (chunk) => {

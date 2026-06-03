@@ -22,7 +22,7 @@ export function startCompose(config: VisageConfig): StopCompose {
     'compose',
     '--ansi=never',
     `--file=${file}`,
-    `--project-name=${process.env.COMPOSE_PROJECT_NAME ?? 'visage'}`,
+    `--project-name=${config.compose.name}`,
   ] as const;
   const env = {
     COMPOSE_MENU: 'false',
@@ -30,9 +30,7 @@ export function startCompose(config: VisageConfig): StopCompose {
       ? {}
       : { [config.secrets.clientSecret]: config.oauth2.secret }),
     ...process.env,
-    ...(config.edgeKey === undefined
-      ? {}
-      : { [config.secrets.edgeKey]: config.edgeKey }),
+    [config.secrets.edgeKey]: config.edgeKey,
     [config.secrets.cookieSecret]: (cookieSecret ??=
       randomBytes(32).toString('base64url')),
   } as const;

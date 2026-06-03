@@ -56,9 +56,14 @@ export type VisageServer = {
 };
 
 export function createVisageServer(options: VisageOptions): VisageServer {
-  const cache = join(process.cwd(), '.visage');
+  const root = process.cwd();
   const edgeKey = randomBytes(32).toString('base64url');
-  const config = resolveConfig(resolveOptions(options), cache, edgeKey);
+  const config = resolveConfig({
+    ...resolveOptions(options),
+    root,
+    cache: join(root, '.visage'),
+    edgeKey,
+  });
   let stop: (() => void) | undefined;
   return {
     middleware: createVisageMiddleware(edgeKey),

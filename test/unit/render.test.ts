@@ -22,13 +22,13 @@ import type { VisageOptions } from '../../src/types.ts';
 function resolvedConfig(
   t: TestContext,
   options: VisageOptions = {},
-  edgeKey?: string,
+  edgeKey = 'edge-key',
 ): VisageConfig {
   const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
   t.after(() => rmSync(cache, { recursive: true, force: true }));
 
-  const config = resolveConfig(
-    resolveOptions({
+  const config = resolveConfig({
+    ...resolveOptions({
       host: 'app.local.test',
       port: 9443,
       ...options,
@@ -37,9 +37,10 @@ function resolvedConfig(
         ...options.upstreams,
       },
     }),
+    root: 'render-test',
     cache,
     edgeKey,
-  );
+  });
   mkdirSync(config.cache, { recursive: true });
   return config;
 }
@@ -54,9 +55,12 @@ function withNetwork(
 ): VisageConfig {
   return {
     ...config,
-    network: {
-      ...config.network,
-      trustedProxyIps,
+    compose: {
+      ...config.compose,
+      network: {
+        ...config.compose.network,
+        trustedProxyIps,
+      },
     },
   };
 }
@@ -171,7 +175,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.networks, {
     default: {
       external: true,
-      name: config.network.name,
+      name: 'render-test-visage',
     },
   });
   assert.deepEqual(compose.secrets, {
@@ -205,6 +209,9 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
+    },
+    VISAGE_EDGE_KEY: {
+      environment: 'VISAGE_EDGE_KEY',
     },
   });
 });

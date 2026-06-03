@@ -13,18 +13,14 @@ export function writeComposeConfig(config: VisageConfig): void {
 function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = config.services;
   return stringify({
-    networks: { default: { external: true, name: config.network.name } },
+    networks: { default: { external: true, name: config.compose.name } },
     secrets: {
       [config.secrets.cookieSecret]: {
         environment: config.secrets.cookieSecret,
       },
-      ...(config.edgeKey === undefined
-        ? {}
-        : {
-            [config.secrets.edgeKey]: {
-              environment: config.secrets.edgeKey,
-            },
-          }),
+      [config.secrets.edgeKey]: {
+        environment: config.secrets.edgeKey,
+      },
       ...(config.oauth2.public
         ? {}
         : {
@@ -47,16 +43,12 @@ function renderComposeConfig(config: VisageConfig): string {
         : {}),
       nginx: {
         ...config.services.nginx,
-        ...(config.edgeKey === undefined
-          ? {}
-          : { secrets: [config.secrets.edgeKey] }),
+        secrets: [config.secrets.edgeKey],
         ports: [`127.0.0.1:${config.port}:${config.port}`],
         volumes: [
           config.files.certs,
           config.files.nginx,
-          ...(config.edgeKey === undefined
-            ? []
-            : [config.files.nginxEdgeKeyJS]),
+          config.files.nginxEdgeKeyJS,
         ].map(([from, to]) => `${from}:${to}:ro`),
       },
       oauth2_proxy: {

@@ -3,16 +3,10 @@ import { spawnSync } from 'node:child_process';
 import type { VisageConfig } from './config';
 
 export function ensureNginxNetwork(config: VisageConfig): VisageConfig {
+  const network = config.compose.name;
   const exists = spawnSync(
     'docker',
-    [
-      'network',
-      'ls',
-      '--filter',
-      `name=${config.network.name}`,
-      '--format',
-      '{{ .Name }}',
-    ],
+    ['network', 'ls', '--filter', `name=${network}`, '--format', '{{ .Name }}'],
     { encoding: 'utf-8' },
   );
   if (exists.error) throw exists.error;
@@ -21,18 +15,12 @@ export function ensureNginxNetwork(config: VisageConfig): VisageConfig {
     throw new Error('Failed to list Docker network');
   }
   if (exists.stdout) {
-    return {
-      ...config,
-      network: {
-        ...config.network,
-        trustedProxyIps: inspectNetwork(config.network.name),
-      },
-    };
+    return withTrustedProxyIps(config, inspectNetwork(network));
   }
 
   const create = spawnSync(
     'docker',
-    ['network', 'create', '--driver', 'bridge', config.network.name],
+    ['network', 'create', '--driver', 'bridge', network],
     { encoding: 'utf-8' },
   );
   if (create.error) throw create.error;
@@ -40,11 +28,24 @@ export function ensureNginxNetwork(config: VisageConfig): VisageConfig {
     console.error(create.stderr);
     throw new Error('Failed to create Docker network');
   }
+  return withTrustedProxyIps(config, inspectNetwork(network));
+}
+
+function withTrustedProxyIps(
+  config: VisageConfig,
+  trustedProxyIps: readonly string[],
+): VisageConfig {
   return {
     ...config,
-    network: {
-      ...config.network,
-      trustedProxyIps: inspectNetwork(config.network.name),
+    compose: {
+      ...config.compose,
+      network: {
+        ...config.compose.network,
+        trustedProxyIps: [
+          ...config.compose.network.trustedProxyIps,
+          ...trustedProxyIps,
+        ],
+      },
     },
   };
 }

@@ -20,25 +20,22 @@ const example = join(repo, 'examples/simple');
 const appUrl = process.env.VISAGE_E2E_URL ?? 'https://localhost:9001/';
 const dexEmail = process.env.VISAGE_E2E_EMAIL ?? 'user@example.com';
 const dexPassword = process.env.VISAGE_E2E_PASSWORD ?? 'pass';
+const appComposeProject = 'visage-simple-example-visage';
 let logFile = '';
 let vite: ChildProcessWithoutNullStreams | undefined;
 let viteOutput = '';
 
 test.describe('Visage simple authenticated upstream flow', () => {
   test.setTimeout(30_000);
-  let appComposeProject = '';
 
   test.beforeAll(async ({}, testInfo) => {
-    appComposeProject = `visage_e2e_${testInfo.parallelIndex}`;
     logFile = testInfo.outputPath('simple.log');
     mkdirSync(dirname(logFile), { recursive: true });
     writeFileSync(logFile, '');
 
     vite = spawn('npm', ['run', 'dev'], {
       cwd: example,
-      env: e2eEnv({
-        COMPOSE_PROJECT_NAME: appComposeProject,
-      }),
+      env: e2eEnv(),
     });
 
     vite.stdout.on('data', (chunk) => {

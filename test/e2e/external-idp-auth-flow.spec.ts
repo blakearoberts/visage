@@ -19,8 +19,8 @@ const example = join(repo, 'examples/external-idp');
 const appUrl = 'https://localhost:9002/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
-const appComposeProject = 'visage-external-idp-example-visage';
-const externalDexProject = 'visage-external-idp';
+const appComposeProject = 'external-idp-visage';
+const externalDexProject = 'external-idp';
 
 let logFile = '';
 let vite: ChildProcessWithoutNullStreams | undefined;

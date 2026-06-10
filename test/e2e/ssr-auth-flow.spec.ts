@@ -19,7 +19,7 @@ const example = join(repo, 'examples/ssr');
 const appUrl = 'https://localhost:9003/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
-const appComposeProject = 'visage-ssr-example-visage';
+const appComposeProject = 'ssr-visage';
 let logFile = '';
 let ssr: ChildProcessWithoutNullStreams | undefined;
 let ssrOutput = '';

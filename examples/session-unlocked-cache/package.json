@@ -1,5 +1,5 @@
 {
-  "name": "visage-session-unlocked-cache-example",
+  "name": "session-unlocked-cache",
   "private": true,
   "type": "module",
   "scripts": {

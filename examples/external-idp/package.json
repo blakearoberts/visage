@@ -1,5 +1,5 @@
 {
-  "name": "visage-external-idp-example",
+  "name": "external-idp",
   "private": true,
   "type": "module",
   "scripts": {

@@ -20,7 +20,7 @@ const example = join(repo, 'examples/simple');
 const appUrl = process.env.VISAGE_E2E_URL ?? 'https://localhost:9001/';
 const dexEmail = process.env.VISAGE_E2E_EMAIL ?? 'user@example.com';
 const dexPassword = process.env.VISAGE_E2E_PASSWORD ?? 'pass';
-const appComposeProject = 'visage-simple-example-visage';
+const appComposeProject = 'simple-visage';
 let logFile = '';
 let vite: ChildProcessWithoutNullStreams | undefined;
 let viteOutput = '';

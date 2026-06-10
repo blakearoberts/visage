@@ -1,5 +1,5 @@
 {
-  "name": "visage-ssr-example",
+  "name": "ssr",
   "private": true,
   "type": "module",
   "scripts": {

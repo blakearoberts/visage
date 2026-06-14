@@ -26,8 +26,7 @@ jobs:
         )
       )
     steps:
-      - name: Create app token
-        id: app-token
+      - id: app-token
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}

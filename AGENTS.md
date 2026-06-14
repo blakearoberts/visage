@@ -33,7 +33,10 @@ This file is intended for LLM based collaborators.
   2. Ensure the intended changes are already committed to `codex`.
   3. Push or recreate remote `codex`.
   4. Open or update a pull request from `codex` into `main`.
-  5. Wait for the required pull request status checks to pass.
+  5. Wait for the required pull request status checks to pass. If checks fail,
+     perform RCA, then use the RCA to guide a local reproduction. Discard
+     exploratory or temporary changes before continuing, but keep intentional
+     proof-of-reproduction changes, such as a test that fails as expected.
   6. Merge the pull request through GitHub.
   7. Wait for the remote `CI` workflow on the exact `main` merge commit.
   8. Fast-forward local `codex` to the `main` merge commit before finishing, and
@@ -77,7 +80,7 @@ This file is intended for LLM based collaborators.
 ## Programmatic checks
 
 - `npm run typecheck`
-- `npm run test:unit`
+- `npm test`
 - `npm run build`
 - `npm run format:check`
 - `npm run test:e2e`

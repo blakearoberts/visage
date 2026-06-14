@@ -18,20 +18,15 @@ jobs:
           cache: npm
           node-version: 26
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Format
-        run: npm run format:check
+      - run: npm run format:check
 
-      - name: Typecheck
-        run: npx tsc --noEmit
+      - run: npm run typecheck
 
-      - name: Test
-        run: npm test --if-present
+      - run: npm test
 
-      - name: Build
-        run: npm run build
+      - run: npm run build
 
       - name: Pack
         run: |
@@ -57,8 +52,7 @@ jobs:
           cache: npm
           node-version: 26
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
       - name: Install mkcert
         run: |
@@ -70,28 +64,23 @@ jobs:
           name: package
           path: package
 
-      - name: Install simple example app
-        run: npm install --prefix examples/simple --package-lock=false --no-save ./package/*.tgz
+      - run: npm install --prefix examples/simple --package-lock=false --no-save ./package/*.tgz
 
-      - name: Install SSR example app
-        run: npm install --prefix examples/ssr --package-lock=false --no-save ./package/*.tgz
+      - run: npm install --prefix examples/ssr --package-lock=false --no-save ./package/*.tgz
 
-      - name: Install external IdP example app
-        run: npm install --prefix examples/external-idp --package-lock=false --no-save ./package/*.tgz
+      - run: npm install --prefix examples/external-idp --package-lock=false --no-save ./package/*.tgz
 
       - name: Pull e2e Docker images
         run: |
           docker compose -f docker-compose.images.yml pull
           docker pull traefik/whoami
 
-      - name: Test
+      - run: npm run test:e2e
         timeout-minutes: 3
         env:
           PLAYWRIGHT_BROWSER_CHANNEL: chrome
-        run: npm run test:e2e
 
-      - name: Upload e2e logs
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v7
         with:
           name: e2e-logs

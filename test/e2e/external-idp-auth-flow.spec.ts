@@ -1,7 +1,7 @@
 import {
   expect,
   request,
-  test,
+  test as base,
   type Locator,
   type Page,
 } from '@playwright/test';
@@ -22,50 +22,76 @@ const dexPassword = 'pass';
 const appComposeProject = 'external-idp-visage';
 const externalDexProject = 'external-idp';
 
-let logFile = '';
-let vite: ChildProcessWithoutNullStreams | undefined;
-let viteOutput = '';
+type ExternalIdpApp = {
+  readonly appUrl: string;
+};
+
+const test = base.extend<{}, { externalIdpApp: ExternalIdpApp }>({
+  externalIdpApp: [
+    async ({}, use, workerInfo) => {
+      let viteOutput = '';
+      let vite: ChildProcessWithoutNullStreams | undefined;
+      const logFile = join(
+        workerInfo.project.outputDir,
+        'external-idp-auth-flow',
+        `worker-${workerInfo.workerIndex}.log`,
+      );
+      const writeLog = (chunk: Uint8Array | string): void => {
+        const output = String(chunk);
+        viteOutput += output;
+        appendFileSync(logFile, output);
+      };
+
+      mkdirSync(dirname(logFile), { recursive: true });
+      writeFileSync(logFile, '');
+
+      try {
+        dockerCompose(['down', '--remove-orphans'], writeLog);
+        dockerCompose(['up', '-d'], writeLog);
+
+        vite = spawn('npm', ['run', 'dev'], {
+          cwd: example,
+          env: e2eEnv(),
+        });
+
+        vite.stdout.on('data', (chunk) => {
+          writeLog(chunk);
+        });
+        vite.stderr.on('data', (chunk) => {
+          writeLog(chunk);
+        });
+
+        await waitForApp(appUrl, vite, () => viteOutput);
+        await use({ appUrl });
+      } finally {
+        writeDockerComposeLogs(
+          appComposeProject,
+          'node_modules/.vite/visage/compose.yaml',
+          writeLog,
+        );
+        writeDockerComposeLogs(
+          externalDexProject,
+          'compose.idp.yaml',
+          writeLog,
+        );
+        if (vite !== undefined) {
+          await stopVite(vite);
+        }
+        dockerCompose(['down', '--remove-orphans'], writeLog);
+      }
+    },
+    { scope: 'worker' },
+  ],
+});
 
 test.describe('Visage external IdP authenticated upstream flow', () => {
   test.setTimeout(30_000);
 
-  test.beforeAll(async ({}, testInfo) => {
-    logFile = testInfo.outputPath('external-idp.log');
-    mkdirSync(dirname(logFile), { recursive: true });
-    writeFileSync(logFile, '');
-
-    dockerCompose(['down', '--remove-orphans']);
-    dockerCompose(['up', '-d']);
-
-    vite = spawn('npm', ['run', 'dev'], {
-      cwd: example,
-      env: e2eEnv(),
-    });
-
-    vite.stdout.on('data', (chunk) => {
-      writeLog(chunk);
-    });
-    vite.stderr.on('data', (chunk) => {
-      writeLog(chunk);
-    });
-
-    await waitForApp();
-  });
-
-  test.afterAll(async () => {
-    writeDockerComposeLogs(
-      appComposeProject,
-      'node_modules/.vite/visage/compose.yaml',
-    );
-    writeDockerComposeLogs(externalDexProject, 'compose.idp.yaml');
-    await stopVite();
-    dockerCompose(['down', '--remove-orphans']);
-  });
-
   test('logs in through an external IdP and renders the authenticated whoami response', async ({
     page,
+    externalIdpApp,
   }) => {
-    await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
+    await page.goto(externalIdpApp.appUrl, { waitUntil: 'domcontentloaded' });
     await completeDexLoginIfPresented(page);
 
     await expect(
@@ -87,14 +113,18 @@ test.describe('Visage external IdP authenticated upstream flow', () => {
   });
 });
 
-async function waitForApp(): Promise<void> {
+async function waitForApp(
+  appUrl: string,
+  vite: ChildProcessWithoutNullStreams,
+  getViteOutput: () => string,
+): Promise<void> {
   const context = await request.newContext({ ignoreHTTPSErrors: true });
   const timeout = Date.now() + 15_000;
 
   try {
     while (Date.now() < timeout) {
-      if (vite?.exitCode !== null) {
-        throw new Error(viteOutput);
+      if (vite.exitCode !== null) {
+        throw new Error(getViteOutput());
       }
 
       try {
@@ -113,7 +143,7 @@ async function waitForApp(): Promise<void> {
     await context.dispose();
   }
 
-  throw new Error(viteOutput || 'External IdP example did not start');
+  throw new Error(getViteOutput() || 'External IdP example did not start');
 }
 
 async function completeDexLoginIfPresented(page: Page): Promise<void> {
@@ -185,28 +215,30 @@ async function isVisible(locator: Locator, timeout = 5_000): Promise<boolean> {
   }
 }
 
-async function stopVite(): Promise<void> {
-  const running = vite;
-  if (running === undefined || running.exitCode !== null) {
+async function stopVite(vite: ChildProcessWithoutNullStreams): Promise<void> {
+  if (vite.exitCode !== null) {
     return;
   }
 
   await new Promise<void>((resolve) => {
     const timeout = setTimeout(() => {
-      running.kill('SIGKILL');
+      vite.kill('SIGKILL');
       resolve();
     }, 5_000);
 
-    running.once('exit', () => {
+    vite.once('exit', () => {
       clearTimeout(timeout);
       resolve();
     });
 
-    running.kill('SIGTERM');
+    vite.kill('SIGTERM');
   });
 }
 
-function dockerCompose(args: string[]): void {
+function dockerCompose(
+  args: string[],
+  writeLog: (chunk: Uint8Array | string) => void,
+): void {
   const result = spawnSync(
     'docker',
     ['compose', '-p', externalDexProject, '-f', 'compose.idp.yaml', ...args],
@@ -222,7 +254,11 @@ function dockerCompose(args: string[]): void {
     throw new Error('External IdP Docker Compose failed');
 }
 
-function writeDockerComposeLogs(project: string, file: string): void {
+function writeDockerComposeLogs(
+  project: string,
+  file: string,
+  writeLog: (chunk: Uint8Array | string) => void,
+): void {
   const result = spawnSync(
     'docker',
     ['compose', '-p', project, '-f', file, 'logs', '--no-color'],
@@ -233,10 +269,4 @@ function writeDockerComposeLogs(project: string, file: string): void {
   );
   writeLog(result.stdout);
   writeLog(result.stderr);
-}
-
-function writeLog(chunk: Uint8Array | string): void {
-  const output = String(chunk);
-  viteOutput += output;
-  appendFileSync(logFile, output);
 }

@@ -6,6 +6,7 @@ const browserChannel =
 export default defineConfig({
   testDir: 'test/e2e',
   globalSetup: './test/e2e/global-setup.ts',
+  retries: process.env.CI === 'true' ? 1 : 0,
   workers: 4,
   use: {
     ignoreHTTPSErrors: true,

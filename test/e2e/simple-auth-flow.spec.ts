@@ -1,7 +1,7 @@
 import {
   expect,
   request,
-  test,
+  test as base,
   type Locator,
   type Page,
 } from '@playwright/test';
@@ -20,43 +20,63 @@ const example = join(repo, 'examples/simple');
 const appUrl = process.env.VISAGE_E2E_URL ?? 'https://localhost:9001/';
 const dexEmail = process.env.VISAGE_E2E_EMAIL ?? 'user@example.com';
 const dexPassword = process.env.VISAGE_E2E_PASSWORD ?? 'pass';
-const appComposeProject = 'visage-simple-example-visage';
-let logFile = '';
-let vite: ChildProcessWithoutNullStreams | undefined;
-let viteOutput = '';
+const appComposeProject = 'simple-visage';
+
+type SimpleApp = {
+  readonly appUrl: string;
+  readonly directUrl: string;
+};
+
+const test = base.extend<{}, { simpleApp: SimpleApp }>({
+  simpleApp: [
+    async ({}, use, workerInfo) => {
+      let viteOutput = '';
+      const logFile = join(
+        workerInfo.project.outputDir,
+        'simple-auth-flow',
+        `worker-${workerInfo.workerIndex}.log`,
+      );
+      const writeLog = (chunk: Uint8Array | string): void => {
+        const output = String(chunk);
+        viteOutput += output;
+        appendFileSync(logFile, output);
+      };
+
+      mkdirSync(dirname(logFile), { recursive: true });
+      writeFileSync(logFile, '');
+
+      const vite = spawn('npm', ['run', 'dev'], {
+        cwd: example,
+        env: e2eEnv(),
+      });
+
+      vite.stdout.on('data', (chunk) => {
+        writeLog(chunk);
+      });
+      vite.stderr.on('data', (chunk) => {
+        writeLog(chunk);
+      });
+
+      try {
+        await waitForApp(appUrl, vite, () => viteOutput);
+        await use({ appUrl, directUrl: viteDirectUrl() });
+      } finally {
+        writeDockerComposeLogs(appComposeProject, writeLog);
+        await stopVite(vite);
+      }
+    },
+    { scope: 'worker' },
+  ],
+});
 
 test.describe('Visage simple authenticated upstream flow', () => {
   test.setTimeout(30_000);
 
-  test.beforeAll(async ({}, testInfo) => {
-    logFile = testInfo.outputPath('simple.log');
-    mkdirSync(dirname(logFile), { recursive: true });
-    writeFileSync(logFile, '');
-
-    vite = spawn('npm', ['run', 'dev'], {
-      cwd: example,
-      env: e2eEnv(),
-    });
-
-    vite.stdout.on('data', (chunk) => {
-      writeLog(chunk);
-    });
-    vite.stderr.on('data', (chunk) => {
-      writeLog(chunk);
-    });
-
-    await waitForApp();
-  });
-
-  test.afterAll(async () => {
-    writeDockerComposeLogs(appComposeProject);
-    await stopVite();
-  });
-
   test('logs in through Dex and renders the authenticated whoami response', async ({
     page,
+    simpleApp,
   }) => {
-    await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
+    await page.goto(simpleApp.appUrl, { waitUntil: 'domcontentloaded' });
     await completeDexLoginIfPresented(page);
 
     await expect(
@@ -72,8 +92,9 @@ test.describe('Visage simple authenticated upstream flow', () => {
 
   test('rejects direct requests to the Vite dev server', async ({
     request,
+    simpleApp,
   }) => {
-    const response = await request.get(viteDirectUrl(), {
+    const response = await request.get(simpleApp.directUrl, {
       maxRedirects: 0,
     });
 
@@ -82,14 +103,18 @@ test.describe('Visage simple authenticated upstream flow', () => {
   });
 });
 
-async function waitForApp(): Promise<void> {
+async function waitForApp(
+  appUrl: string,
+  vite: ChildProcessWithoutNullStreams,
+  getViteOutput: () => string,
+): Promise<void> {
   const context = await request.newContext({ ignoreHTTPSErrors: true });
   const timeout = Date.now() + 15_000;
 
   try {
     while (Date.now() < timeout) {
-      if (vite !== undefined && vite.exitCode !== null) {
-        throw new Error(viteOutput);
+      if (vite.exitCode !== null) {
+        throw new Error(getViteOutput());
       }
 
       try {
@@ -108,7 +133,7 @@ async function waitForApp(): Promise<void> {
     await context.dispose();
   }
 
-  throw new Error(viteOutput || 'Simple example did not start');
+  throw new Error(getViteOutput() || 'Simple example did not start');
 }
 
 async function completeDexLoginIfPresented(page: Page): Promise<void> {
@@ -183,28 +208,30 @@ async function isVisible(locator: Locator, timeout = 5_000): Promise<boolean> {
   }
 }
 
-async function stopVite(): Promise<void> {
-  const running = vite;
-  if (running === undefined || running.exitCode !== null) {
+async function stopVite(vite: ChildProcessWithoutNullStreams): Promise<void> {
+  if (vite.exitCode !== null) {
     return;
   }
 
   await new Promise<void>((resolve) => {
     const timeout = setTimeout(() => {
-      running.kill('SIGKILL');
+      vite.kill('SIGKILL');
       resolve();
     }, 5_000);
 
-    running.once('exit', () => {
+    vite.once('exit', () => {
       clearTimeout(timeout);
       resolve();
     });
 
-    running.kill('SIGTERM');
+    vite.kill('SIGTERM');
   });
 }
 
-function writeDockerComposeLogs(appComposeProject: string): void {
+function writeDockerComposeLogs(
+  appComposeProject: string,
+  writeLog: (chunk: Uint8Array | string) => void,
+): void {
   const result = spawnSync(
     'docker',
     [
@@ -248,10 +275,4 @@ function viteDirectHost(): string {
       .map((line) => line.trim())
       .find((line) => isIP(line)) ?? '127.0.0.1'
   );
-}
-
-function writeLog(chunk: Uint8Array | string): void {
-  const output = String(chunk);
-  viteOutput += output;
-  appendFileSync(logFile, output);
 }

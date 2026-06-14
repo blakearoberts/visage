@@ -1,7 +1,7 @@
 import {
   expect,
   request,
-  test,
+  test as base,
   type Locator,
   type Page,
 } from '@playwright/test';
@@ -17,52 +17,73 @@ import { e2eEnv, repo } from './environment';
 
 const example = join(repo, 'examples/ssr');
 const appUrl = 'https://localhost:9003/';
+const directUrl = 'http://127.0.0.1:6175/';
 const dexEmail = 'user@example.com';
 const dexPassword = 'pass';
-const appComposeProject = 'visage-ssr-example-visage';
-let logFile = '';
-let ssr: ChildProcessWithoutNullStreams | undefined;
-let ssrOutput = '';
+const appComposeProject = 'ssr-visage';
+
+type SsrApp = {
+  readonly appUrl: string;
+  readonly directUrl: string;
+};
+
+const test = base.extend<{}, { ssrApp: SsrApp }>({
+  ssrApp: [
+    async ({}, use, workerInfo) => {
+      let ssrOutput = '';
+      const logFile = join(
+        workerInfo.project.outputDir,
+        'ssr-auth-flow',
+        `worker-${workerInfo.workerIndex}.log`,
+      );
+      const writeLog = (chunk: Uint8Array | string): void => {
+        const output = String(chunk);
+        ssrOutput += output;
+        appendFileSync(logFile, output);
+      };
+
+      mkdirSync(dirname(logFile), { recursive: true });
+      writeFileSync(logFile, '');
+
+      const ssr = spawn('npm', ['run', 'dev'], {
+        cwd: example,
+        env: e2eEnv(),
+      });
+
+      ssr.stdout.on('data', (chunk) => {
+        writeLog(chunk);
+      });
+      ssr.stderr.on('data', (chunk) => {
+        writeLog(chunk);
+      });
+
+      try {
+        await waitForApp(appUrl, ssr, () => ssrOutput);
+        await use({ appUrl, directUrl });
+      } finally {
+        writeDockerComposeLogs(appComposeProject, writeLog);
+        await stopSsr(ssr);
+      }
+    },
+    { scope: 'worker' },
+  ],
+});
 
 test.describe('Visage SSR authenticated identity flow', () => {
   test.setTimeout(30_000);
 
-  test.beforeAll(async ({}, testInfo) => {
-    logFile = testInfo.outputPath('ssr.log');
-    mkdirSync(dirname(logFile), { recursive: true });
-    writeFileSync(logFile, '');
-
-    ssr = spawn('npm', ['run', 'dev'], {
-      cwd: example,
-      env: e2eEnv(),
-    });
-
-    ssr.stdout.on('data', (chunk) => {
-      writeLog(chunk);
-    });
-    ssr.stderr.on('data', (chunk) => {
-      writeLog(chunk);
-    });
-
-    await waitForApp();
-  });
-
-  test.afterAll(async () => {
-    writeDockerComposeLogs(appComposeProject);
-    await stopSsr();
-  });
-
   test('logs in through Dex and renders authenticated identity during SSR', async ({
     page,
+    ssrApp,
   }) => {
-    await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
+    await page.goto(ssrApp.appUrl, { waitUntil: 'domcontentloaded' });
     await completeDexLoginIfPresented(page);
 
     await expect(
       page.getByRole('heading', { name: 'Hello from Visage' }),
     ).toBeVisible();
 
-    const response = await page.context().request.get(appUrl, {
+    const response = await page.context().request.get(ssrApp.appUrl, {
       maxRedirects: 0,
     });
     expect(response.status()).toBe(200);
@@ -83,8 +104,11 @@ test.describe('Visage SSR authenticated identity flow', () => {
     ).toContainText('Hostname', { timeout: 5_000 });
   });
 
-  test('rejects direct requests to the SSR app server', async ({ request }) => {
-    const response = await request.get('http://127.0.0.1:6175/', {
+  test('rejects direct requests to the SSR app server', async ({
+    request,
+    ssrApp,
+  }) => {
+    const response = await request.get(ssrApp.directUrl, {
       maxRedirects: 0,
     });
 
@@ -93,14 +117,18 @@ test.describe('Visage SSR authenticated identity flow', () => {
   });
 });
 
-async function waitForApp(): Promise<void> {
+async function waitForApp(
+  appUrl: string,
+  ssr: ChildProcessWithoutNullStreams,
+  getSsrOutput: () => string,
+): Promise<void> {
   const context = await request.newContext({ ignoreHTTPSErrors: true });
   const timeout = Date.now() + 15_000;
 
   try {
     while (Date.now() < timeout) {
-      if (ssr !== undefined && ssr.exitCode !== null) {
-        throw new Error(ssrOutput);
+      if (ssr.exitCode !== null) {
+        throw new Error(getSsrOutput());
       }
 
       try {
@@ -119,7 +147,7 @@ async function waitForApp(): Promise<void> {
     await context.dispose();
   }
 
-  throw new Error(ssrOutput || 'SSR example did not start');
+  throw new Error(getSsrOutput() || 'SSR example did not start');
 }
 
 async function completeDexLoginIfPresented(page: Page): Promise<void> {
@@ -194,28 +222,30 @@ async function isVisible(locator: Locator, timeout = 5_000): Promise<boolean> {
   }
 }
 
-async function stopSsr(): Promise<void> {
-  const running = ssr;
-  if (running === undefined || running.exitCode !== null) {
+async function stopSsr(ssr: ChildProcessWithoutNullStreams): Promise<void> {
+  if (ssr.exitCode !== null) {
     return;
   }
 
   await new Promise<void>((resolve) => {
     const timeout = setTimeout(() => {
-      running.kill('SIGKILL');
+      ssr.kill('SIGKILL');
       resolve();
     }, 5_000);
 
-    running.once('exit', () => {
+    ssr.once('exit', () => {
       clearTimeout(timeout);
       resolve();
     });
 
-    running.kill('SIGINT');
+    ssr.kill('SIGINT');
   });
 }
 
-function writeDockerComposeLogs(appComposeProject: string): void {
+function writeDockerComposeLogs(
+  appComposeProject: string,
+  writeLog: (chunk: Uint8Array | string) => void,
+): void {
   const result = spawnSync(
     'docker',
     [
@@ -232,10 +262,4 @@ function writeDockerComposeLogs(appComposeProject: string): void {
 
   writeLog(result.stdout);
   writeLog(result.stderr);
-}
-
-function writeLog(chunk: Uint8Array | string): void {
-  const output = String(chunk);
-  ssrOutput += output;
-  appendFileSync(logFile, output);
 }

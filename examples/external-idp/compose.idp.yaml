@@ -8,3 +8,6 @@ services:
       - '5557:5557'
     volumes:
       - './dex.yml:/etc/dex/dex.yml:ro'
+networks:
+  default:
+    name: external-idp

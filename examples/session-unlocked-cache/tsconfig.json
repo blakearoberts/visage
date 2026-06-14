@@ -17,5 +17,5 @@
     "noUnusedParameters": true,
     "types": ["node"]
   },
-  "include": ["server.ts", "src"]
+  "include": ["sessioncache", "src", "server.ts", "vite.config.ts"]
 }

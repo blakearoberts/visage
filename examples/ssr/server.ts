@@ -24,10 +24,17 @@ const vite = await createViteServer({
 app.use(vite.middlewares);
 app.use(ssrHandler(vite));
 
-process.once('SIGINT', () => {
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
+
+async function shutdown() {
+  await vite.close();
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
   visage.close();
-  server.close();
-});
+  process.exit(0);
+}
 
 function ssrHandler(vite: ViteDevServer): connect.SimpleHandleFunction {
   return async function ssr(req, res) {

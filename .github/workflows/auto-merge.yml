@@ -1,9 +1,11 @@
 name: Auto-Merge
 
 on:
-  pull_request_target:
-    branches: [main]
-    types: [opened, reopened, synchronize]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches:
+      - 'dependabot/**'
 
 permissions:
   contents: write
@@ -14,9 +16,9 @@ jobs:
     name: Enable Auto-Merge
     runs-on: ubuntu-latest
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
-      github.event.pull_request.user.login == 'dependabot[bot]'
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
     steps:
       - id: app-token
         uses: actions/create-github-app-token@v3
@@ -28,22 +30,18 @@ jobs:
 
       - name: Enable auto-merge
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
 
-          mapfile -t changed_paths < <(gh pr diff --name-only "$PR_URL")
+          pr_url="$(
+            gh pr list \
+              --base main \
+              --head "$HEAD_BRANCH" \
+              --json url \
+              --jq '.[0].url // empty'
+          )"
 
-          for path in "${changed_paths[@]}"; do
-            case "$path" in
-              .github/workflows/release.yml|.github/workflows/publish.yml)
-                echo "$path requires manual merge; disabling auto-merge for $PR_URL."
-                gh pr merge --disable-auto "$PR_URL" || true
-                exit 0
-                ;;
-            esac
-          done
-
-          gh pr merge --auto --merge --delete-branch "$PR_URL"
+          gh pr merge --auto --merge --delete-branch "$pr_url"

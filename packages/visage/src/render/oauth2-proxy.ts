@@ -21,6 +21,7 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
 function renderOauth2ProxyConfig(config: VisageConfig): string {
   const data = {
     http_address: `127.0.0.1:${config.upstreams.oauth2_proxy.port}`,
+    metrics_address: '0.0.0.0:4181',
     provider: 'oidc',
     oidc_issuer_url: config.idp.oidc.issuer,
     ...(config.idp.oidc.algs === undefined

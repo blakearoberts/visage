@@ -869,6 +869,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
+  assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
   assert.equal(oauth2Proxy.login_url, 'https://app.local.test:9443/dex/auth');

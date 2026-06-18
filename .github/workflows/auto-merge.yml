@@ -15,16 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      (
-        (
-          github.event.pull_request.head.ref == 'codex' &&
-          github.event.pull_request.user.login == 'blakearoberts'
-        ) ||
-        (
-          startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
-          github.event.pull_request.user.login == 'dependabot[bot]'
-        )
-      )
+      startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
+      github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - id: app-token
         uses: actions/create-github-app-token@v3

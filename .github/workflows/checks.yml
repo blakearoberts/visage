@@ -75,7 +75,7 @@ jobs:
           docker compose -f docker-compose.images.yml pull
           docker pull traefik/whoami
 
-      - run: npm run test:e2e
+      - run: npm --ignore-scripts run test:e2e
         timeout-minutes: 3
         env:
           PLAYWRIGHT_BROWSER_CHANNEL: chrome

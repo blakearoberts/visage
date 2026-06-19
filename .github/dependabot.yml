@@ -3,9 +3,6 @@ updates:
   - package-ecosystem: 'npm'
     directories:
       - '/'
-      - '/examples/external-idp'
-      - '/examples/simple'
-      - '/examples/ssr'
     schedule:
       interval: 'weekly'
     groups:
@@ -21,7 +18,7 @@ updates:
         patterns:
           - '*'
   - package-ecosystem: 'docker-compose'
-    directory: '/'
+    directory: '/packages/visage'
     schedule:
       interval: 'weekly'
     groups:

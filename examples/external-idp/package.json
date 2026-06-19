@@ -3,12 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check": "npm run check:type",
+    "check:type": "npm run typecheck",
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@blakearoberts/visage": "file:../..",
+    "@blakearoberts/visage": "file:../../packages/visage",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

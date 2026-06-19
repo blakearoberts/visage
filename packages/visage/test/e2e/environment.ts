@@ -1,7 +1,10 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const repo = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
+export const packageRoot = dirname(
+  dirname(dirname(fileURLToPath(import.meta.url))),
+);
+export const repo = dirname(dirname(packageRoot));
 
 export const e2eCache =
   process.env.VISAGE_E2E_XDG_CACHE_HOME ??

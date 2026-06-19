@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "examples/*",
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "scripts": {
     "build": "npm run build --workspace packages",
@@ -12,6 +12,7 @@
     "check:format": "prettier --check .",
     "check:type": "npm run check:type --workspaces --if-present",
     "format": "prettier --write .",
+    "precheck:type": "npm run build --workspace packages",
     "test": "npm run test --workspace packages",
     "test:all": "npm run test:all --workspace packages --if-present",
     "test:e2e": "npm run test:e2e --workspace packages --if-present"

@@ -52,8 +52,7 @@ This file is intended for LLM based collaborators.
 
 ## Programmatic checks
 
-- `npm run typecheck`
+- `npm run check`
 - `npm test`
 - `npm run build`
-- `npm run format:check`
 - `npm run test:e2e`

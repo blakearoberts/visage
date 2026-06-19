@@ -20,9 +20,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run format:check
-
-      - run: npm run typecheck
+      - run: npm run check
 
       - run: npm test
 
@@ -31,7 +29,7 @@ jobs:
       - name: Pack
         run: |
           mkdir -p package
-          npm pack --pack-destination package
+          npm pack --workspace @blakearoberts/visage --pack-destination package
 
       - uses: actions/upload-artifact@v7
         with:
@@ -72,7 +70,7 @@ jobs:
 
       - name: Pull e2e Docker images
         run: |
-          docker compose -f docker-compose.images.yml pull
+          docker compose -f packages/visage/docker-compose.images.yml pull
           docker pull traefik/whoami
 
       - run: npm --ignore-scripts run test:e2e

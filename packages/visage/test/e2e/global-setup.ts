@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { e2eCache, repo } from './environment';
+import { e2eCache, packageRoot, repo } from './environment';
 
 export default function globalSetup(): void {
   const cache = join(repo, 'test-results/e2e-global-setup');
@@ -28,7 +28,7 @@ export default function globalSetup(): void {
       ].join('\n'),
     ],
     {
-      cwd: repo,
+      cwd: packageRoot,
       encoding: 'utf8',
       env: {
         ...process.env,

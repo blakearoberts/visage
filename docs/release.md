@@ -18,11 +18,11 @@ merge commits. See [Publish target resolution](#publish-target-resolution) for
 the exact inputs, outputs, and target selection rules.
 
 To start a non-patch release train after a stable release, make a normal pull
-request that sets `package.json` and `package-lock.json` to a prerelease seed
-for that train:
+request that sets `packages/visage/package.json` and `package-lock.json` to a
+prerelease seed for that train:
 
 ```sh
-npm version 0.1.0-rc.0 --no-git-tag-version --ignore-scripts
+npm version 0.1.0-rc.0 --workspace @blakearoberts/visage --no-git-tag-version --ignore-scripts
 ```
 
 When that PR merges and CI passes on `main`, the publish workflow publishes the
@@ -45,13 +45,13 @@ The prepare workflow:
 
 1. Verifies the run is still on the latest `main`.
 2. Verifies the release tag and npm package version do not already exist.
-3. Updates `package.json` and `package-lock.json`.
+3. Updates `packages/visage/package.json` and `package-lock.json`.
 4. Pushes a `release/v<version>` branch with the release automation app.
 5. Opens or updates a `chore(release): v<version>` pull request into `main`.
 
 The `Auto-Merge` workflow enables merge-commit auto-merge for release pull
 requests after verifying the release branch is in this repository and only
-changes `package.json` and `package-lock.json`.
+changes `packages/visage/package.json` and `package-lock.json`.
 
 If the release pull request checks fail, the pull request remains open as the
 failure artifact. No tag, npm package, npm dist-tag, or GitHub release is
@@ -128,8 +128,8 @@ after a stable release.
 - Auto-merge skips pull requests that touch `.github/workflows/release.yml` or
   `.github/workflows/publish.yml`.
 - Release pull requests must use a same-repository `release/v<version>` head
-  branch and only change `package.json` and `package-lock.json` to qualify for
-  auto-merge.
+  branch and only change `packages/visage/package.json` and `package-lock.json`
+  to qualify for auto-merge.
 - The repository has a `v* release tags` ruleset for `refs/tags/v*` that blocks
   creation, updates, and deletion except by the release automation app.
 

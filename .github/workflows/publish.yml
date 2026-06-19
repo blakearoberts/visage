@@ -43,8 +43,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          package_name="$(npm pkg get name | tr -d '"')"
-          checkout_version="$(npm pkg get version | tr -d '"')"
+          package_name="$(node -p "require('./packages/visage/package.json').name")"
+          checkout_version="$(node -p "require('./packages/visage/package.json').version")"
 
           merge_pr="$(
             gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/pulls" \

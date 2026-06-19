@@ -36,8 +36,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          current_version="$(node -p "require('./package.json').version")"
-          package_name="$(node -p "require('./package.json').name")"
+          current_version="$(node -p "require('./packages/visage/package.json').version")"
+          package_name="$(node -p "require('./packages/visage/package.json').name")"
           requested_version="${{ inputs.version }}"
 
           if [[ -z "$requested_version" ]]; then
@@ -108,10 +108,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          npm version "$PACKAGE_VERSION" --no-git-tag-version --ignore-scripts
+          npm version "$PACKAGE_VERSION" --workspace @blakearoberts/visage --no-git-tag-version --ignore-scripts
 
-          if git diff --quiet -- package.json package-lock.json; then
-            echo "Version bump did not change package.json or package-lock.json." >&2
+          if git diff --quiet -- packages/visage/package.json package-lock.json; then
+            echo "Version bump did not change packages/visage/package.json or package-lock.json." >&2
             exit 1
           fi
 
@@ -151,7 +151,7 @@ jobs:
           fi
 
           git checkout -B "$RELEASE_BRANCH"
-          git add package.json package-lock.json
+          git add packages/visage/package.json package-lock.json
           git commit -m "chore(release): $RELEASE_TAG"
 
           npm_url="https://www.npmjs.com/package/${PACKAGE_NAME}/v/${PACKAGE_VERSION}"

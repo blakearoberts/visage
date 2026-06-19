@@ -21,7 +21,7 @@ updates:
         patterns:
           - '*'
   - package-ecosystem: 'docker-compose'
-    directory: '/'
+    directory: '/packages/visage'
     schedule:
       interval: 'weekly'
     groups:

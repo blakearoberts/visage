@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Cut Stable Release'
+  short_description: 'Prepare and verify stable Visage releases'
+  default_prompt: 'Use $cut-stable-release to cut a stable Visage release.'

@@ -582,8 +582,8 @@ export function resolveConfig(
 function resolveComposeName(root: string): string {
   const name = (packageName(root) ?? basename(resolve(root)))
     .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
+    .replace(/^[^a-z0-9]+/, '')
+    .replace(/[^a-z0-9_-]+/g, '-');
   return `${name}-visage`;
 }
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -533,6 +533,24 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     config.upstreams.vite.locations['/'].headers?.['X-Auth-Request-Email'],
     '$auth_email',
   );
+});
+
+test('resolveConfig derives Compose project names from scoped package names', (t) => {
+  const root = tempCache(t);
+  writeFileSync(
+    join(root, 'package.json'),
+    JSON.stringify({ name: '@blakearoberts/visage' }),
+    'utf8',
+  );
+
+  const config = resolveConfig({
+    ...resolveOptions({}),
+    cache: join(root, '.visage'),
+    root,
+    edgeKey: 'edge-key',
+  });
+
+  assert.equal(config.compose.name, 'blakearoberts-visage-visage');
 });
 
 test('resolveConfig preserves the edge key without mutating Vite headers', (t) => {

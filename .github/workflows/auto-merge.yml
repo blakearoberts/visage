@@ -44,4 +44,9 @@ jobs:
               --jq '.[0].url // empty'
           )"
 
-          gh pr merge --auto --merge --delete-branch "$pr_url"
+          if [ -z "$pr_url" ]; then
+            echo "No open pull request found for $HEAD_BRANCH."
+            exit 0
+          fi
+
+          gh pr merge --auto --delete-branch "$pr_url"

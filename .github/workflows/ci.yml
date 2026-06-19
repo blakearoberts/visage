@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+  merge_group:
   push:
     branches:
       - main
       - 'codex/**'
-      - 'dependabot/**'
 
 concurrency:
   group: visage-${{ github.ref }}

@@ -20,8 +20,10 @@ export function createMiddlewareServer(): {
     let index = 0;
     const next = (error?: unknown): void => {
       if (error !== undefined) {
+        console.error(error);
         response.statusCode = 500;
-        response.end(error instanceof Error ? error.message : String(error));
+        response.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        response.end('Internal Server Error');
         return;
       }
 

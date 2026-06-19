@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check": "npm run check:type",
+    "check:type": "npm run typecheck",
     "dev": "tsx server.ts",
     "build": "vite build",
     "typecheck": "tsc --noEmit"

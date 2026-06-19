@@ -3,21 +3,18 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "examples/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspace packages",
     "check": "npm run check:format && npm run check:type",
     "check:format": "prettier --check .",
     "check:type": "npm run check:type --workspaces --if-present",
-    "example": "npm run example:simple",
-    "example:simple": "npm --prefix examples/simple run dev",
     "format": "prettier --write .",
-    "test": "npm run test --workspaces",
-    "test:all": "npm run test:all --workspaces --if-present",
-    "test:e2e": "npm run test:e2e --workspaces --if-present",
-    "test:e2e:setup": "npm run test:e2e:setup --workspaces --if-present",
-    "test:e2e:setup:examples": "npm run test:e2e:setup:examples --workspaces --if-present"
+    "test": "npm run test --workspace packages",
+    "test:all": "npm run test:all --workspace packages --if-present",
+    "test:e2e": "npm run test:e2e --workspace packages --if-present"
   },
   "devDependencies": {
     "prettier": "^3.8.3"

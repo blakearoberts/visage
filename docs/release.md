@@ -9,7 +9,7 @@ Releases are GitHub Actions-driven. The workflows are split by entrypoint:
   merges, or publishes a stable release with the `latest` dist-tag for release
   merges.
 - Manual `Prepare Release` workflow dispatch from `main` prepares a stable
-  version bump pull request and enables auto-merge for it.
+  version bump pull request for manual review and merge.
 
 ## RC builds
 
@@ -49,17 +49,17 @@ The prepare workflow:
 4. Pushes a `release/v<version>` branch with the release automation app.
 5. Opens or updates a `chore(release): v<version>` pull request into `main`.
 
-The `Auto-Merge` workflow enables merge-commit auto-merge for release pull
-requests after verifying the release branch is in this repository and only
-changes `packages/visage/package.json` and `package-lock.json`.
+The release pull request is the manual review point. It should use the
+same-repository `release/v<version>` branch and only change
+`packages/visage/package.json` and `package-lock.json`.
 
 If the release pull request checks fail, the pull request remains open as the
 failure artifact. No tag, npm package, npm dist-tag, or GitHub release is
 created.
 
-After the release pull request checks pass, GitHub auto-merges it to `main` with
-a merge commit. The `CI` workflow runs the shared checks on that merged `main`
-commit. After those checks pass, the publish workflow uses
+After the release pull request checks pass, merge it to `main` with a merge
+commit. The `CI` workflow runs the shared checks on that merged `main` commit.
+After those checks pass, the publish workflow uses
 [Publish target resolution](#publish-target-resolution) to publish with the
 `latest` dist-tag, then tags the merged `main` commit and creates the GitHub
 release. The release body starts with a package section that links to the exact
@@ -121,15 +121,13 @@ after a stable release.
   `AUTO_MERGE_APP_PRIVATE_KEY` must have contents and pull request write access
   so the Prepare Release workflow can open the version bump PR.
 - Only `blakearoberts` may dispatch stable releases.
-- The `main` branch ruleset must allow merge commits because the `Auto-Merge`
-  workflow enables auto-merge with `--merge`.
+- The `main` branch ruleset must allow merge commits because stable release pull
+  requests should be merged that way.
 - Release PR metadata must satisfy
   [Publish target resolution](#publish-target-resolution).
-- Auto-merge skips pull requests that touch `.github/workflows/release.yml` or
-  `.github/workflows/publish.yml`.
 - Release pull requests must use a same-repository `release/v<version>` head
   branch and only change `packages/visage/package.json` and `package-lock.json`
-  to qualify for auto-merge.
+  to match the release workflow's expected version-bump boundary.
 - The repository has a `v* release tags` ruleset for `refs/tags/v*` that blocks
   creation, updates, and deletion except by the release automation app.
 

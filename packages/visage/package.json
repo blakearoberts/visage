@@ -48,14 +48,11 @@
     "build": "rollup -c",
     "check": "npm run check:type",
     "check:type": "npm run typecheck",
-    "example": "npm run example:simple",
-    "example:simple": "npm --prefix ../../examples/simple run dev",
     "pretest:e2e": "npm run test:e2e:setup",
     "test": "tsx --test test/unit/*.test.ts",
     "test:all": "npm run typecheck && npm test && npm run test:e2e",
     "test:e2e": "playwright test test/e2e",
-    "test:e2e:setup": "npm run build && npm run test:e2e:setup:examples && playwright install chromium",
-    "test:e2e:setup:examples": "npm --prefix ../../examples/simple install --no-audit --no-fund && npm --prefix ../../examples/ssr install --no-audit --no-fund && npm --prefix ../../examples/external-idp install --no-audit --no-fund",
+    "test:e2e:setup": "npm run build && playwright install chromium",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

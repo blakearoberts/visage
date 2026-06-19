@@ -57,26 +57,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mkcert
 
+      - name: Pull Docker images
+        run: |
+          docker compose -f packages/visage/docker-compose.images.yml pull
+          docker pull traefik/whoami
+
       - uses: actions/download-artifact@v8
         with:
           name: package
           path: package
 
-      - run: npm install --prefix examples/simple --package-lock=false --no-save ./package/*.tgz
-
-      - run: npm install --prefix examples/ssr --package-lock=false --no-save ./package/*.tgz
-
-      - run: npm install --prefix examples/external-idp --package-lock=false --no-save ./package/*.tgz
-
-      - name: Pull e2e Docker images
+      - name: Extract package artifact
         run: |
-          docker compose -f packages/visage/docker-compose.images.yml pull
-          docker pull traefik/whoami
+          mkdir -p package/e2e
+          tar -xzf package/*.tgz -C package/e2e
 
       - run: npm --ignore-scripts run test:e2e
         timeout-minutes: 3
         env:
           PLAYWRIGHT_BROWSER_CHANNEL: chrome
+          VISAGE_E2E_PACKAGE_ENTRY: ${{ github.workspace }}/package/e2e/package/dist/index.js
 
       - if: always()
         uses: actions/upload-artifact@v7

@@ -10,26 +10,27 @@ These Playwright tests run the example apps through the local Visage auth stack:
 
 ## Defaults
 
-- Simple app URL: `VISAGE_E2E_URL` or `https://localhost:9001/`
-- External IdP app URL: `https://localhost:9002/`
-- SSR app URL: `https://localhost:9003/`
-- Direct example ports: simple `6173`, external IdP `6174`, SSR `6175`
-- `VISAGE_E2E_EMAIL`: `user@example.com`
-- `VISAGE_E2E_PASSWORD`: `pass`
+- Simple app URL: `https://localhost:9001/simple/`
+- SSR app URL: `https://localhost:9001/ssr/`
+- External IdP app URL: `https://localhost:9002/external-idp/`
+- Direct app ports: managed Dex examples `6173`, external IdP `6174`
+- Test logins: simple `simple@example.com` / `pass`, SSR `ssr@example.com` /
+  `pass`, external IdP `user@example.com` / `pass`
 
 ## Runtime
 
-Playwright global setup first runs real `ensureCerts()` calls with the installed
-`mkcert` executable to prepare the local CA and generate TLS material. In CI,
-Visage skips trust-store installation by default and Playwright ignores local
-HTTPS errors. After that, the simple, SSR, and external-IdP specs run in
-parallel with their own app processes and Docker Compose projects. The simple
-spec uses the plugin-managed Dex stack, the SSR spec starts Visage through
-`createVisageServer()`, and the external IdP spec starts Dex separately from
-`examples/external-idp`. From there, Visage serves each app through NGINX.
+Playwright global setup starts stable suite-level harness processes before the
+browser tests run. One managed-Dex Visage edge serves the simple and SSR apps on
+route prefixes, while the external-IdP scenario uses a separate Visage edge
+because each edge has one IdP configuration. Once those routes are ready, the
+specs run in parallel without owning app-process or Docker Compose lifecycle.
 
-Child process and container lifecycle output is written to each test's
-Playwright output directory as `simple.log`, `ssr.log`, or `external-idp.log`.
+Harness logs, Visage Compose output, generated TLS material, and the runtime URL
+manifest are written under `test-results/e2e-harness`.
+
+CI points `VISAGE_E2E_PACKAGE_ENTRY` at the `npm pack` artifact extracted from
+the CI job, so e2e validates the packed package. Local runs omit that variable
+and use the workspace package build created by `pretest:e2e`.
 
 ## First-Time Setup
 

@@ -1,0 +1,19 @@
+{
+  "name": "@blakearoberts/prettier-plugin-helm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./index.ts",
+  "scripts": {
+    "build": "true",
+    "test": "node --test",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "prettier": "^3.9.5"
+  }
+}

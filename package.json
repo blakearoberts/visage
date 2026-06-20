@@ -10,7 +10,7 @@
     "build": "npm run build --workspace packages",
     "check": "npm run check:format && npm run check:type",
     "check:format": "prettier --check .",
-    "check:type": "npm run check:type --workspaces --if-present",
+    "check:type": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
     "pretest:e2e": "npm run build",
     "precheck:type": "npm run build --workspace packages",

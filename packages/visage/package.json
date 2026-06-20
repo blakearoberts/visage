@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/blakearoberts/visage/issues"
   },
-  "homepage": "https://github.com/blakearoberts/visage#readme",
+  "homepage": "https://github.com/blakearoberts/visage/tree/main/packages/visage#readme",
   "keywords": [
     "authentication",
     "hmr",
@@ -38,7 +38,7 @@
     "docker-compose.images.yml"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "publishConfig": {
     "access": "public",
@@ -48,7 +48,7 @@
     "build": "rollup -c",
     "check": "npm run typecheck",
     "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

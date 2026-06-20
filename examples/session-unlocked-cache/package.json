@@ -1,5 +1,6 @@
 {
   "name": "session-unlocked-cache",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,7 +8,7 @@
     "check:type": "npm run typecheck",
     "dev": "tsx server.ts",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@blakearoberts/visage": "file:../../packages/visage",

@@ -1,5 +1,6 @@
 {
   "name": "external-idp",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +10,7 @@
     "dev": "vite",
     "start:idp": "docker compose -p external-idp -f compose.idp.yaml up -d",
     "stop:idp": "docker compose -p external-idp down",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@blakearoberts/visage": "file:../../packages/visage",

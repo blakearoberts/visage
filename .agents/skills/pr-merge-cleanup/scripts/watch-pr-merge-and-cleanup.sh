@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-timeout_seconds=43200
-poll_interval_seconds=60
+timeout_seconds=900
+poll_interval_seconds=15
 dry_run=0
 
 usage() {

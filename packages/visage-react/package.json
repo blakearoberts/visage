@@ -1,0 +1,10 @@
+{
+  "name": "@blakearoberts/visage-react",
+  "private": true,
+  "description": "Visage extensions for React.",
+  "type": "module",
+  "scripts": {
+    "build": "true",
+    "test": "true"
+  }
+}

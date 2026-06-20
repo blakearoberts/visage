@@ -1,0 +1,2 @@
+image: oauth2-proxy-operator:latest
+imagePullPolicy: IfNotPresent

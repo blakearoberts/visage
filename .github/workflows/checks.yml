@@ -12,21 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-node@v6
         with:
           cache: npm
           node-version: 26
 
       - run: npm ci
-
       - run: npm run check
-
       - run: npm test
-
       - run: npm run build
-
-      - name: Pack
+      - name: npm pack
         run: |
           mkdir -p package
           npm pack --workspace @blakearoberts/visage --pack-destination package
@@ -44,7 +39,6 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-node@v6
         with:
           cache: npm

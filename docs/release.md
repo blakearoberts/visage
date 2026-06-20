@@ -3,15 +3,41 @@
 Releases are GitHub Actions-driven. The workflows are split by entrypoint:
 
 - The reusable `Checks` workflow contains the shared CI and E2E jobs.
-- The `CI` workflow runs the shared checks for pull requests and pushes.
-- The `Publish` workflow runs after a successful `CI` workflow for a push to
+- The `CI` workflow runs the shared checks for pull requests and pushes to
+  `main`.
+- The `Publish` workflow runs after a successful `CI` workflow from a push to
   `main`; it publishes the next RC to npm with the `next` dist-tag for ordinary
   merges, or publishes a stable release with the `latest` dist-tag for release
   merges.
 - Manual `Prepare Release` workflow dispatch from `main` prepares a stable
   version bump pull request for manual review and merge.
 
-## RC builds
+```mermaid
+flowchart LR
+  stable_start([workflow_dispatch])
+  rc_start(["push.branches: [main]"])
+  stop([Stop])
+
+  subgraph "Prepare Release"
+    release_prepare["Prepare Release PR"]
+  end
+  subgraph "Checks"
+    checks_ci["CI"]
+    checks_e2e["E2E"]
+  end
+  subgraph "Publish"
+    publish_publish["Publish Package"]
+  end
+
+  stable_start --> release_prepare
+  rc_start --> checks_ci
+  release_prepare --> checks_ci
+  checks_ci --> checks_e2e
+  checks_e2e --> publish_publish
+  publish_publish --> stop
+```
+
+## Release Candidates
 
 Merging to `main` publishes an RC after CI passes, except for stable release
 merge commits. See [Publish target resolution](#publish-target-resolution) for
@@ -33,7 +59,7 @@ body starts with a package section that links to the exact npm package version,
 then includes GitHub-generated release notes from the previous reachable `v*`
 tag, including merged pull request links and the compare link.
 
-## Stable releases
+## Stable Releases
 
 Use the `Prepare Release` workflow's manual dispatch from the `main` branch.
 
@@ -77,7 +103,7 @@ version, and npm `latest` dist-tag all identify the same stable version. The npm
 `next` dist-tag is only moved by RC publishes and may remain on the latest RC
 after a stable release.
 
-## Publish target resolution
+## Publish Target Resolution
 
 ### Inputs Needed
 
@@ -124,15 +150,9 @@ after a stable release.
 - The `main` branch ruleset must allow merge commits because stable release pull
   requests should be merged that way.
 - Release PR metadata must satisfy
-  [Publish target resolution](#publish-target-resolution).
+  [Publish Target Resolution](#publish-target-resolution).
 - Release pull requests must use a same-repository `release/v<version>` head
   branch and only change `packages/visage/package.json` and `package-lock.json`
   to match the release workflow's expected version-bump boundary.
 - The repository has a `v* release tags` ruleset for `refs/tags/v*` that blocks
   creation, updates, and deletion except by the release automation app.
-
-## After the first stable release
-
-No `0.0.1`-specific cleanup is required. The publish workflow follows
-[Publish target resolution](#publish-target-resolution) for ordinary merges
-after the first stable release.

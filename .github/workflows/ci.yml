@@ -2,13 +2,11 @@ name: CI
 
 on:
   workflow_dispatch:
+  merge_group:
   pull_request:
     branches: [main]
-  merge_group:
   push:
-    branches:
-      - main
-      - 'codex/**'
+    branches: [main]
 
 concurrency:
   group: visage-${{ github.ref }}

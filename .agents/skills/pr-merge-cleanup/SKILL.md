@@ -35,14 +35,17 @@ bash .agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh --dry
 
 After the cleanup script succeeds, decide whether the invoking Codex thread can
 be archived automatically. If cleanup completed normally and no user follow-up
-is needed, include this exact line by itself in the final response:
+is needed, include these exact lines by themselves in the final response:
 
 ```text
 CODEX_PR_MERGE_CLEANUP_ARCHIVE=ready
+CODEX_PR_MERGE_CLEANUP_THREAD_ID=<current CODEX_THREAD_ID>
 ```
 
-Do not include the marker if cleanup fails, times out, leaves the local branch
-present, or leaves any follow-up action for the user.
+Replace `<current CODEX_THREAD_ID>` with the `CODEX_THREAD_ID` value from the
+resumed Codex turn. Do not include the markers if cleanup fails, times out,
+leaves the local branch present, the current thread id is unavailable, or leaves
+any follow-up action for the user.
 
 ## Safety Rules
 

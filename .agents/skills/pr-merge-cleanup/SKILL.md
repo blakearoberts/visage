@@ -31,6 +31,19 @@ For validation without mutating Git state:
 bash .agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh --dry-run
 ```
 
+## Archive Decision
+
+After the cleanup script succeeds, decide whether the invoking Codex thread can
+be archived automatically. If cleanup completed normally and no user follow-up
+is needed, include this exact line by itself in the final response:
+
+```text
+CODEX_PR_MERGE_CLEANUP_ARCHIVE=ready
+```
+
+Do not include the marker if cleanup fails, times out, leaves the local branch
+present, or leaves any follow-up action for the user.
+
 ## Safety Rules
 
 - Never force-delete a branch. The script must use `git branch -d`, not

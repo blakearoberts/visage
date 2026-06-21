@@ -1,6 +1,6 @@
 # Visage Auto-Merge Action Iteration Handoff
 
-Updated: 2026-06-21T16:07:45Z
+Updated: 2026-06-21T21:24:40Z
 
 ## Purpose
 
@@ -18,20 +18,23 @@ action/skill behavior changes.
 
 ## Current State
 
-- Latest observed successful test PR: #59
-- PR #59: in this repository
-- PR #59 merge commit: `9d4e9e591645c00941d9bf2fc78f217ce39559cf`
-- PR #59 post-action final cwd state: detached at `origin/main` on the merge
-  commit.
-- PR #59 local and remote PR branch cleanup: `codex/add-auto-merge-handoff-doc`
+- Latest observed successful test PR: #60
+- PR #60: in this repository
+- PR #60 merge commit: `43ccf9935306d6455c96878d19ee1dfa639d5ac7`
+- PR #60 post-action final cwd state: primary checkout on local `main`,
+  fast-forwarded to `origin/main` at the merge commit.
+- PR #60 local and remote PR branch cleanup: `codex/post-merge-checkout-sync`
   was deleted locally and remotely.
 - AM-1 status: done in PR #59 by implementation; terminal-noise and token-usage
   impact were not inspectable from the follow-up thread.
-- AM-5 local implementation: primary checkout sync and linked-worktree detached
-  sync are implemented on this branch and pending PR/action verification.
-- Open backlog items: AM-2 through AM-7; AM-5 is in progress, AM-7 is a small
-  action preflight enhancement, AM-2 remains next after those small action
-  slices, and AM-6 still needs its full structured result contract.
+- AM-5 status: done in PR #60 by implementation and action verification.
+- AM-8 local implementation: the action now invokes the watcher directly and no
+  longer starts a child Codex cleanup session on success; watcher failures still
+  hand off to ephemeral Codex RCA without saving a child session. Pending
+  review, PR, and action verification.
+- Open backlog items: AM-2, AM-3, AM-4, AM-6, and AM-7; AM-7 is a small action
+  preflight enhancement, AM-2 remains the next failure-path behavior slice, and
+  AM-6 still needs its full structured result contract.
 - Action/skill files to inspect before changing behavior:
   - `.codex/environments/auto-merge-and-cleanup.sh`
   - `.agents/skills/pr-merge-cleanup/SKILL.md`
@@ -95,6 +98,18 @@ Update rules:
   after it is merged or the user explicitly accepts a non-merged local result.
 
 ## Iteration Log
+
+### PR #60: Post-Merge Checkout Sync
+
+- Status: merged
+- PR: #60
+- Merge commit: `43ccf9935306d6455c96878d19ee1dfa639d5ac7`
+- Result: action completed successfully, merged the PR, switched the primary
+  checkout to local `main`, fast-forwarded it from `origin/main`, and deleted
+  local branch `codex/post-merge-checkout-sync`.
+- Important follow-up: the cleanup work itself completed quickly, but the child
+  Codex session still consumed a large fixed model-turn budget because the
+  action used `codex exec resume --last` for deterministic success cleanup.
 
 ### PR #59: Compact Cleanup Handoff Prompt
 
@@ -191,6 +206,23 @@ CODEX_PR_MERGE_CLEANUP_THREAD_ID=<cleanup-session-thread-id>
 - The cleanup session consumed roughly 82k tokens even though Bash did the
   substantive watcher work.
 
+## Known Facts From PR #60
+
+- PR #60 merged at `2026-06-21T17:18:26Z`.
+- The watcher cleanup command completed successfully in about 2.3 seconds.
+- The action still launched a child Codex session through
+  `codex exec resume --last`.
+- The child session reread project and skill instructions, ran the deterministic
+  watcher command, then ran three simple verification commands.
+- The child session had four model steps and the app recorded about 95k total
+  tokens for the archived cleanup session.
+- The child session inherited the user's configured model and reasoning effort.
+  In the observed run that was a high-reasoning configuration, which is
+  disproportionate for deterministic happy-path cleanup.
+- PR #60 showed that AM-3 is too narrow when framed only as "agent-side
+  polling": even when the watcher exits almost immediately, the action still
+  pays for a full child Codex turn.
+
 ## Backlog
 
 ### AM-1: Compact Handoff To Avoid Source Echoing
@@ -248,22 +280,24 @@ PR #58 later had checks rerun and eventually merged. If the watcher exits on
 failure, the user can re-trigger the action after rerunning checks. That is
 acceptable if the failure report is clear.
 
-### AM-3: Stop Agent-Side Polling
+### AM-3: Stop Agent-Side Waiting
 
 Status: open
 
 Problem:
 
-The cleanup agent repeatedly polled the long-running Bash watcher and generated
-low-value progress messages, consuming many tokens.
+The cleanup agent can spend model turns waiting for or checking on deterministic
+Bash work. PR #58 showed this during a long wait. PR #60 showed the same broader
+problem even without a long wait: a nearly immediate happy-path cleanup still
+paid for multiple model steps.
 
 Goal:
 
-Invert the control flow so the deterministic watcher owns waiting, and the agent
-only handles the final result. Possible shapes:
+Keep waiting and routine verification in Bash. A model should only be involved
+when there is information that needs interpretation or RCA. Possible shapes:
 
 - action runs watcher directly and only invokes Codex after watcher exits,
-- action writes a compact result file and resumes Codex only once,
+- action writes a compact result file and resumes Codex only for failures,
 - watcher calls `codex exec resume` with a final result prompt,
 - action uses a result file plus `--output-last-message` only for the final
   archive decision.
@@ -276,8 +310,9 @@ Likely files:
 
 Acceptance target:
 
-The agent should not burn a turn every 30 seconds while Bash waits. A happy-path
-cleanup should have near-constant low token use.
+The agent should not burn turns while Bash waits or after Bash has already
+completed deterministic success cleanup. A happy-path cleanup should have
+near-zero model token use.
 
 ### AM-4: Resolve Parent App Session Archive Semantics
 
@@ -309,7 +344,7 @@ product support needed to propagate that id into action terminals?
 
 ### AM-5: Post-Merge Checkout Sync
 
-Status: in progress
+Status: done in PR #60
 
 Problem:
 
@@ -336,7 +371,7 @@ Only switch to local `main` when cwd is the primary checkout, not an auxiliary
 worktree. In linked worktrees, local `main` may already be checked out
 elsewhere, so detached `origin/main` is safer.
 
-Current local implementation:
+Merged implementation:
 
 - Primary checkout detection uses Git internals:
   `git rev-parse --path-format=absolute --git-common-dir` must equal
@@ -401,12 +436,64 @@ Notes:
 - Keep this as an action preflight step; the cleanup watcher should not own PR
   readiness.
 
+### AM-8: Model-Free Happy Path
+
+Status: in progress
+
+Problem:
+
+The action invokes `codex exec resume --last` after enabling auto-merge, even
+when the rest of the flow is deterministic. PR #60 merged almost immediately and
+the watcher finished in about 2.3 seconds, but the child Codex session still
+consumed about 95k total tokens because it loaded instructions, ran the watcher,
+verified state, and emitted archive markers.
+
+Goal:
+
+Run successful cleanup without starting a model turn. The action should invoke
+the watcher directly after enabling auto-merge, keep watcher output on stdout,
+and exit successfully when cleanup succeeds.
+
+Likely files:
+
+- `.codex/environments/auto-merge-and-cleanup.sh`
+- `.agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh`
+- `.agents/skills/pr-merge-cleanup/SKILL.md`
+
+Design notes:
+
+- Reserve Codex for failure or RCA paths, not deterministic success cleanup.
+- Failure-path RCA is allowed to inherit the user's configured model and
+  reasoning effort. Token minimization matters on success; diagnosis quality
+  matters on failure.
+- Do not block this slice on parent-session archive semantics. AM-4 still owns
+  whether the invoking app session can be archived. A child cleanup session is
+  not worth creating solely so it can archive itself.
+- This item is a sharper follow-up to AM-3. AM-3 covers agent-side waiting in
+  general; AM-8 is the concrete happy-path optimization.
+
+Current local implementation:
+
+- `.codex/environments/auto-merge-and-cleanup.sh` enables auto-merge, then runs
+  the watcher directly with `PR_MERGE_CLEANUP_PR_URL` and
+  `PR_MERGE_CLEANUP_BRANCH`.
+- The action no longer calls `codex exec resume`, writes an archive-decision
+  file, parses archive markers, or archives the child cleanup session.
+- If the watcher exits non-zero, the action invokes `codex exec --ephemeral` for
+  RCA with the PR URL, branch, and watcher exit status, then preserves the
+  watcher failure status as the action exit code.
+- The RCA output stays in the action terminal. It is not archived because no
+  saved child session should be created for one-shot failure reporting.
+- `.agents/skills/pr-merge-cleanup/SKILL.md` now clarifies that the skill is for
+  manual cleanup, failure follow-up, or explicit user requests, not the action
+  happy path.
+
 ## Suggested Chunk Order
 
-1. Complete AM-5 through PR/action verification.
+1. Complete AM-8 through review, PR, and action verification.
 2. AM-7: mark draft PRs ready before enabling auto-merge.
 3. AM-2: early exit on failed required checks.
-4. AM-3: restructure to avoid agent-side polling.
+4. AM-3: eliminate remaining agent-side waiting or routine verification.
 5. AM-6: full result format and RCA contract, once the watcher/action boundary
    is clearer.
 6. AM-4: research and prove whether parent app-session archive is possible.

@@ -18,6 +18,10 @@ Run `scripts/watch-pr-merge-and-cleanup.sh` from this skill directory. Do not
 spend tool calls rediscovering the PR or branch when the invocation environment
 provides them.
 
+The Visage auto-merge environment action calls the watcher directly on its happy
+path. Use this skill for manual cleanup, failure follow-up, or explicit user
+requests that need an agent to interpret the watcher result.
+
 Required inputs:
 
 - PR URL: GitHub pull request URL to watch.

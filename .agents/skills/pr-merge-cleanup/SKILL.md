@@ -10,42 +10,28 @@ description:
 
 ## Workflow
 
+If the prompt provides a PR URL and local branch, use them as the cleanup
+inputs. Do not rediscover the PR or branch unless the provided values are
+missing or invalid.
+
 Run `scripts/watch-pr-merge-and-cleanup.sh` from this skill directory. Do not
 spend tool calls rediscovering the PR or branch when the invocation environment
 provides them.
 
-Required environment variables:
+Required inputs:
 
-- `PR_MERGE_CLEANUP_PR_URL`: GitHub pull request URL to watch.
-- `PR_MERGE_CLEANUP_BRANCH`: local PR branch to switch away from and delete.
+- PR URL: GitHub pull request URL to watch.
+- Local branch: local PR branch to switch away from and delete.
 
 Command:
 
 ```bash
+PR_MERGE_CLEANUP_PR_URL=<pr-url> \
+PR_MERGE_CLEANUP_BRANCH=<local-branch> \
 bash .agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh
 ```
 
-For validation without mutating Git state:
-
-```bash
-bash .agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh --dry-run
-```
-
-## Archive Decision
-
-After the cleanup script succeeds, decide whether the invoking Codex thread can
-be archived automatically. If cleanup completed normally and no user follow-up
-is needed, include these exact lines by themselves in the final response:
-
-```text
-CODEX_PR_MERGE_CLEANUP_ARCHIVE=ready
-CODEX_PR_MERGE_CLEANUP_THREAD_ID=<current CODEX_THREAD_ID>
-```
-
-Replace `<current CODEX_THREAD_ID>` with the `CODEX_THREAD_ID` value from the
-resumed Codex turn. Do not include the markers if cleanup fails, times out,
-leaves the local branch present, the current thread id is unavailable, or leaves
-any follow-up action for the user.
+For validation without mutating Git state, add `--dry-run` to the command.
 
 ## Safety Rules
 

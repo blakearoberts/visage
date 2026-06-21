@@ -74,6 +74,33 @@ set_pr_metadata() {
   fi
 }
 
+read_terminal_required_check() {
+  local checks_status
+  local terminal_check
+
+  set +e
+  terminal_check="$(
+    gh pr checks "$pr_url" \
+      --required \
+      --json name,state,bucket,workflow,description,link \
+      --jq 'map(select(.bucket == "fail" or .bucket == "cancel"))[0] // empty | [(.name // ""), (.state // ""), (.bucket // ""), (.workflow // ""), (.description // ""), (.link // "")] | join("\u001f")'
+  )"
+  checks_status="$?"
+  set -e
+
+  if [ -n "$terminal_check" ]; then
+    echo "$terminal_check"
+    return 0
+  fi
+
+  if [ "$checks_status" -ne 0 ] && [ "$checks_status" -ne 8 ]; then
+    echo "Unable to read required PR checks for $canonical_url; gh exited with status $checks_status." >&2
+    return 2
+  fi
+
+  return 1
+}
+
 is_primary_checkout() {
   local git_common_dir
   local git_dir
@@ -120,7 +147,7 @@ print_plan() {
   elif [ "$state" = "CLOSED" ]; then
     echo "Dry run: PR is closed without a merge; cleanup would stop without changing Git state."
   else
-    echo "Dry run: PR is not merged yet; cleanup would wait before changing Git state."
+    echo "Dry run: PR is not merged yet; cleanup would watch required checks, stop on terminal required-check failure, and wait before changing Git state."
   fi
 }
 
@@ -134,8 +161,31 @@ fi
 deadline=$(( $(date +%s) + timeout_seconds ))
 
 while [ "$state" != "MERGED" ]; do
+  failed_check=""
+
   if [ "$state" = "CLOSED" ]; then
     echo "PR closed without merging: $canonical_url" >&2
+    exit 1
+  fi
+
+  set +e
+  failed_check="$(read_terminal_required_check)"
+  failed_check_status="$?"
+  set -e
+
+  if [ "$failed_check_status" -eq 0 ]; then
+    IFS=$'\037' read -r failed_check_name failed_check_state failed_check_bucket failed_check_workflow failed_check_description failed_check_link <<<"$failed_check"
+    echo "Required PR check reached terminal ${failed_check_bucket} state before merge: $failed_check_name" >&2
+    echo "PR: $canonical_url" >&2
+    echo "Check state: $failed_check_state" >&2
+    echo "Workflow: ${failed_check_workflow:-<none>}" >&2
+    echo "Details: ${failed_check_link:-<none>}" >&2
+    if [ -n "$failed_check_description" ]; then
+      echo "Description: $failed_check_description" >&2
+    fi
+    echo "Safest next action: inspect or rerun the failed required check, then rerun the auto-merge action." >&2
+    exit 1
+  elif [ "$failed_check_status" -ne 1 ]; then
     exit 1
   fi
 

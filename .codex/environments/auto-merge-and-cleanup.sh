@@ -46,7 +46,8 @@ Watcher exit status: $cleanup_status
 
 Perform RCA for the failed cleanup. Inspect the PR, checks, and local Git state
 as needed. Report the likely root cause, the evidence, and the safest next
-action.
+action. Start with required PR checks because the watcher exits early when a
+required check fails or is canceled before merge.
 
 Do not rerun the auto-merge action or mutating cleanup watcher, do not merge or
 close the PR, do not delete branches, and do not archive any Codex session.

@@ -74,6 +74,29 @@ set_pr_metadata() {
   fi
 }
 
+is_primary_checkout() {
+  local git_common_dir
+  local git_dir
+
+  git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
+  git_dir="$(git rev-parse --absolute-git-dir)"
+
+  [ "$git_common_dir" = "$git_dir" ]
+}
+
+sync_post_merge_checkout() {
+  local base_ref="$1"
+
+  if is_primary_checkout; then
+    echo "Primary checkout detected; switching to $base_ref and fast-forwarding from origin/$base_ref."
+    git switch "$base_ref"
+    git pull --ff-only origin "$base_ref"
+  else
+    echo "Linked worktree detected; switching to detached origin/$base_ref."
+    git switch --detach "origin/$base_ref"
+  fi
+}
+
 print_plan() {
   local state="$1"
   local merged_at="$2"
@@ -89,7 +112,11 @@ print_plan() {
   echo "Local branch: $branch"
 
   if [ "$state" = "MERGED" ]; then
-    echo "Dry run: would fetch/prune origin, require a clean tree, switch to detached origin/$base_ref, then delete $branch with git branch -d."
+    if is_primary_checkout; then
+      echo "Dry run: would fetch/prune origin, require a clean tree, switch to local $base_ref, fast-forward it from origin/$base_ref, then delete $branch with git branch -d."
+    else
+      echo "Dry run: would fetch/prune origin, require a clean tree, switch to detached origin/$base_ref, then delete $branch with git branch -d."
+    fi
   elif [ "$state" = "CLOSED" ]; then
     echo "Dry run: PR is closed without a merge; cleanup would stop without changing Git state."
   else
@@ -140,12 +167,7 @@ if ! git rev-parse --verify --quiet "refs/remotes/origin/$base_ref^{commit}" >/d
   exit 1
 fi
 
-current_branch="$(git branch --show-current || true)"
-if [ "$current_branch" = "$branch" ]; then
-  git switch --detach "origin/$base_ref"
-else
-  echo "Already off cleanup branch $branch; current branch is ${current_branch:-detached}."
-fi
+sync_post_merge_checkout "$base_ref"
 
 if git show-ref --verify --quiet "refs/heads/$branch"; then
   if ! git branch -d -- "$branch"; then

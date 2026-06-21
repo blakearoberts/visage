@@ -14,6 +14,13 @@ if [ -z "$branch" ]; then
   exit 1
 fi
 
+is_draft="$(gh pr view "$pr_url" --json isDraft --jq '.isDraft')"
+
+if [ "$is_draft" = "true" ]; then
+  echo "Marking draft PR ready for review: $pr_url"
+  gh pr ready "$pr_url"
+fi
+
 gh pr merge --auto --merge "$pr_url"
 
 set +e

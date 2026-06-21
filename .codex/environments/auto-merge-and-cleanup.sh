@@ -16,12 +16,25 @@ gh pr merge --auto --merge "$pr_url"
 archive_decision_file="$(mktemp)"
 trap 'rm -f "$archive_decision_file"' EXIT
 
-if PR_MERGE_CLEANUP_PR_URL="$pr_url" \
-  PR_MERGE_CLEANUP_BRANCH="$branch" \
-  codex exec resume \
-    --last \
-    --output-last-message "$archive_decision_file" \
-    'Use $pr-merge-cleanup'; then
+if codex exec resume \
+  --last \
+  --output-last-message "$archive_decision_file" \
+  - <<PROMPT
+Use \$pr-merge-cleanup.
+
+PR URL: $pr_url
+Local branch: $branch
+
+This request came from the Visage Codex Auto-Merge action. After the skill
+finishes, include these exact lines by themselves if and only if cleanup
+succeeded, no user follow-up is needed, and CODEX_THREAD_ID is available:
+
+CODEX_PR_MERGE_CLEANUP_ARCHIVE=ready
+CODEX_PR_MERGE_CLEANUP_THREAD_ID=<current CODEX_THREAD_ID>
+
+Do not include archive markers otherwise.
+PROMPT
+then
   if grep -Fxq "$archive_marker" "$archive_decision_file"; then
     thread_id="$(
       sed -n "s/^$thread_id_marker_prefix//p" "$archive_decision_file" | tail -n 1

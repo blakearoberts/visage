@@ -1,6 +1,6 @@
 # Visage Auto-Merge Action Iteration Handoff
 
-Updated: 2026-06-20T22:44:27Z
+Updated: 2026-06-21T04:48:16Z
 
 ## Purpose
 
@@ -23,7 +23,10 @@ action/skill behavior changes.
 - PR #58 merge commit: `ce544f31aea5cf860a73c84dd9a1cd4e8f3111d6`
 - Last observed local test state after manual cleanup: clean `main` tracking
   `origin/main`
-- Open backlog items: AM-1 through AM-6
+- AM-1 local implementation: compact stdin handoff is implemented on this branch
+  and pending PR/action verification.
+- Open backlog items: AM-2 through AM-6; AM-6 still needs its full structured
+  result contract.
 - Action/skill files to inspect before changing behavior:
   - `.codex/environments/auto-merge-and-cleanup.sh`
   - `.agents/skills/pr-merge-cleanup/SKILL.md`
@@ -177,7 +180,7 @@ CODEX_PR_MERGE_CLEANUP_THREAD_ID=<cleanup-session-thread-id>
 
 ### AM-1: Compact Handoff To Avoid Source Echoing
 
-Status: open
+Status: in progress
 
 Problem:
 
@@ -200,6 +203,10 @@ Notes:
 - Environment variables did not propagate through `codex exec resume` in PR #58,
   so prefer prompt text or a compact handoff file over shell env for data the
   resumed agent must see.
+- This branch implements the prompt-text path by passing the PR URL, local
+  branch, and Codex action archive-marker contract through stdin to
+  `codex exec resume`. It intentionally does not change watcher polling
+  behavior.
 
 ### AM-2: Exit Early On Required CI Failure
 
@@ -344,6 +351,12 @@ Include:
 
 This could be a temp file, JSON file, line protocol, or shell-sourced key/value
 file. Prefer the simplest format that Bash can write and the agent can read.
+
+Current partial slice:
+
+- This branch keeps the archive-marker contract in the action prompt while the
+  skill remains focused on PR watching and local branch cleanup. The broader
+  structured result contract remains open.
 
 ## Suggested Chunk Order
 

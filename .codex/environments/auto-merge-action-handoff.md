@@ -1,6 +1,6 @@
 # Visage Auto-Merge Action Iteration Handoff
 
-Updated: 2026-06-21T04:48:16Z
+Updated: 2026-06-21T16:07:45Z
 
 ## Purpose
 
@@ -18,15 +18,20 @@ action/skill behavior changes.
 
 ## Current State
 
-- Latest observed successful test PR: #58
-- PR #58: in this repository
-- PR #58 merge commit: `ce544f31aea5cf860a73c84dd9a1cd4e8f3111d6`
-- Last observed local test state after manual cleanup: clean `main` tracking
-  `origin/main`
-- AM-1 local implementation: compact stdin handoff is implemented on this branch
-  and pending PR/action verification.
-- Open backlog items: AM-2 through AM-6; AM-6 still needs its full structured
-  result contract.
+- Latest observed successful test PR: #59
+- PR #59: in this repository
+- PR #59 merge commit: `9d4e9e591645c00941d9bf2fc78f217ce39559cf`
+- PR #59 post-action final cwd state: detached at `origin/main` on the merge
+  commit.
+- PR #59 local and remote PR branch cleanup: `codex/add-auto-merge-handoff-doc`
+  was deleted locally and remotely.
+- AM-1 status: done in PR #59 by implementation; terminal-noise and token-usage
+  impact were not inspectable from the follow-up thread.
+- AM-5 local implementation: primary checkout sync and linked-worktree detached
+  sync are implemented on this branch and pending PR/action verification.
+- Open backlog items: AM-2 through AM-7; AM-5 is in progress, AM-7 is a small
+  action preflight enhancement, AM-2 remains next after those small action
+  slices, and AM-6 still needs its full structured result contract.
 - Action/skill files to inspect before changing behavior:
   - `.codex/environments/auto-merge-and-cleanup.sh`
   - `.agents/skills/pr-merge-cleanup/SKILL.md`
@@ -90,6 +95,16 @@ Update rules:
   after it is merged or the user explicitly accepts a non-merged local result.
 
 ## Iteration Log
+
+### PR #59: Compact Cleanup Handoff Prompt
+
+- Status: merged
+- PR: #59
+- Merge commit: `9d4e9e591645c00941d9bf2fc78f217ce39559cf`
+- Result: action completed successfully, merged the PR, deleted the local PR
+  branch, and the remote PR branch was gone after pruning.
+- Important follow-up: the checkout was left detached at `origin/main`, and
+  local `main` remained stale until manually fast-forwarded.
 
 ### PR #58: Resume Cleanup From Last Codex Thread
 
@@ -180,7 +195,7 @@ CODEX_PR_MERGE_CLEANUP_THREAD_ID=<cleanup-session-thread-id>
 
 ### AM-1: Compact Handoff To Avoid Source Echoing
 
-Status: in progress
+Status: done in PR #59
 
 Problem:
 
@@ -203,10 +218,9 @@ Notes:
 - Environment variables did not propagate through `codex exec resume` in PR #58,
   so prefer prompt text or a compact handoff file over shell env for data the
   resumed agent must see.
-- This branch implements the prompt-text path by passing the PR URL, local
-  branch, and Codex action archive-marker contract through stdin to
-  `codex exec resume`. It intentionally does not change watcher polling
-  behavior.
+- PR #59 implemented the prompt-text path by passing the PR URL, local branch,
+  and Codex action archive-marker contract through stdin to `codex exec resume`.
+  It intentionally did not change watcher polling behavior.
 
 ### AM-2: Exit Early On Required CI Failure
 
@@ -295,13 +309,13 @@ product support needed to propagate that id into action terminals?
 
 ### AM-5: Post-Merge Checkout Sync
 
-Status: open
+Status: in progress
 
 Problem:
 
-After PR #58 merged, the action left the primary checkout clean but detached at
-the merge commit. Manual cleanup switched to `main`, ran `fetch --prune`, and
-pulled.
+After PR #58 and PR #59 merged, the action left the primary checkout clean but
+detached at the merge commit. Manual cleanup switched to `main`, ran
+`fetch --prune`, and pulled.
 
 Goal:
 
@@ -322,11 +336,15 @@ Only switch to local `main` when cwd is the primary checkout, not an auxiliary
 worktree. In linked worktrees, local `main` may already be checked out
 elsewhere, so detached `origin/main` is safer.
 
-Open design question:
+Current local implementation:
 
-How should the script reliably distinguish primary checkout from auxiliary
-worktree? Candidate signals include `git worktree list --porcelain`, the cwd
-matching the first worktree entry, and/or Codex worktree path conventions.
+- Primary checkout detection uses Git internals:
+  `git rev-parse --path-format=absolute --git-common-dir` must equal
+  `git rev-parse --absolute-git-dir`.
+- Primary checkout final state: switch to the local base branch and fast-forward
+  it from `origin/<base>`.
+- Linked worktree final state: switch to detached `origin/<base>`.
+- Local PR branch deletion still uses `git branch -d`.
 
 ### AM-6: Result Format And RCA Contract
 
@@ -358,13 +376,40 @@ Current partial slice:
   skill remains focused on PR watching and local branch cleanup. The broader
   structured result contract remains open.
 
+### AM-7: Mark Draft PR Ready Before Auto-Merge
+
+Status: open
+
+Problem:
+
+The Codex app Create PR flow may leave a pull request in draft state. A draft PR
+cannot complete an auto-merge flow until it is marked ready for review.
+
+Goal:
+
+Before enabling auto-merge, have the action detect whether the current PR is a
+draft and mark it ready for review if needed.
+
+Likely file:
+
+- `.codex/environments/auto-merge-and-cleanup.sh`
+
+Notes:
+
+- PR #60 was opened as draft, making this easy to verify against the current
+  workflow shape.
+- Keep this as an action preflight step; the cleanup watcher should not own PR
+  readiness.
+
 ## Suggested Chunk Order
 
-1. AM-1 plus a small part of AM-6: compact handoff/result contract.
-2. AM-2: early exit on failed required checks.
-3. AM-5: post-merge checkout sync.
+1. Complete AM-5 through PR/action verification.
+2. AM-7: mark draft PRs ready before enabling auto-merge.
+3. AM-2: early exit on failed required checks.
 4. AM-3: restructure to avoid agent-side polling.
-5. AM-4: research and prove whether parent app-session archive is possible.
+5. AM-6: full result format and RCA contract, once the watcher/action boundary
+   is clearer.
+6. AM-4: research and prove whether parent app-session archive is possible.
 
 Do not try to solve all items in one PR. The fastest path is small, reviewable
 behavior changes with a real action test after each merge.
@@ -376,8 +421,8 @@ Use targeted checks, not broad churn.
 - `bash -n .codex/environments/auto-merge-and-cleanup.sh`
 - `bash -n .agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh`
 - `git diff --check`
-- `bash .agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh --dry-run`
-  with mocked or real safe PR context where applicable
+- `PR_MERGE_CLEANUP_PR_URL=<pr-url> PR_MERGE_CLEANUP_BRANCH=<local-branch> bash .agents/skills/pr-merge-cleanup/scripts/watch-pr-merge-and-cleanup.sh --dry-run`
+  with mocked or real safe PR context where applicable.
 - Mock `gh`, `git`, and `codex` in `PATH` for action-script control-flow tests
   when the change affects orchestration.
 - Manual AGENTS.md diff audit before final response.

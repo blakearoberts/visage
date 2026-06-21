@@ -1,6 +1,6 @@
 # Visage Auto-Merge Action Iteration Handoff
 
-Updated: 2026-06-21T20:37:25Z
+Updated: 2026-06-21T21:24:40Z
 
 ## Purpose
 
@@ -28,10 +28,13 @@ action/skill behavior changes.
 - AM-1 status: done in PR #59 by implementation; terminal-noise and token-usage
   impact were not inspectable from the follow-up thread.
 - AM-5 status: done in PR #60 by implementation and action verification.
-- Open backlog items: AM-2, AM-3, AM-4, AM-6, AM-7, and AM-8; AM-8 is the
-  highest-leverage efficiency slice, AM-7 is a small action preflight
-  enhancement, AM-2 remains the next failure-path behavior slice, and AM-6 still
-  needs its full structured result contract.
+- AM-8 local implementation: the action now invokes the watcher directly and no
+  longer starts a child Codex cleanup session on success; watcher failures still
+  hand off to ephemeral Codex RCA without saving a child session. Pending
+  review, PR, and action verification.
+- Open backlog items: AM-2, AM-3, AM-4, AM-6, and AM-7; AM-7 is a small action
+  preflight enhancement, AM-2 remains the next failure-path behavior slice, and
+  AM-6 still needs its full structured result contract.
 - Action/skill files to inspect before changing behavior:
   - `.codex/environments/auto-merge-and-cleanup.sh`
   - `.agents/skills/pr-merge-cleanup/SKILL.md`
@@ -341,7 +344,7 @@ product support needed to propagate that id into action terminals?
 
 ### AM-5: Post-Merge Checkout Sync
 
-Status: in progress
+Status: done in PR #60
 
 Problem:
 
@@ -368,7 +371,7 @@ Only switch to local `main` when cwd is the primary checkout, not an auxiliary
 worktree. In linked worktrees, local `main` may already be checked out
 elsewhere, so detached `origin/main` is safer.
 
-Current local implementation:
+Merged implementation:
 
 - Primary checkout detection uses Git internals:
   `git rev-parse --path-format=absolute --git-common-dir` must equal
@@ -435,7 +438,7 @@ Notes:
 
 ### AM-8: Model-Free Happy Path
 
-Status: open
+Status: in progress
 
 Problem:
 
@@ -460,18 +463,34 @@ Likely files:
 Design notes:
 
 - Reserve Codex for failure or RCA paths, not deterministic success cleanup.
-- If a failure path still invokes Codex, override the action's model or
-  reasoning effort so it does not inherit an expensive user-default
-  configuration.
+- Failure-path RCA is allowed to inherit the user's configured model and
+  reasoning effort. Token minimization matters on success; diagnosis quality
+  matters on failure.
 - Do not block this slice on parent-session archive semantics. AM-4 still owns
   whether the invoking app session can be archived. A child cleanup session is
   not worth creating solely so it can archive itself.
 - This item is a sharper follow-up to AM-3. AM-3 covers agent-side waiting in
   general; AM-8 is the concrete happy-path optimization.
 
+Current local implementation:
+
+- `.codex/environments/auto-merge-and-cleanup.sh` enables auto-merge, then runs
+  the watcher directly with `PR_MERGE_CLEANUP_PR_URL` and
+  `PR_MERGE_CLEANUP_BRANCH`.
+- The action no longer calls `codex exec resume`, writes an archive-decision
+  file, parses archive markers, or archives the child cleanup session.
+- If the watcher exits non-zero, the action invokes `codex exec --ephemeral` for
+  RCA with the PR URL, branch, and watcher exit status, then preserves the
+  watcher failure status as the action exit code.
+- The RCA output stays in the action terminal. It is not archived because no
+  saved child session should be created for one-shot failure reporting.
+- `.agents/skills/pr-merge-cleanup/SKILL.md` now clarifies that the skill is for
+  manual cleanup, failure follow-up, or explicit user requests, not the action
+  happy path.
+
 ## Suggested Chunk Order
 
-1. AM-8: run happy-path cleanup without starting a child Codex session.
+1. Complete AM-8 through review, PR, and action verification.
 2. AM-7: mark draft PRs ready before enabling auto-merge.
 3. AM-2: early exit on failed required checks.
 4. AM-3: eliminate remaining agent-side waiting or routine verification.

@@ -1,6 +1,6 @@
 # Visage Auto-Merge Action Iteration Handoff
 
-Updated: 2026-06-21T21:24:40Z
+Updated: 2026-06-21T21:57:18Z
 
 ## Purpose
 
@@ -19,6 +19,7 @@ action/skill behavior changes.
 ## Current State
 
 - Latest observed successful test PR: #60
+- Latest merged implementation PR: #61
 - PR #60: in this repository
 - PR #60 merge commit: `43ccf9935306d6455c96878d19ee1dfa639d5ac7`
 - PR #60 post-action final cwd state: primary checkout on local `main`,
@@ -28,13 +29,14 @@ action/skill behavior changes.
 - AM-1 status: done in PR #59 by implementation; terminal-noise and token-usage
   impact were not inspectable from the follow-up thread.
 - AM-5 status: done in PR #60 by implementation and action verification.
-- AM-8 local implementation: the action now invokes the watcher directly and no
-  longer starts a child Codex cleanup session on success; watcher failures still
-  hand off to ephemeral Codex RCA without saving a child session. Pending
-  review, PR, and action verification.
-- Open backlog items: AM-2, AM-3, AM-4, AM-6, and AM-7; AM-7 is a small action
-  preflight enhancement, AM-2 remains the next failure-path behavior slice, and
-  AM-6 still needs its full structured result contract.
+- AM-8 status: done in PR #61 by implementation. The action now invokes the
+  watcher directly and no longer starts a child Codex cleanup session on
+  success; watcher failures still hand off to ephemeral Codex RCA without saving
+  a child session.
+- AM-7 status: in progress on branch `codex/ready-draft-before-auto-merge`.
+- Open backlog items: AM-2, AM-3, AM-4, and AM-6; AM-2 remains the next
+  failure-path behavior slice, and AM-6 still needs its full structured result
+  contract.
 - Action/skill files to inspect before changing behavior:
   - `.codex/environments/auto-merge-and-cleanup.sh`
   - `.agents/skills/pr-merge-cleanup/SKILL.md`
@@ -98,6 +100,17 @@ Update rules:
   after it is merged or the user explicitly accepts a non-merged local result.
 
 ## Iteration Log
+
+### PR #61: Model-Free Happy Path
+
+- Status: merged
+- PR: #61
+- Merge commit: `22d26cc8c386e00b4d5ee3d20c41ac74eb5f5814`
+- Result: the action now runs the deterministic cleanup watcher directly after
+  enabling auto-merge, exits immediately on successful watcher cleanup, and
+  invokes ephemeral Codex RCA only when the watcher fails.
+- Important follow-up: PRs opened as draft still need to be marked ready for
+  review before GitHub can enable or complete auto-merge.
 
 ### PR #60: Post-Merge Checkout Sync
 
@@ -413,7 +426,7 @@ Current partial slice:
 
 ### AM-7: Mark Draft PR Ready Before Auto-Merge
 
-Status: open
+Status: in progress
 
 Problem:
 
@@ -435,10 +448,13 @@ Notes:
   workflow shape.
 - Keep this as an action preflight step; the cleanup watcher should not own PR
   readiness.
+- Current local implementation checks `isDraft` with `gh pr view` and runs
+  `gh pr ready` before `gh pr merge --auto --merge` only when the PR is still a
+  draft.
 
 ### AM-8: Model-Free Happy Path
 
-Status: in progress
+Status: done in PR #61
 
 Problem:
 
@@ -472,7 +488,7 @@ Design notes:
 - This item is a sharper follow-up to AM-3. AM-3 covers agent-side waiting in
   general; AM-8 is the concrete happy-path optimization.
 
-Current local implementation:
+Merged implementation:
 
 - `.codex/environments/auto-merge-and-cleanup.sh` enables auto-merge, then runs
   the watcher directly with `PR_MERGE_CLEANUP_PR_URL` and
@@ -490,13 +506,12 @@ Current local implementation:
 
 ## Suggested Chunk Order
 
-1. Complete AM-8 through review, PR, and action verification.
-2. AM-7: mark draft PRs ready before enabling auto-merge.
-3. AM-2: early exit on failed required checks.
-4. AM-3: eliminate remaining agent-side waiting or routine verification.
-5. AM-6: full result format and RCA contract, once the watcher/action boundary
+1. Complete AM-7 through review, PR, and action verification.
+2. AM-2: early exit on failed required checks.
+3. AM-3: eliminate remaining agent-side waiting or routine verification.
+4. AM-6: full result format and RCA contract, once the watcher/action boundary
    is clearer.
-6. AM-4: research and prove whether parent app-session archive is possible.
+5. AM-4: research and prove whether parent app-session archive is possible.
 
 Do not try to solve all items in one PR. The fastest path is small, reviewable
 behavior changes with a real action test after each merge.

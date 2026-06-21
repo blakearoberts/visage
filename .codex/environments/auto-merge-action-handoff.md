@@ -1,6 +1,6 @@
 # Visage Auto-Merge Action Iteration Handoff
 
-Updated: 2026-06-21T06:43:11Z
+Updated: 2026-06-21T16:07:45Z
 
 ## Purpose
 
@@ -29,8 +29,9 @@ action/skill behavior changes.
   impact were not inspectable from the follow-up thread.
 - AM-5 local implementation: primary checkout sync and linked-worktree detached
   sync are implemented on this branch and pending PR/action verification.
-- Open backlog items: AM-2 through AM-6; AM-5 is in progress, AM-2 remains next
-  after AM-5, and AM-6 still needs its full structured result contract.
+- Open backlog items: AM-2 through AM-7; AM-5 is in progress, AM-7 is a small
+  action preflight enhancement, AM-2 remains next after those small action
+  slices, and AM-6 still needs its full structured result contract.
 - Action/skill files to inspect before changing behavior:
   - `.codex/environments/auto-merge-and-cleanup.sh`
   - `.agents/skills/pr-merge-cleanup/SKILL.md`
@@ -375,14 +376,40 @@ Current partial slice:
   skill remains focused on PR watching and local branch cleanup. The broader
   structured result contract remains open.
 
+### AM-7: Mark Draft PR Ready Before Auto-Merge
+
+Status: open
+
+Problem:
+
+The Codex app Create PR flow may leave a pull request in draft state. A draft PR
+cannot complete an auto-merge flow until it is marked ready for review.
+
+Goal:
+
+Before enabling auto-merge, have the action detect whether the current PR is a
+draft and mark it ready for review if needed.
+
+Likely file:
+
+- `.codex/environments/auto-merge-and-cleanup.sh`
+
+Notes:
+
+- PR #60 was opened as draft, making this easy to verify against the current
+  workflow shape.
+- Keep this as an action preflight step; the cleanup watcher should not own PR
+  readiness.
+
 ## Suggested Chunk Order
 
 1. Complete AM-5 through PR/action verification.
-2. AM-2: early exit on failed required checks.
-3. AM-3: restructure to avoid agent-side polling.
-4. AM-6: full result format and RCA contract, once the watcher/action boundary
+2. AM-7: mark draft PRs ready before enabling auto-merge.
+3. AM-2: early exit on failed required checks.
+4. AM-3: restructure to avoid agent-side polling.
+5. AM-6: full result format and RCA contract, once the watcher/action boundary
    is clearer.
-5. AM-4: research and prove whether parent app-session archive is possible.
+6. AM-4: research and prove whether parent app-session archive is possible.
 
 Do not try to solve all items in one PR. The fastest path is small, reviewable
 behavior changes with a real action test after each merge.

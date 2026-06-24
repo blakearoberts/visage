@@ -10,7 +10,7 @@ while [ "$pr_create_attempts" -gt 0 ]; do
   branch="$(git branch --show-current || true)"
 
   if [ -n "$branch" ]; then
-    pr_url="$(gh pr status --json url --jq '.currentBranch.url // empty')"
+    pr_url="$(gh pr list --head "$branch" --state open --json url --jq '.[0].url // empty')"
   fi
 
   if [ -n "$pr_url" ]; then

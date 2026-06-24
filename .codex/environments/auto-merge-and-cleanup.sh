@@ -1,16 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-pr_url="$(gh pr status --json url --jq '.currentBranch.url // empty')"
-branch="$(git branch --show-current || true)"
+pr_create_attempts=15
+pr_create_poll_interval_seconds=2
+pr_url=""
+branch=""
 
-if [ -z "$pr_url" ]; then
-  echo "No PR found for the current branch." >&2
+while [ "$pr_create_attempts" -gt 0 ]; do
+  branch="$(git branch --show-current || true)"
+
+  if [ -n "$branch" ]; then
+    pr_url="$(gh pr status --json url --jq '.currentBranch.url // empty')"
+  fi
+
+  if [ -n "$pr_url" ]; then
+    break
+  fi
+
+  pr_create_attempts=$((pr_create_attempts - 1))
+  if [ "$pr_create_attempts" -gt 0 ]; then
+    sleep "$pr_create_poll_interval_seconds"
+  fi
+done
+
+if [ -z "$branch" ]; then
+  echo "Timed out waiting for the create PR flow to check out a local branch." >&2
   exit 1
 fi
 
-if [ -z "$branch" ]; then
-  echo "Current checkout is not on a local branch." >&2
+if [ -z "$pr_url" ]; then
+  echo "Timed out waiting for a PR for the current branch: $branch" >&2
   exit 1
 fi
 

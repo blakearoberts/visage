@@ -118,10 +118,18 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     t,
     {
       services: {
+        nginx: {
+          volumes: ['./nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro'],
+        },
+        oauth2_proxy: {
+          volumes: ['./oauth2-proxy-extra.yml:/etc/oauth2-proxy/extra.yml:ro'],
+        },
         api: {
           image: 'example/api:test',
           command: ['serve'],
+          environment: { API_MODE: 'test' },
           depends_on: ['nginx'],
+          volumes: ['./api.yml:/etc/api/api.yml:ro'],
           upstream: {
             locations: { '/api/': {} },
           },
@@ -154,6 +162,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     './certs:/etc/nginx/certs:ro',
     './nginx.conf:/etc/nginx/nginx.conf:ro',
     './nginx-edge-key.js:/etc/nginx/edge-key.js:ro',
+    './nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro',
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
     'host.docker.internal:host-gateway',
@@ -161,6 +170,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.equal(compose.services.oauth2_proxy.restart, 'always');
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
+    './oauth2-proxy-extra.yml:/etc/oauth2-proxy/extra.yml:ro',
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
@@ -169,8 +179,10 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.api, {
     image: 'example/api:test',
     command: ['serve'],
+    environment: { API_MODE: 'test' },
     depends_on: ['nginx'],
     restart: 'on-failure',
+    volumes: ['./api.yml:/etc/api/api.yml:ro'],
   });
   assert.deepEqual(compose.networks, {
     default: {

@@ -266,6 +266,10 @@ export type VisageService = {
    */
   readonly command?: readonly string[];
   /**
+   * Environment variables rendered into the Compose service.
+   */
+  readonly environment?: { readonly [name: string]: string };
+  /**
    * Compose service dependencies that should start before this service.
    */
   readonly depends_on?: readonly string[];
@@ -278,6 +282,10 @@ export type VisageService = {
    * @defaultValue `'on-failure'`
    */
   readonly restart?: 'always' | 'no' | 'on-failure' | 'unless-stopped';
+  /**
+   * Volume mounts rendered into the Compose service.
+   */
+  readonly volumes?: readonly string[];
   /**
    * Optional upstream override for this service. Omit this to create a default
    * upstream from the service name.

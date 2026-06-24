@@ -34,7 +34,10 @@ function renderComposeConfig(config: VisageConfig): string {
         ? {
             dex: {
               ...config.services.dex,
-              volumes: [`${config.files.dex[0]}:${config.files.dex[1]}:ro`],
+              volumes: [
+                `${config.files.dex[0]}:${config.files.dex[1]}:ro`,
+                ...(config.services.dex.volumes ?? []),
+              ],
               ...(config.oauth2.public
                 ? {}
                 : { secrets: [config.secrets.clientSecret] }),
@@ -46,15 +49,19 @@ function renderComposeConfig(config: VisageConfig): string {
         secrets: [config.secrets.edgeKey],
         ports: [`127.0.0.1:${config.port}:${config.port}`],
         volumes: [
-          config.files.certs,
-          config.files.nginx,
-          config.files.nginxEdgeKeyJS,
-        ].map(([from, to]) => `${from}:${to}:ro`),
+          ...[
+            config.files.certs,
+            config.files.nginx,
+            config.files.nginxEdgeKeyJS,
+          ].map(([from, to]) => `${from}:${to}:ro`),
+          ...(config.services.nginx.volumes ?? []),
+        ],
       },
       oauth2_proxy: {
         ...config.services.oauth2_proxy,
         volumes: [
           `${config.files.oauth2Proxy[0]}:${config.files.oauth2Proxy[1]}:ro`,
+          ...(config.services.oauth2_proxy.volumes ?? []),
         ],
         secrets: [
           config.secrets.cookieSecret,

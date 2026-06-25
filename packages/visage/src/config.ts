@@ -69,6 +69,7 @@ type OIDCEndpointConfig = {
   readonly authorization?: string;
   readonly token?: string;
   readonly jwks?: string;
+  readonly algs?: readonly string[];
   readonly end_session_endpoint?: string;
 };
 
@@ -639,6 +640,7 @@ function resolveIdpConfig({
   const issuer = new URL(idp.issuer);
   const oidc = {
     issuer: idp.issuer,
+    ...(idp.algs === undefined ? {} : { algs: idp.algs }),
     ...(idp.end_session_endpoint === undefined
       ? {}
       : { end_session_endpoint: idp.end_session_endpoint }),

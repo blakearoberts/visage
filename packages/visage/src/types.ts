@@ -210,6 +210,14 @@ export type VisageExternalIdpOptions = {
    */
   readonly jwks?: string;
   /**
+   * JWT signing algorithms allowed by OAuth2 Proxy when verifying OIDC tokens.
+   * Rendered as OAuth2 Proxy `oidc_enabled_signing_algs`.
+   *
+   * @defaultValue OAuth2 Proxy uses discovered provider algorithms, or `RS256`
+   * when none are discovered or specified.
+   */
+  readonly algs?: readonly string[];
+  /**
    * OIDC end-session endpoint URL. When configured, Visage routes OAuth2 Proxy
    * sign-out redirects through this endpoint so the provider session can be
    * ended as part of the sign-out flow.

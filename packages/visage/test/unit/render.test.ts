@@ -851,6 +851,7 @@ test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t
   assert.equal(oauth2Proxy.login_url, undefined);
   assert.equal(oauth2Proxy.redeem_url, undefined);
   assert.equal(oauth2Proxy.oidc_jwks_url, undefined);
+  assert.equal(oauth2Proxy.oidc_enabled_signing_algs, undefined);
 });
 
 test('writeOauth2ProxyConfig whitelists external IdP end-session redirects', (t) => {
@@ -878,6 +879,7 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
       authorization: '/authorize',
+      algs: ['RS512'],
     },
   });
 
@@ -894,6 +896,7 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
   );
   assert.equal(oauth2Proxy.redeem_url, 'http://idp.localhost:5557/idp/token');
   assert.equal(oauth2Proxy.oidc_jwks_url, 'http://idp.localhost:5557/idp/keys');
+  assert.deepEqual(oauth2Proxy.oidc_enabled_signing_algs, ['RS512']);
 });
 
 test('writeOauth2ProxyConfig renders configured cookie policy', (t) => {

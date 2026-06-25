@@ -179,11 +179,13 @@ test('resolveOptions applies IdP overrides', () => {
   const options = resolveOptions({
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
+      algs: ['RS512'],
     },
   });
 
   assert.deepEqual(options.idp, {
     issuer: 'http://idp.localhost:5557/idp',
+    algs: ['RS512'],
   });
 });
 
@@ -351,6 +353,7 @@ test('resolveConfig supports external IdP upstreams', (t) => {
     },
   });
   assert.equal(config.idp.oidc.issuer, 'http://idp.localhost:5557/idp');
+  assert.equal(config.idp.oidc.algs, undefined);
   assert.equal(config.idp.oidc.end_session_endpoint, undefined);
   assert.equal('authorization' in config.idp, false);
   assert.equal('token' in config.idp, false);
@@ -362,9 +365,11 @@ test('resolveConfig supports external IdP end-session endpoints', (t) => {
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
       end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
+      algs: ['RS512'],
     },
   });
 
+  assert.deepEqual(config.idp.oidc.algs, ['RS512']);
   assert.equal(
     config.idp.oidc.end_session_endpoint,
     'http://idp.localhost:5557/idp/logout',

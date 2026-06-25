@@ -23,6 +23,9 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     http_address: `0.0.0.0:${config.upstreams.oauth2_proxy.port}`,
     provider: 'oidc',
     oidc_issuer_url: config.idp.oidc.issuer,
+    ...(config.idp.oidc.algs === undefined
+      ? {}
+      : { oidc_enabled_signing_algs: config.idp.oidc.algs }),
     ...('authorization' in config.idp.oidc
       ? {
           skip_oidc_discovery: true,

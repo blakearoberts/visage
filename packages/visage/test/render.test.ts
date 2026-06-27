@@ -12,12 +12,12 @@ import {
   resolveOptions,
   VisageEdgeKeyHeader,
   type VisageConfig,
-} from '../../src/config.ts';
-import { writeComposeConfig } from '../../src/render/compose.ts';
-import { writeDexConfig } from '../../src/render/dex.ts';
-import { writeNginxConfig } from '../../src/render/nginx.ts';
-import { writeOauth2ProxyConfig } from '../../src/render/oauth2-proxy.ts';
-import type { VisageOptions } from '../../src/types.ts';
+} from '../src/config.ts';
+import { writeComposeConfig } from '../src/render/compose.ts';
+import { writeDexConfig } from '../src/render/dex.ts';
+import { writeNginxConfig } from '../src/render/nginx.ts';
+import { writeOauth2ProxyConfig } from '../src/render/oauth2-proxy.ts';
+import type { VisageOptions } from '../src/types.ts';
 
 function resolvedConfig(
   t: TestContext,

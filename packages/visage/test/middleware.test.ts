@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import {
   createVisageMiddleware,
   createVisageUpgradeHandler,
-} from '../../src/middleware.ts';
+} from '../src/middleware.ts';
 
 type MockResponse = ServerResponse & {
   body?: string;

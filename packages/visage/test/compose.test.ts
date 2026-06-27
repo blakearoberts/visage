@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
 
-import { resolveConfig, resolveOptions } from '../../src/config.ts';
+import { resolveConfig, resolveOptions } from '../src/config.ts';
 
 type SpawnCall = {
   readonly command: string;
@@ -55,7 +55,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
   }) as typeof childProcess.spawnSync);
   syncBuiltinESMExports();
 
-  const { startCompose } = await import('../../src/compose.ts');
+  const { startCompose } = await import('../src/compose.ts');
   const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
   syncBuiltinESMExports();
   let stop: (() => void) | undefined;
@@ -140,7 +140,7 @@ test('startCompose cleans up failed detached startup', async (t) => {
   }) as typeof childProcess.spawnSync);
   syncBuiltinESMExports();
 
-  const { startCompose } = await import('../../src/compose.ts');
+  const { startCompose } = await import('../src/compose.ts');
   const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
   syncBuiltinESMExports();
   try {

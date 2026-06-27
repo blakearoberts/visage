@@ -44,8 +44,6 @@ jobs:
           cache: npm
           node-version: 26
 
-      - run: npm ci
-
       - name: Install mkcert
         run: |
           sudo apt-get update
@@ -56,21 +54,11 @@ jobs:
           docker compose -f packages/visage/docker-compose.images.yml pull
           docker pull traefik/whoami
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: package
-          path: package
-
-      - name: Extract package artifact
-        run: |
-          mkdir -p package/e2e
-          tar -xzf package/*.tgz -C package/e2e
-
-      - run: npm --ignore-scripts run test:e2e
+      - run: npm ci
+      - run: npm run test:e2e
         timeout-minutes: 3
         env:
           PLAYWRIGHT_BROWSER_CHANNEL: chrome
-          VISAGE_E2E_PACKAGE_ENTRY: ${{ github.workspace }}/package/e2e/package/dist/index.js
 
       - if: always()
         uses: actions/upload-artifact@v7

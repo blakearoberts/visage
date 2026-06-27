@@ -101,6 +101,7 @@ export function visage(options: VisageOptions = {}): Plugin {
         visageUrl = formatVisageUrlLog(config.host, config.port);
 
         stop = await startVisageServer(config);
+        process.once('SIGINT', closeBundle);
         vite.httpServer?.once('close', closeBundle);
         return result;
       };

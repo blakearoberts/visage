@@ -20,6 +20,7 @@ const IdentityPre: React.FC<{
 }> = ({ rows }) => {
   return (
     <pre
+      data-test-id='csr-identity'
       style={{
         textWrap: 'pretty',
         overflowWrap: 'anywhere',

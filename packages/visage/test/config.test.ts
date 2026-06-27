@@ -9,8 +9,8 @@ import {
   resolveOptions,
   VisageEdgeKeyHeader,
   type VisageConfig,
-} from '../../src/config.ts';
-import type { VisageOptions } from '../../src/types.ts';
+} from '../src/config.ts';
+import type { VisageOptions } from '../src/types.ts';
 
 function tempCache(t: TestContext) {
   const cache = mkdtempSync(join(tmpdir(), 'visage-config-test-'));

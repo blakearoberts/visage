@@ -12,10 +12,10 @@
     "check:format": "prettier --check .",
     "check:type": "npm run check:type --workspaces --if-present",
     "format": "prettier --write .",
+    "pretest:e2e": "npm run build",
     "precheck:type": "npm run build --workspace packages",
     "test": "npm run test --workspace packages",
-    "test:all": "npm run test:all --workspace packages --if-present",
-    "test:e2e": "npm run test:e2e --workspace packages --if-present"
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "prettier": "^3.8.3"

@@ -20,7 +20,7 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
 
 function renderOauth2ProxyConfig(config: VisageConfig): string {
   const data = {
-    http_address: `0.0.0.0:${config.upstreams.oauth2_proxy.port}`,
+    http_address: `127.0.0.1:${config.upstreams.oauth2_proxy.port}`,
     provider: 'oidc',
     oidc_issuer_url: config.idp.oidc.issuer,
     ...(config.idp.oidc.algs === undefined
@@ -59,7 +59,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     ] satisfies string[],
     scope: config.oauth2.scopes.join(' '),
     reverse_proxy: true,
-    trusted_proxy_ips: config.compose.network.trustedProxyIps,
+    trusted_proxy_ips: ['127.0.0.1'],
     set_xauthrequest: true,
     set_authorization_header: true,
     pass_access_token: true,

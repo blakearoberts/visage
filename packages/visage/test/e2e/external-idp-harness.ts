@@ -36,7 +36,6 @@ const visage = createVisageServer({
   services: {
     whoami: { image: 'traefik/whoami' },
     nginx: { extra_hosts: ['idp.localhost:host-gateway'] },
-    oauth2_proxy: { extra_hosts: ['idp.localhost:host-gateway'] },
   },
   upstreams: {
     vite: {

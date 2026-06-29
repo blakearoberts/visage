@@ -13,7 +13,6 @@ export function writeComposeConfig(config: VisageConfig): void {
 function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = config.services;
   return stringify({
-    networks: { default: { external: true, name: config.compose.name } },
     secrets: {
       [config.secrets.cookieSecret]: {
         environment: config.secrets.cookieSecret,

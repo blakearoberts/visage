@@ -4,7 +4,6 @@ import {
   appendFileSync,
   mkdirSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -27,7 +26,6 @@ type HarnessProcess = {
 };
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
-  rmSync(harnessRoot, { recursive: true, force: true });
   mkdirSync(harnessRoot, { recursive: true, mode: 0o700 });
 
   const processes: HarnessProcess[] = [];

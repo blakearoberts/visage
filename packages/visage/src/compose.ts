@@ -1,29 +1,21 @@
-import { spawn, spawnSync, type StdioOptions } from 'node:child_process';
+import { spawnSync, type StdioOptions } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { openSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { VisageConfig } from './config';
 
-type StopCompose = () => void;
-
-let stopRef: StopCompose | undefined;
-let cookieSecret: string | undefined;
-
-export function startCompose(config: VisageConfig): StopCompose {
-  stopRef?.();
-  stopRef = undefined;
-
-  const file = join(config.cache, config.files.compose);
+export function startCompose(config: VisageConfig): () => void {
   const logs = join(config.cache, 'logs');
   const output = openSync(join(logs, 'compose.log'), 'w');
 
   const compose = [
     'compose',
     '--ansi=never',
-    `--file=${file}`,
+    `--file=${config.files.compose}`,
     `--project-name=${config.compose.name}`,
   ] as const;
+
   const env = {
     COMPOSE_MENU: 'false',
     ...(config.oauth2.public
@@ -31,8 +23,7 @@ export function startCompose(config: VisageConfig): StopCompose {
       : { [config.secrets.clientSecret]: config.oauth2.secret }),
     ...process.env,
     [config.secrets.edgeKey]: config.edgeKey,
-    [config.secrets.cookieSecret]: (cookieSecret ??=
-      randomBytes(32).toString('base64url')),
+    [config.secrets.cookieSecret]: randomBytes(32).toString('base64url'),
   } as const;
   const opts = {
     cwd: config.cache,
@@ -40,23 +31,28 @@ export function startCompose(config: VisageConfig): StopCompose {
     env,
   };
 
-  const up = [
-    ...compose,
-    'up',
-    '--force-recreate',
-    '--remove-orphans',
-  ] as const;
-  const child = spawn('docker', up, opts);
+  function up() {
+    const args = [
+      ...compose,
+      'up',
+      '--detach',
+      '--force-recreate',
+      '--remove-orphans',
+    ] as const;
+    return spawnSync('docker', args, opts);
+  }
 
-  const stop = () => {
-    if (stopRef !== stop) return;
-    stopRef = undefined;
+  function down() {
+    const args = [...compose, 'down', '--remove-orphans'] as const;
+    return spawnSync('docker', args, opts);
+  }
 
-    child.kill();
-    const down = [...compose, 'down', '--remove-orphans'] as const;
-    spawnSync('docker', down, opts);
-  };
-
-  stopRef = stop;
-  return stop;
+  down();
+  const result = up();
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    down();
+    throw new Error('Failed to start Docker Compose');
+  }
+  return down;
 }

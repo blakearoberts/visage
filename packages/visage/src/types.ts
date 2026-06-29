@@ -282,6 +282,10 @@ export type VisageService = {
    */
   readonly depends_on?: readonly string[];
   /**
+   * Docker network mode rendered into the Compose service.
+   */
+  readonly network_mode?: string;
+  /**
    * Additional host-to-IP mappings rendered into the Compose service.
    */
   readonly extra_hosts?: readonly string[];

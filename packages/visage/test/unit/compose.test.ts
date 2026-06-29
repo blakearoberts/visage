@@ -1,10 +1,5 @@
 import assert from 'node:assert/strict';
-import type {
-  ChildProcess,
-  SpawnOptions,
-  SpawnSyncOptions,
-  SpawnSyncReturns,
-} from 'node:child_process';
+import type { SpawnSyncOptions, SpawnSyncReturns } from 'node:child_process';
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -42,16 +37,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     }
   });
 
-  const spawnCalls: SpawnCall[] = [];
   const spawnSyncCalls: SpawnCall[] = [];
-  const spawnMock = t.mock.method(childProcess, 'spawn', ((
-    command: string,
-    args?: readonly string[],
-    options?: SpawnOptions,
-  ) => {
-    spawnCalls.push({ command, args: args ?? [], env: options?.env });
-    return { kill: () => true } as ChildProcess;
-  }) as typeof childProcess.spawn);
   const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
     command: string,
     args?: readonly string[],
@@ -76,33 +62,38 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
   try {
     startCompose(config);
-    const firstSecret = spawnCalls[0]?.env?.[config.secrets.cookieSecret];
-    const firstEdgeKey = spawnCalls[0]?.env?.[config.secrets.edgeKey];
+    const firstSecret = spawnSyncCalls[1]?.env?.[config.secrets.cookieSecret];
+    const firstEdgeKey = spawnSyncCalls[1]?.env?.[config.secrets.edgeKey];
 
     process.env[config.secrets.cookieSecret] = 'changed-cookie-secret';
     process.env[config.secrets.edgeKey] = 'changed-edge-key';
     stop = startCompose(config);
-    const secondSecret = spawnCalls[1]?.env?.[config.secrets.cookieSecret];
-    const secondEdgeKey = spawnCalls[1]?.env?.[config.secrets.edgeKey];
+    const secondSecret = spawnSyncCalls[3]?.env?.[config.secrets.cookieSecret];
+    const secondEdgeKey = spawnSyncCalls[3]?.env?.[config.secrets.edgeKey];
 
-    assert.equal(spawnCalls.length, 2);
-    assert.equal(spawnCalls[0]?.command, 'docker');
+    assert.equal(spawnSyncCalls.length, 4);
+    assert.equal(spawnSyncCalls[0]?.command, 'docker');
+    assert.ok(spawnSyncCalls[0]?.args.includes('--file=./compose.yaml'));
     assert.ok(
-      spawnCalls[0]?.args.includes('--project-name=compose-test-visage'),
+      spawnSyncCalls[0]?.args.includes('--project-name=compose-test-visage'),
     );
-    assert.deepEqual(spawnCalls[0]?.args.slice(-3), [
+    assert.deepEqual(
+      spawnSyncCalls.map((call) => (call.args.includes('up') ? 'up' : 'down')),
+      ['down', 'up', 'down', 'up'],
+    );
+    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-4), [
       'up',
+      '--detach',
       '--force-recreate',
       '--remove-orphans',
     ]);
-    assert.equal(spawnSyncCalls.length, 1);
-    assert.equal(spawnSyncCalls[0]?.command, 'docker');
-    assert.deepEqual(spawnSyncCalls[0]?.args.slice(-2), [
+    assert.equal(spawnSyncCalls[2]?.command, 'docker');
+    assert.deepEqual(spawnSyncCalls[2]?.args.slice(-2), [
       'down',
       '--remove-orphans',
     ]);
     assert.ok(firstSecret);
-    assert.equal(secondSecret, firstSecret);
+    assert.ok(secondSecret);
     assert.notEqual(secondSecret, 'changed-cookie-secret');
     assert.equal(firstEdgeKey, 'edge-key');
     assert.equal(secondEdgeKey, 'edge-key');
@@ -110,11 +101,61 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
     stop();
     stop = undefined;
-    assert.equal(spawnSyncCalls.length, 2);
+    assert.equal(spawnSyncCalls.length, 5);
+    assert.deepEqual(spawnSyncCalls[4]?.args.slice(-2), [
+      'down',
+      '--remove-orphans',
+    ]);
   } finally {
     stop?.();
     openSyncMock.mock.restore();
-    spawnMock.mock.restore();
+    spawnSyncMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
+
+test('startCompose cleans up failed detached startup', async (t) => {
+  const config = resolveConfig({
+    ...resolveOptions({}),
+    cache: '',
+    root: 'compose-test',
+    edgeKey: 'edge-key',
+  });
+  const spawnSyncCalls: SpawnCall[] = [];
+  const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
+    command: string,
+    args?: readonly string[],
+    options?: SpawnSyncOptions,
+  ) => {
+    spawnSyncCalls.push({ command, args: args ?? [], env: options?.env });
+    const isUp = args?.includes('up') === true;
+    return {
+      pid: 0,
+      output: [],
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+      status: isUp ? 1 : 0,
+      signal: null,
+    } as SpawnSyncReturns<Buffer>;
+  }) as typeof childProcess.spawnSync);
+  syncBuiltinESMExports();
+
+  const { startCompose } = await import('../../src/compose.ts');
+  const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => startCompose(config), /Failed to start Docker Compose/);
+
+    assert.deepEqual(
+      spawnSyncCalls.map((call) => (call.args.includes('up') ? 'up' : 'down')),
+      ['down', 'up', 'down'],
+    );
+    assert.deepEqual(spawnSyncCalls[2]?.args.slice(-2), [
+      'down',
+      '--remove-orphans',
+    ]);
+  } finally {
+    openSyncMock.mock.restore();
     spawnSyncMock.mock.restore();
     syncBuiltinESMExports();
   }

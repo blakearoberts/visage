@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build",
     "check": "npm run check:type",
     "check:type": "npm run typecheck",
     "dev": "vite",
-    "build": "vite build",
+    "start:idp": "docker compose -p external-idp -f compose.idp.yaml up -d",
+    "stop:idp": "docker compose -p external-idp down",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

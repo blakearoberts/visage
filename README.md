@@ -136,18 +136,23 @@ See [`VisageOptions`](packages/visage/src/types.ts) for the full option surface.
 
 ```mermaid
 flowchart LR
-  Browser
-  NGINX
-  Oauth2-Proxy
-  Vite
-  IDP["IdP (Dex)"]
-  ServicesUpstreams["Services / Upstreams"]
+  browser([Browser])
+  subgraph "Visage / Docker Compose Project"
+    NGINX
+    oauth2[OAuth2 Proxy]
+    idp(["Dex / IdP"])
+    services([Services])
+  end
+  vite([Vite])
+  upstreams([Upstreams])
 
-  Browser --> NGINX
-  NGINX --> Oauth2-Proxy
-  Oauth2-Proxy --> IDP
-  NGINX --> Vite
-  NGINX --> ServicesUpstreams
+  browser --> NGINX
+  browser --> idp
+  NGINX --> oauth2
+  oauth2 --> idp
+  NGINX --> vite
+  NGINX ---> services
+  NGINX ---> upstreams
 ```
 
 ## Required Tools

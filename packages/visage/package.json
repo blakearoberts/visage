@@ -46,13 +46,8 @@
   },
   "scripts": {
     "build": "rollup -c",
-    "check": "npm run check:type",
-    "check:type": "npm run typecheck",
-    "pretest:e2e": "npm run test:e2e:setup",
-    "test": "tsx --test test/unit/*.test.ts",
-    "test:all": "npm run typecheck && npm test && npm run test:e2e",
-    "test:e2e": "playwright test test/e2e",
-    "test:e2e:setup": "npm run build && playwright install chromium",
+    "check": "npm run typecheck",
+    "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

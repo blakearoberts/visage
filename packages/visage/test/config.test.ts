@@ -9,8 +9,8 @@ import {
   resolveOptions,
   VisageEdgeKeyHeader,
   type VisageConfig,
-} from '../../src/config.ts';
-import type { VisageOptions } from '../../src/types.ts';
+} from '../src/config.ts';
+import type { VisageOptions } from '../src/types.ts';
 
 function tempCache(t: TestContext) {
   const cache = mkdtempSync(join(tmpdir(), 'visage-config-test-'));
@@ -331,14 +331,13 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   });
 
   assert.equal(config.services.dex, undefined);
-  assert.deepEqual(config.services.nginx.depends_on, ['oauth2_proxy']);
+  assert.equal(config.services.nginx.depends_on, undefined);
   assert.deepEqual(config.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
   ]);
-  assert.equal(config.services.oauth2_proxy.depends_on, undefined);
-  assert.deepEqual(config.services.oauth2_proxy.extra_hosts, [
-    'host.docker.internal:host-gateway',
-  ]);
+  assert.deepEqual(config.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
+  assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
   assert.equal(config.upstreams.dex, undefined);
   assert.equal(config.upstreams.idp.host, 'idp.localhost');
   assert.equal(config.upstreams.idp.scheme, 'http');
@@ -433,9 +432,6 @@ test('resolveConfig preserves managed service defaults for partial service overr
       nginx: {
         extra_hosts: ['idp.localhost:host-gateway'],
       },
-      oauth2_proxy: {
-        extra_hosts: ['idp.localhost:host-gateway'],
-      },
     },
   });
 
@@ -447,10 +443,9 @@ test('resolveConfig preserves managed service defaults for partial service overr
     '--config',
     '/etc/oauth2-proxy/config.yml',
   ]);
-  assert.deepEqual(config.services.oauth2_proxy.extra_hosts, [
-    'host.docker.internal:host-gateway',
-    'idp.localhost:host-gateway',
-  ]);
+  assert.deepEqual(config.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
+  assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
 });
 
 test('resolveConfig applies defaults and normalizes upstream locations', (t) => {
@@ -484,11 +479,11 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);
   assert.equal(config.upstreams.dex.scheme, 'http');
+  assert.equal(config.upstreams.oauth2_proxy.host, '127.0.0.1');
   assert.equal(config.upstreams.oauth2_proxy.port, 4180);
   assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
   assert.deepEqual(config.compose, {
     name: 'test-app-visage',
-    network: { trustedProxyIps: [] },
   });
 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {

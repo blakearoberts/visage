@@ -12,7 +12,6 @@ import {
   createVisageMiddleware,
   createVisageUpgradeHandler,
 } from './middleware';
-import { ensureNginxNetwork } from './network';
 import {
   writeComposeConfig,
   writeDexConfig,
@@ -89,14 +88,12 @@ export async function startVisageServer(
   await ensureCerts(config);
   ensureHostEntry(config);
 
-  const renderConfig = ensureNginxNetwork(config);
-
-  writeComposeConfig(renderConfig);
-  if ('dex' in renderConfig.idp) {
-    writeDexConfig(renderConfig);
+  writeComposeConfig(config);
+  if ('dex' in config.idp) {
+    writeDexConfig(config);
   }
-  writeNginxConfig(renderConfig);
-  writeOauth2ProxyConfig(renderConfig);
+  writeNginxConfig(config);
+  writeOauth2ProxyConfig(config);
 
-  return startCompose(renderConfig);
+  return startCompose(config);
 }

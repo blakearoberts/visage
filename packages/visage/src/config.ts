@@ -125,9 +125,6 @@ export type VisageConfig = {
   };
   readonly compose: {
     readonly name: string;
-    readonly network: {
-      readonly trustedProxyIps: readonly string[];
-    };
   };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
@@ -151,7 +148,6 @@ const BaseServiceDex = {
 
 const BaseServiceNginx = {
   image: DockerImages.nginx.image,
-  depends_on: ['oauth2_proxy'],
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
 } as const satisfies ResolvedService;
@@ -159,7 +155,8 @@ const BaseServiceNginx = {
 const BaseServiceOAuth2Proxy = {
   image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
-  extra_hosts: ['host.docker.internal:host-gateway'],
+  depends_on: ['nginx'],
+  network_mode: 'service:nginx',
   restart: 'always',
 } as const satisfies ResolvedService;
 
@@ -188,7 +185,7 @@ const DefaultProxyPolicy = {
 } as const satisfies ResolvedProxyPolicy;
 
 const BaseUpstreamOauth2Proxy = {
-  host: 'oauth2_proxy',
+  host: '127.0.0.1',
   scheme: 'http',
   port: 4180,
   locations: {
@@ -323,13 +320,7 @@ function resolveServicesOptions(
     },
     oauth2_proxy: {
       ...BaseServiceOAuth2Proxy,
-      ...{
-        ...(services.oauth2_proxy ?? {}),
-        extra_hosts: [
-          ...BaseServiceOAuth2Proxy.extra_hosts,
-          ...(services.oauth2_proxy?.extra_hosts ?? []),
-        ],
-      },
+      ...(services.oauth2_proxy ?? {}),
     },
   };
 }
@@ -547,14 +538,13 @@ export function resolveConfig(
     },
     compose: {
       name: resolveComposeName(options.root),
-      network: { trustedProxyIps: [] },
     },
     services: {
       ...('dex' in idp
         ? {
             dex: BaseServiceDex,
-            nginx: { ...BaseServiceNginx, depends_on: ['dex', 'oauth2_proxy'] },
-            oauth2_proxy: { ...BaseServiceOAuth2Proxy, depends_on: ['dex'] },
+            nginx: BaseServiceNginx,
+            oauth2_proxy: BaseServiceOAuth2Proxy,
           }
         : { nginx: BaseServiceNginx, oauth2_proxy: BaseServiceOAuth2Proxy }),
       ...Object.fromEntries(

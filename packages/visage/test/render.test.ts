@@ -12,12 +12,12 @@ import {
   resolveOptions,
   VisageEdgeKeyHeader,
   type VisageConfig,
-} from '../../src/config.ts';
-import { writeComposeConfig } from '../../src/render/compose.ts';
-import { writeDexConfig } from '../../src/render/dex.ts';
-import { writeNginxConfig } from '../../src/render/nginx.ts';
-import { writeOauth2ProxyConfig } from '../../src/render/oauth2-proxy.ts';
-import type { VisageOptions } from '../../src/types.ts';
+} from '../src/config.ts';
+import { writeComposeConfig } from '../src/render/compose.ts';
+import { writeDexConfig } from '../src/render/dex.ts';
+import { writeNginxConfig } from '../src/render/nginx.ts';
+import { writeOauth2ProxyConfig } from '../src/render/oauth2-proxy.ts';
+import type { VisageOptions } from '../src/types.ts';
 
 function resolvedConfig(
   t: TestContext,
@@ -47,22 +47,6 @@ function resolvedConfig(
 
 function readGenerated(config: VisageConfig, file: string) {
   return readFileSync(join(config.cache, file), 'utf8');
-}
-
-function withNetwork(
-  config: VisageConfig,
-  trustedProxyIps: readonly string[],
-): VisageConfig {
-  return {
-    ...config,
-    compose: {
-      ...config.compose,
-      network: {
-        ...config.compose.network,
-        trustedProxyIps,
-      },
-    },
-  };
 }
 
 function locationBlock(rendered: string, path: string) {
@@ -158,15 +142,17 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
   ]);
+  assert.equal(compose.services.nginx.depends_on, undefined);
   assert.deepEqual(compose.services.nginx.volumes, [
     './certs:/etc/nginx/certs:ro',
     './nginx.conf:/etc/nginx/nginx.conf:ro',
     './nginx-edge-key.js:/etc/nginx/edge-key.js:ro',
     './nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro',
   ]);
-  assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
-    'host.docker.internal:host-gateway',
-  ]);
+  assert.equal(compose.services.oauth2_proxy.extra_hosts, undefined);
+  assert.deepEqual(compose.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(compose.services.oauth2_proxy.network_mode, 'service:nginx');
+  assert.equal(compose.services.oauth2_proxy.networks, undefined);
   assert.equal(compose.services.oauth2_proxy.restart, 'always');
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
@@ -184,12 +170,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     restart: 'on-failure',
     volumes: ['./api.yml:/etc/api/api.yml:ro'],
   });
-  assert.deepEqual(compose.networks, {
-    default: {
-      external: true,
-      name: 'render-test-visage',
-    },
-  });
+  assert.equal(compose.networks, undefined);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
@@ -239,14 +220,14 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
 
   const compose = parse(readGenerated(config, config.files.compose));
   assert.equal(compose.services.dex, undefined);
-  assert.deepEqual(compose.services.nginx.depends_on, ['oauth2_proxy']);
+  assert.equal(compose.services.nginx.depends_on, undefined);
   assert.deepEqual(compose.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
   ]);
-  assert.equal(compose.services.oauth2_proxy.depends_on, undefined);
-  assert.deepEqual(compose.services.oauth2_proxy.extra_hosts, [
-    'host.docker.internal:host-gateway',
-  ]);
+  assert.deepEqual(compose.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(compose.services.oauth2_proxy.extra_hosts, undefined);
+  assert.equal(compose.services.oauth2_proxy.network_mode, 'service:nginx');
+  assert.equal(compose.services.oauth2_proxy.networks, undefined);
 });
 
 test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => {
@@ -346,10 +327,12 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
 
   const nginx = readGenerated(config, config.files.nginx[0]);
   const dex = locationBlock(nginx, '/dex/');
+  const oauth2ProxyUpstream = upstreamBlock(nginx, 'oauth2_proxy');
   const oauth2Proxy = locationBlock(nginx, '/oauth2/');
   const oauth2Auth = locationBlock(nginx, '= /oauth2/auth');
   const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
 
+  assert.match(oauth2ProxyUpstream, /server 127\.0\.0\.1:4180;/);
   assert.doesNotMatch(dex, /auth_request/);
   assert.match(dex, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(dex, /proxy_set_header Authorization "";/);
@@ -759,14 +742,14 @@ test('writeDexConfig renders configured expiry and users', (t) => {
 });
 
 test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret', (t) => {
-  const config = withNetwork(resolvedConfig(t), ['172.30.0.0/16']);
+  const config = resolvedConfig(t);
 
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
-  assert.equal(oauth2Proxy.http_address, '0.0.0.0:4180');
+  assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
   assert.equal(oauth2Proxy.login_url, 'https://app.local.test:9443/dex/auth');
@@ -798,7 +781,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.cookie_path, '/');
   assert.deepEqual(oauth2Proxy.email_domains, ['example.com']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
-  assert.deepEqual(oauth2Proxy.trusted_proxy_ips, ['172.30.0.0/16']);
+  assert.deepEqual(oauth2Proxy.trusted_proxy_ips, ['127.0.0.1']);
   assert.equal(oauth2Proxy.set_xauthrequest, true);
   assert.equal(oauth2Proxy.set_authorization_header, true);
   assert.equal(oauth2Proxy.pass_access_token, true);

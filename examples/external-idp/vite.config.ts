@@ -3,10 +3,7 @@ import react from '@vitejs/plugin-react';
 import visage from '@blakearoberts/visage';
 
 export default defineConfig({
-  server: {
-    port: 6174,
-    strictPort: true,
-  },
+  server: { port: 6174, strictPort: true },
   plugins: [
     react(),
     visage({
@@ -21,10 +18,8 @@ export default defineConfig({
 
         // Note: the following extra_hosts overrides are only required for this
         // example because the "external" IdP is a container inside docker where
-        // nginx and oauth2_proxy need to reach it without hitting their own
-        // loopback interfaces.
+        // nginx needs to reach it without hitting its own loopback interface.
         nginx: { extra_hosts: ['idp.localhost:host-gateway'] },
-        oauth2_proxy: { extra_hosts: ['idp.localhost:host-gateway'] },
       },
     }),
   ],

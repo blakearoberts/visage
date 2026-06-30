@@ -1,5 +1,7 @@
+import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { stringify } from 'yaml';
 
 import type { VisageConfig } from '../config';
@@ -12,8 +14,19 @@ export function writeComposeConfig(config: VisageConfig): void {
 
 function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = config.services;
+
+  const bridge = spawnSync(
+    'docker',
+    [
+      'network',
+      'inspect',
+      'bridge',
+      '--format={{ (index .IPAM.Config 0).Gateway }}',
+    ],
+    { encoding: 'utf8' },
+  ).stdout.trim();
+
   return stringify({
-    networks: { default: { external: true, name: config.compose.name } },
     secrets: {
       [config.secrets.cookieSecret]: {
         environment: config.secrets.cookieSecret,
@@ -41,6 +54,17 @@ function renderComposeConfig(config: VisageConfig): string {
               ...(config.oauth2.public
                 ? {}
                 : { secrets: [config.secrets.clientSecret] }),
+            },
+          }
+        : {}),
+      ...('vite' in config.upstreams
+        ? {
+            vite_loopback: {
+              image: 'alpine/socat',
+              command: `tcp-listen:${config.upstreams.vite.port},fork,bind=${bridge} tcp-connect:127.0.0.1:${config.upstreams.vite.port}`,
+              network_mode: 'host',
+              profiles: ['linux'],
+              restart: 'always',
             },
           }
         : {}),

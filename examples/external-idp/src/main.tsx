@@ -38,7 +38,7 @@ function App() {
       {whoami?.error && <p role='alert'>{whoami.error}</p>}
       {whoami?.body && (
         <div
-          aria-label='Whoami response body'
+          data-test-id='csr-identity'
           style={{
             display: 'grid',
             gridTemplateColumns: 'max-content minmax(0, 1fr)',

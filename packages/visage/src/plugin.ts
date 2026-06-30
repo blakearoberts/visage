@@ -1,6 +1,4 @@
-import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { isIP } from 'node:net';
 import { join } from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 
@@ -36,28 +34,10 @@ export function visage(options: VisageOptions = {}): Plugin {
             host: resolvedOptions.host,
             clientPort: resolvedOptions.port,
           },
-          // Configure Vite to listen on the minimal host address to allow
-          // Docker containers to reach it. Visage (internally managed NGINX)
-          // exposes the browser-facing host/port. On non-Linux systems, this is
-          // localhost. On Linux, it's the host's bridge gateway (e.g.,
-          // 172.17.0.1).
-          host:
-            process.platform !== 'linux'
-              ? '127.0.0.1'
-              : (spawnSync(
-                  'docker',
-                  [
-                    'network',
-                    'inspect',
-                    'bridge',
-                    '--format',
-                    '{{range .IPAM.Config}}{{println .Gateway}}{{end}}',
-                  ],
-                  { encoding: 'utf8' },
-                )
-                  .stdout?.split(/\r?\n/)
-                  .map((line) => line.trim())
-                  .find((line) => isIP(line)) ?? '0.0.0.0'),
+          // Overwrite the localhost default which may resolve to an IPv6
+          // loopback. Docker Desktop (com.docker.backend), doesn't support IPv6
+          // traffic translation to host loopback.
+          host: '127.0.0.1',
         },
       };
     },
@@ -101,6 +81,7 @@ export function visage(options: VisageOptions = {}): Plugin {
         visageUrl = formatVisageUrlLog(config.host, config.port);
 
         stop = await startVisageServer(config);
+        process.once('SIGINT', closeBundle);
         vite.httpServer?.once('close', closeBundle);
         return result;
       };

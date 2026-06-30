@@ -25,8 +25,7 @@ type ResolvedCookiePolicy = {
 };
 
 type ResolvedIdpOption =
-  | { readonly dex: VisageDexOptions }
-  | VisageExternalIdpOptions;
+  { readonly dex: VisageDexOptions } | VisageExternalIdpOptions;
 
 type ResolvedOAuth2Client = {
   readonly id: string;

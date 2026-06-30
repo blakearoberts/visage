@@ -35,7 +35,10 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-latest
-    needs: ci
+    env:
+      CAROOT: ${{ github.workspace }}/.cache/visage/ca
+      XDG_CACHE_HOME: ${{ github.workspace }}/.cache
+      TRUST_STORES: system,nss
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -44,10 +47,14 @@ jobs:
           cache: npm
           node-version: 26
 
-      - name: Install mkcert
+      - name: Install mkcert and local CA
         run: |
           sudo apt-get update
-          sudo apt-get install -y mkcert
+          sudo apt-get install -y mkcert libnss3-tools
+          mkdir -p "$CAROOT"
+          mkdir -p "$HOME/.pki/nssdb"
+          certutil -N --empty-password -d "sql:$HOME/.pki/nssdb"
+          mkcert -install
 
       - name: Pull Docker images
         run: |
@@ -57,12 +64,15 @@ jobs:
       - run: npm ci
       - run: npm run test:e2e
         timeout-minutes: 3
-        env:
-          PLAYWRIGHT_BROWSER_CHANNEL: chrome
 
       - if: always()
         uses: actions/upload-artifact@v7
         with:
           name: e2e-logs
-          path: test-results
+          path: |
+            test-results
+            examples/simple/node_modules/.vite/visage/logs/**
+            examples/ssr/.visage/logs/**
+            examples/external-idp/node_modules/.vite/visage/logs/**
+          include-hidden-files: true
           retention-days: 1

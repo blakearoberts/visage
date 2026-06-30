@@ -1,4 +1,14 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import { defineConfig, Project } from '@playwright/test';
+
+if (process.env.CI === 'true') {
+  process.env.NODE_EXTRA_CA_CERTS = join(
+    process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
+    'visage/ca/rootCA.pem',
+  );
+}
 
 function addExampleSpec(
   name: string,
@@ -34,14 +44,14 @@ function addExampleSpec(
 export default defineConfig({
   testDir: 'tests',
   fullyParallel: true,
+  workers: process.env.CI === 'true' ? '100%' : undefined,
   projects: [
     ...addExampleSpec('plugin', 'https://localhost:9001'),
     ...addExampleSpec('server', 'https://localhost:9003'),
     ...addExampleSpec('external-idp', 'https://localhost:9002'),
   ],
   use: {
-    channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL,
-    ignoreHTTPSErrors: true,
+    channel: process.env.CI === 'true' ? 'chrome' : undefined,
     trace: 'on-first-retry',
     actionTimeout: 5000,
     navigationTimeout: 5000,

@@ -171,6 +171,7 @@ Visage pulls these as needed based on configuration:
 | [NGINX](https://nginx.org/)                                  | [`nginx`](https://hub.docker.com/_/nginx)                                                   | [manifest](packages/visage/docker-compose.images.yml) |
 | [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | [manifest](packages/visage/docker-compose.images.yml) |
 | [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                    | [manifest](packages/visage/docker-compose.images.yml) |
+| [Socat](https://www.dest-unreach.org/socat/)                 | [`alpine/socat`](https://hub.docker.com/r/alpine/socat)                                     | [manifest](packages/visage/docker-compose.images.yml) |
 
 ## Security Notes
 

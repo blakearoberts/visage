@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { stringify } from 'yaml';
 
-import type { VisageConfig } from '../config';
+import { DockerImages, type VisageConfig } from '../config';
 
 export function writeComposeConfig(config: VisageConfig): void {
   const file = join(config.cache, config.files.compose);
@@ -60,7 +60,7 @@ function renderComposeConfig(config: VisageConfig): string {
       ...('vite' in config.upstreams
         ? {
             vite_loopback: {
-              image: 'alpine/socat',
+              image: DockerImages.socat.image,
               command: `tcp-listen:${config.upstreams.vite.port},fork,bind=${bridge} tcp-connect:127.0.0.1:${config.upstreams.vite.port}`,
               network_mode: 'host',
               profiles: ['linux'],

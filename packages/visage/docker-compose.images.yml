@@ -5,3 +5,5 @@ services:
     image: nginx:1.31.2-alpine
   oauth2_proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.3
+  socat:
+    image: alpine/socat:1.8.1.3

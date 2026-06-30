@@ -133,12 +133,12 @@ export type VisageConfig = {
 
 export const VisageEdgeKeyHeader = 'X-Visage-Edge-Key';
 
-const DockerImages = parse(
+export const DockerImages = parse(
   readFileSync(
     new URL('../docker-compose.images.yml', import.meta.url),
     'utf8',
   ),
-).services as Record<'dex' | 'nginx' | 'oauth2_proxy', { image: string }>;
+).services as Record<string, { image: string }>;
 
 const BaseServiceDex = {
   image: DockerImages.dex.image,

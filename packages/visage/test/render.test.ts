@@ -8,6 +8,7 @@ import { compareSync } from 'bcryptjs';
 import { parse } from 'yaml';
 
 import {
+  DockerImages,
   resolveConfig,
   resolveOptions,
   VisageEdgeKeyHeader,
@@ -162,6 +163,14 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     'OAUTH2_PROXY_COOKIE_SECRET',
     'OAUTH2_CLIENT_SECRET',
   ]);
+  assert.equal(compose.services.vite_loopback.image, DockerImages.socat.image);
+  assert.match(
+    compose.services.vite_loopback.command,
+    /tcp-listen:6173,fork,bind=.* tcp-connect:127\.0\.0\.1:6173/,
+  );
+  assert.equal(compose.services.vite_loopback.network_mode, 'host');
+  assert.deepEqual(compose.services.vite_loopback.profiles, ['linux']);
+  assert.equal(compose.services.vite_loopback.restart, 'always');
   assert.deepEqual(compose.services.api, {
     image: 'example/api:test',
     command: ['serve'],

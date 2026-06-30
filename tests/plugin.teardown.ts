@@ -8,7 +8,7 @@ teardown('stop visage plugin', async () => {
   const pid = Number.parseInt(str);
   if (isNaN(pid)) throw new Error('PLUGIN_PID not a number');
   try {
-    process.kill(pid, 'SIGINT');
+    process.kill(-pid, 'SIGINT');
   } catch {}
 
   await expect(() => {
@@ -20,7 +20,7 @@ teardown('stop visage plugin', async () => {
       .stdout.split(/\r?\n/)
       .filter(Boolean);
     expect(containers).toHaveLength(0);
-  }).toPass({ timeout: 10_000, intervals: [100] });
+  }).toPass({ timeout: 5_000, intervals: [100] });
 
   try {
     process.kill(-pid, 'SIGTERM');

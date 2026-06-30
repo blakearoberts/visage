@@ -24,4 +24,14 @@ test.describe('external-idp', () => {
       'Hostname',
     );
   });
+
+  test('reject direct host requests to the app server', async ({ request }) => {
+    const response = await request.get('http://localhost:6174/', {
+      maxRedirects: 0,
+      timeout: 1_000,
+    });
+
+    expect(response.status()).toBe(403);
+    expect(await response.text()).toBe('Forbidden');
+  });
 });

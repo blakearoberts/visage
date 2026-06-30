@@ -24,9 +24,10 @@ test.describe('server', () => {
     );
   });
 
-  test('rejects direct requests to the SSR app server', async ({ request }) => {
-    const response = await request.get('http://127.0.0.1:6175/', {
+  test('reject direct host requests to the app server', async ({ request }) => {
+    const response = await request.get('http://localhost:6175/', {
       maxRedirects: 0,
+      timeout: 1_000,
     });
 
     expect(response.status()).toBe(403);

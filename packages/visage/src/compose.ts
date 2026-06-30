@@ -14,6 +14,7 @@ export function startCompose(config: VisageConfig): () => void {
     '--ansi=never',
     `--file=${config.files.compose}`,
     `--project-name=${config.compose.name}`,
+    `--profile=${process.platform}`,
   ] as const;
 
   const env = {

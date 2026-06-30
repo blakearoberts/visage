@@ -14,7 +14,8 @@ http {
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 
-    # Disable IPv6 DNS lookups that may fail to resolve upstream hostnames.
+    # Disable IPv6 DNS lookup. Docker Desktop (com.docker.backend), doesn't
+    # support IPv6 traffic translation to host loopback.
     resolver 127.0.0.11 ipv6=off;
 
     # Configure access log format.

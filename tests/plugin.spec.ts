@@ -21,11 +21,10 @@ test.describe('plugin', () => {
     );
   });
 
-  test('rejects direct requests to the Vite dev server', async ({
-    request,
-  }) => {
-    const response = await request.get('http://127.0.0.1:6173/', {
+  test('reject direct host requests to the app server', async ({ request }) => {
+    const response = await request.get('http://localhost:6173/', {
       maxRedirects: 0,
+      timeout: 1_000,
     });
 
     expect(response.status()).toBe(403);

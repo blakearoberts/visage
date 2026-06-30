@@ -64,5 +64,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: e2e-logs
-          path: test-results
+          path: |
+            test-results
+            examples/simple/node_modules/.vite/visage/logs/**
+            examples/ssr/.visage/logs/**
+            examples/external-idp/node_modules/.vite/visage/logs/**
+          include-hidden-files: true
           retention-days: 1

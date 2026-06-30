@@ -34,6 +34,7 @@ function addExampleSpec(
 export default defineConfig({
   testDir: 'tests',
   fullyParallel: true,
+  workers: process.env.CI ? '100%' : undefined,
   projects: [
     ...addExampleSpec('plugin', 'https://localhost:9001'),
     ...addExampleSpec('server', 'https://localhost:9003'),

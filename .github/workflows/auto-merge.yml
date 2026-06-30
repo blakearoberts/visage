@@ -49,4 +49,4 @@ jobs:
             exit 0
           fi
 
-          gh pr merge --auto --delete-branch "$pr_url"
+          gh pr merge --auto --merge --delete-branch "$pr_url"

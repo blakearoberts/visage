@@ -164,10 +164,13 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     'OAUTH2_CLIENT_SECRET',
   ]);
   assert.equal(compose.services.vite_loopback.image, DockerImages.socat.image);
-  assert.match(
+  assert.equal(
     compose.services.vite_loopback.command,
-    /tcp-listen:6173,fork,bind=.* tcp-connect:127\.0\.0\.1:6173/,
+    'tcp-listen:6173,fork,bind=host.docker.internal tcp-connect:127.0.0.1:6173',
   );
+  assert.deepEqual(compose.services.vite_loopback.extra_hosts, [
+    'host.docker.internal:host-gateway',
+  ]);
   assert.equal(compose.services.vite_loopback.network_mode, 'host');
   assert.deepEqual(compose.services.vite_loopback.profiles, ['linux']);
   assert.equal(compose.services.vite_loopback.restart, 'always');

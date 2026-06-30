@@ -3,12 +3,10 @@ import { join } from 'node:path';
 
 import { defineConfig, Project } from '@playwright/test';
 
-if (process.env.CI === 'true') {
-  process.env.NODE_EXTRA_CA_CERTS = join(
-    process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
-    'visage/ca/rootCA.pem',
-  );
-}
+process.env.NODE_EXTRA_CA_CERTS = join(
+  process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
+  'visage/ca/rootCA.pem',
+);
 
 function addExampleSpec(
   name: string,

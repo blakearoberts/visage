@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -14,17 +13,6 @@ export function writeComposeConfig(config: VisageConfig): void {
 
 function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = config.services;
-
-  const bridge = spawnSync(
-    'docker',
-    [
-      'network',
-      'inspect',
-      'bridge',
-      '--format={{ (index .IPAM.Config 0).Gateway }}',
-    ],
-    { encoding: 'utf8' },
-  ).stdout.trim();
 
   return stringify({
     secrets: {
@@ -61,7 +49,10 @@ function renderComposeConfig(config: VisageConfig): string {
         ? {
             vite_loopback: {
               image: DockerImages.socat.image,
-              command: `tcp-listen:${config.upstreams.vite.port},fork,bind=${bridge} tcp-connect:127.0.0.1:${config.upstreams.vite.port}`,
+              command:
+                `tcp-listen:${config.upstreams.vite.port},fork,bind=host.docker.internal ` +
+                `tcp-connect:127.0.0.1:${config.upstreams.vite.port}`,
+              extra_hosts: ['host.docker.internal:host-gateway'],
               network_mode: 'host',
               profiles: ['linux'],
               restart: 'always',

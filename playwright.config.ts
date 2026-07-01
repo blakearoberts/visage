@@ -1,12 +1,6 @@
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { defineConfig, type Project } from '@playwright/test';
 
-import { defineConfig, Project } from '@playwright/test';
-
-process.env.NODE_EXTRA_CA_CERTS = join(
-  process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
-  'visage/ca/rootCA.pem',
-);
+process.env.NODE_OPTIONS = '--use-system-ca --use-bundled-ca';
 
 function addExampleSpec(
   name: string,
@@ -43,6 +37,7 @@ export default defineConfig({
   testDir: 'tests',
   fullyParallel: true,
   workers: process.env.CI === 'true' ? '100%' : undefined,
+  expect: { toPass: { timeout: 10_000, intervals: [200] } },
   projects: [
     ...addExampleSpec('plugin', 'https://localhost:9001'),
     ...addExampleSpec('server', 'https://localhost:9003'),

@@ -35,10 +35,6 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-latest
-    env:
-      CAROOT: ${{ github.workspace }}/.cache/visage/ca
-      XDG_CACHE_HOME: ${{ github.workspace }}/.cache
-      TRUST_STORES: system,nss
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -51,7 +47,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mkcert libnss3-tools
-          mkdir -p "$CAROOT"
           mkdir -p "$HOME/.pki/nssdb"
           certutil -N --empty-password -d "sql:$HOME/.pki/nssdb"
           mkcert -install

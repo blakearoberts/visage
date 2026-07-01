@@ -10,8 +10,9 @@ setup('start visage plugin', async () => {
   process.env.PLUGIN_PID = String(child.pid);
 
   const ctx = await request.newContext();
-  await expect(async () =>
-    (await ctx.get('https://127.0.0.1:9001').catch()).ok(),
-  ).toPass({ timeout: 5_000, intervals: [200] });
+  await expect(async () => {
+    const response = await ctx.get('https://127.0.0.1:9001');
+    expect(response.ok()).toBe(true);
+  }).toPass();
   await ctx.dispose();
 });

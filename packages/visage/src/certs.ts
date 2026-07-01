@@ -1,28 +1,20 @@
 import { spawnSync, type StdioOptions } from 'node:child_process';
 import { chmodSync, mkdirSync, openSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type { VisageConfig } from './config';
 
-const CACHE_HOME = process.env.XDG_CACHE_HOME || join(homedir(), '.cache');
-
 export async function ensureCerts(config: VisageConfig): Promise<void> {
-  const CAROOT = join(CACHE_HOME, 'visage/ca');
-  mkdirSync(CAROOT, { recursive: true, mode: 0o700 });
-  chmodSync(CAROOT, 0o700);
-
   const mkcert = resolveMkcert();
 
   const out = openSync(join(config.cache, 'logs', 'mkcert.log'), 'w');
-  const env = { CAROOT, TRUST_STORES: 'system', ...process.env };
   const tty = process.stdin.isTTY;
   const stdio = [tty ? 'inherit' : 'ignore', out, out] satisfies StdioOptions;
 
-  if (process.env.CI !== 'true') {
+  {
     // mkcert -install is idempotent;
     // CA files alone don't prove trust-store state.
-    const result = spawnSync(mkcert, ['-install'], { env, stdio });
+    const result = spawnSync(mkcert, ['-install'], { stdio });
     if (result.error) throw result.error;
     if (result.status !== 0) {
       throw new Error('Failed to install CA');
@@ -40,7 +32,7 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
 
   const names = [...new Set([config.host, 'localhost', '127.0.0.1', '::1'])];
   const args = ['-cert-file', cert, '-key-file', key, ...names];
-  const result = spawnSync(mkcert, args, { env, stdio });
+  const result = spawnSync(mkcert, args, { stdio });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error('Failed to generate TLS certificates');

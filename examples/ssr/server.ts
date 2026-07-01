@@ -6,7 +6,7 @@ import { createServer as createViteServer, type ViteDevServer } from 'vite';
 
 const port = 6175;
 const app = connect();
-const server = app.listen(port);
+const server = app.listen(port, '127.0.0.1');
 
 const visage = createVisageServer({
   port: 9003,

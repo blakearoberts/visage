@@ -37,7 +37,7 @@ export function startCompose(config: VisageConfig): () => void {
     return spawnSync('docker', args, { ...opts, stdio: ['ignore', out, out] });
   }
   function down() {
-    const out = openSync(join(dir, 'compose.log'), 'w');
+    const out = openSync(join(dir, 'compose.log'), 'a');
     const args = [...compose, 'down', '--remove-orphans'];
     return spawnSync('docker', args, { ...opts, stdio: ['ignore', out, out] });
   }

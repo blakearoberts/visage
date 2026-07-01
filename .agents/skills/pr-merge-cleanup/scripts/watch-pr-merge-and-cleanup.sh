@@ -183,7 +183,7 @@ while [ "$state" != "MERGED" ]; do
     if [ -n "$failed_check_description" ]; then
       echo "Description: $failed_check_description" >&2
     fi
-    echo "Safest next action: inspect or rerun the failed required check, then rerun the auto-merge action." >&2
+    echo "Auto-merge RCA required before rerun: inspect the failed run/job logs, identify the failing test or command, cite log evidence, separate facts from inferences, recommend a fix, and state what was verified or remains unverified." >&2
     exit 1
   elif [ "$failed_check_status" -ne 1 ]; then
     exit 1

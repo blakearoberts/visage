@@ -22,6 +22,23 @@ The Visage auto-merge environment action calls the watcher directly on its happy
 path. Use this skill for manual cleanup, failure follow-up, or explicit user
 requests that need an agent to interpret the watcher result.
 
+If the watcher reports a terminal required-check failure, perform an RCA before
+responding. Do not stop at the watcher output, the obvious failing status, or a
+list of investigation steps. Use the check details printed by the script as the
+starting point, inspect the failing run/job logs, and inspect relevant repo code
+or tests when the logs identify them.
+
+The failure response must include:
+
+- the concrete failing check, run, job, command, and test name when available
+- short log evidence for the failure
+- root cause facts separated from root cause inferences
+- the recommended fix, or the safest next action if the fix is still unverified
+- what was verified and what remains unverified
+
+If any required RCA detail cannot be verified from available logs or code, state
+that explicitly and explain what evidence is missing.
+
 Required inputs:
 
 - PR URL: GitHub pull request URL to watch.
@@ -46,5 +63,6 @@ For validation without mutating Git state, add `--dry-run` to the command.
 - Do not switch branches before the PR is merged.
 - Return success only after Git cleanup succeeds; callers own any host-specific
   follow-up after this skill succeeds.
-- Report the script result concisely, including any log or failure message the
+- On success, report the script result concisely, including any log message the
   script prints.
+- On terminal required-check failure, report the RCA described above.

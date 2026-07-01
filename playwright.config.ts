@@ -1,12 +1,6 @@
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { defineConfig, type Project } from '@playwright/test';
 
-import { defineConfig, Project } from '@playwright/test';
-
-process.env.NODE_EXTRA_CA_CERTS = join(
-  process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
-  'visage/ca/rootCA.pem',
-);
+process.env.NODE_OPTIONS = '--use-system-ca --use-bundled-ca';
 
 function addExampleSpec(
   name: string,

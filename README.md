@@ -198,8 +198,7 @@ application accepts form posts or other browser-submitted mutations. CSP,
 - If the hostname cannot be resolved, Visage may need permission to update
   `/etc/hosts`.
 - If the browser rejects the certificate, allow the local certificate authority
-  prompt from `mkcert`; CI test runners should be configured to ignore local
-  HTTPS errors.
+  prompt from `mkcert`.
 
 ## TO-DO
 

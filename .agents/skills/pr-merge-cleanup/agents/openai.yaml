@@ -1,4 +1,4 @@
 interface:
   display_name: 'PR Merge Cleanup'
   short_description: 'Clean up local PR branches'
-  default_prompt: 'Use $pr-merge-cleanup to watch a PR merge and clean up the local branch.'
+  default_prompt: 'Use $pr-merge-cleanup to watch a PR merge, clean up the local branch, and produce an RCA if a required check fails.'

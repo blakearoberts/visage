@@ -25,7 +25,7 @@ teardown('stop external idp example', async () => {
       .stdout.split(/\r?\n/)
       .filter(Boolean);
     expect(containers).toHaveLength(0);
-  }).toPass({ timeout: 5_000, intervals: [100] });
+  }).toPass();
 
   try {
     process.kill(-pid, 'SIGTERM');

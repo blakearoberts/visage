@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
-import type { SpawnSyncOptions, SpawnSyncReturns } from 'node:child_process';
+import type {
+  SpawnOptions,
+  SpawnSyncOptions,
+  SpawnSyncReturns,
+} from 'node:child_process';
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
+import { basename } from 'node:path';
 import { test } from 'node:test';
 
 import { resolveConfig, resolveOptions } from '../src/config.ts';
@@ -38,6 +43,8 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
   });
 
   const spawnSyncCalls: SpawnCall[] = [];
+  const spawnCalls: SpawnCall[] = [];
+  const stoppedLogs: unknown[] = [];
   const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
     command: string,
     args?: readonly string[],
@@ -53,10 +60,29 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       signal: null,
     } as SpawnSyncReturns<Buffer>;
   }) as typeof childProcess.spawnSync);
+  const spawnMock = t.mock.method(childProcess, 'spawn', ((
+    command: string,
+    args?: readonly string[],
+    options?: SpawnOptions,
+  ) => {
+    spawnCalls.push({ command, args: args ?? [], env: options?.env });
+    return {
+      exitCode: null,
+      signalCode: null,
+      kill(signal?: NodeJS.Signals | number) {
+        stoppedLogs.push(signal);
+        return true;
+      },
+    } as ReturnType<typeof childProcess.spawn>;
+  }) as typeof childProcess.spawn);
   syncBuiltinESMExports();
 
   const { startCompose } = await import('../src/compose.ts');
-  const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
+  const openSyncCalls: string[] = [];
+  const openSyncMock = t.mock.method(fs, 'openSync', (path) => {
+    openSyncCalls.push(String(path));
+    return 2;
+  });
   syncBuiltinESMExports();
   let stop: (() => void) | undefined;
 
@@ -81,6 +107,24 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       spawnSyncCalls.map((call) => (call.args.includes('up') ? 'up' : 'down')),
       ['down', 'up', 'down', 'up'],
     );
+    assert.deepEqual(
+      spawnCalls.map((call) => call.args.slice(-2)),
+      [
+        ['logs', '--follow'],
+        ['logs', '--follow'],
+      ],
+    );
+    assert.deepEqual(
+      openSyncCalls.map((file) => basename(file)),
+      [
+        'compose.log',
+        'compose.log',
+        'container.log',
+        'compose.log',
+        'compose.log',
+        'container.log',
+      ],
+    );
     assert.deepEqual(spawnSyncCalls[1]?.args.slice(-4), [
       'up',
       '--detach',
@@ -101,6 +145,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
     stop();
     stop = undefined;
+    assert.deepEqual(stoppedLogs, ['SIGINT']);
     assert.equal(spawnSyncCalls.length, 5);
     assert.deepEqual(spawnSyncCalls[4]?.args.slice(-2), [
       'down',
@@ -109,6 +154,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
   } finally {
     stop?.();
     openSyncMock.mock.restore();
+    spawnMock.mock.restore();
     spawnSyncMock.mock.restore();
     syncBuiltinESMExports();
   }
@@ -122,6 +168,7 @@ test('startCompose cleans up failed detached startup', async (t) => {
     edgeKey: 'edge-key',
   });
   const spawnSyncCalls: SpawnCall[] = [];
+  const spawnCalls: SpawnCall[] = [];
   const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
     command: string,
     args?: readonly string[],
@@ -138,6 +185,14 @@ test('startCompose cleans up failed detached startup', async (t) => {
       signal: null,
     } as SpawnSyncReturns<Buffer>;
   }) as typeof childProcess.spawnSync);
+  const spawnMock = t.mock.method(childProcess, 'spawn', ((
+    command: string,
+    args?: readonly string[],
+    options?: SpawnOptions,
+  ) => {
+    spawnCalls.push({ command, args: args ?? [], env: options?.env });
+    return {} as ReturnType<typeof childProcess.spawn>;
+  }) as typeof childProcess.spawn);
   syncBuiltinESMExports();
 
   const { startCompose } = await import('../src/compose.ts');
@@ -154,8 +209,10 @@ test('startCompose cleans up failed detached startup', async (t) => {
       'down',
       '--remove-orphans',
     ]);
+    assert.equal(spawnCalls.length, 0);
   } finally {
     openSyncMock.mock.restore();
+    spawnMock.mock.restore();
     spawnSyncMock.mock.restore();
     syncBuiltinESMExports();
   }

@@ -10,8 +10,9 @@ setup('start server example', async () => {
   process.env.SERVER_PID = String(child.pid);
 
   const ctx = await request.newContext();
-  await expect(async () =>
-    (await ctx.get('https://127.0.0.1:9003').catch()).ok(),
-  ).toPass({ timeout: 5_000, intervals: [200] });
+  await expect(async () => {
+    const response = await ctx.get('https://127.0.0.1:9003');
+    expect(response.ok()).toBe(true);
+  }).toPass();
   await ctx.dispose();
 });

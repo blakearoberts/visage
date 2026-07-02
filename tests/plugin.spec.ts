@@ -22,7 +22,7 @@ test.describe('plugin', () => {
   });
 
   test('reject direct host requests to the app server', async ({ request }) => {
-    const response = await request.get('http://localhost:6173/', {
+    const response = await request.get('http://127.0.0.1:6173/', {
       maxRedirects: 0,
       timeout: 1_000,
     });

@@ -37,10 +37,10 @@ is_draft="$(gh pr view "$pr_url" --json isDraft --jq '.isDraft')"
 
 if [ "$is_draft" = "true" ]; then
   echo "Marking draft PR ready for review: $pr_url"
-  gh pr ready "$pr_url"
+  gh pr ready "$pr_url" > >(cat)
 fi
 
-gh pr merge --auto --merge "$pr_url"
+gh pr merge --auto --merge "$pr_url" > >(cat)
 
 watcher_output="$(mktemp)"
 set +e

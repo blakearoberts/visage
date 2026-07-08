@@ -417,7 +417,15 @@ function resolveUpstreamOptions(
         Object.entries(upstream.locations ?? { [`/${name}/`]: {} }).map(
           ([path, policy]) => [
             path,
-            resolveUpstreamLocationOptions(name, host, policy, external),
+            resolveUpstreamLocationOptions(
+              name,
+              host,
+              {
+                ...policy,
+                headers: { ...(upstream.headers ?? {}), ...policy.headers },
+              },
+              external,
+            ),
           ],
         ),
       ),

@@ -328,6 +328,11 @@ export type VisageUpstream = {
    */
   readonly port?: number;
   /**
+   * Request headers to apply to every location for this upstream. Per-location
+   * headers override matching values from this map.
+   */
+  readonly headers?: { readonly [key: string]: string };
+  /**
    * Path-location policies for this upstream, keyed by NGINX location path.
    *
    * @defaultValue `/{upstreamName}/`

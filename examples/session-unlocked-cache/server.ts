@@ -28,7 +28,7 @@ await visage.listen();
 
 const vite = await createViteServer({
   appType: 'spa',
-  server: { middlewareMode: true, hmr: { server } },
+  server: { middlewareMode: true, ws: { server } },
 });
 
 server.prependListener('upgrade', visage.upgrade);

@@ -207,6 +207,49 @@ test('resolveOptions applies upstream defaults', () => {
   assert.equal(options.upstreams.secure.port, 443);
 });
 
+test('resolveOptions applies upstream headers to every location', () => {
+  const options = resolveOptions({
+    upstreams: {
+      api: {
+        headers: {
+          Host: 'api.internal',
+          'X-Service': 'api',
+          'X-Scope': 'upstream',
+        },
+        locations: {
+          '/api/': {},
+          '/admin/': {
+            headers: {
+              'X-Scope': 'admin',
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(
+    options.upstreams.api.locations['/api/'].headers.Host,
+    'api.internal',
+  );
+  assert.equal(
+    options.upstreams.api.locations['/api/'].headers['X-Service'],
+    'api',
+  );
+  assert.equal(
+    options.upstreams.api.locations['/api/'].headers['X-Scope'],
+    'upstream',
+  );
+  assert.equal(
+    options.upstreams.api.locations['/admin/'].headers['X-Service'],
+    'api',
+  );
+  assert.equal(
+    options.upstreams.api.locations['/admin/'].headers['X-Scope'],
+    'admin',
+  );
+});
+
 test('resolveOptions derives upstreams from services', () => {
   const options = resolveOptions({
     services: {
@@ -268,6 +311,10 @@ test('resolveOptions applies Vite upstream defaults and merges the root location
     upstreams: {
       vite: {
         port: 6173,
+        headers: {
+          Host: 'vite.internal',
+          'X-Shared': 'vite',
+        },
         locations: {
           '/': {
             auth: { forward: true },
@@ -299,7 +346,15 @@ test('resolveOptions applies Vite upstream defaults and merges the root location
     options.upstreams.vite.locations['/'].headers.Upgrade,
     '$http_upgrade',
   );
+  assert.equal(
+    options.upstreams.vite.locations['/'].headers['X-Shared'],
+    'vite',
+  );
   assert.equal(options.upstreams.vite.locations['/'].headers['X-App'], 'root');
+  assert.equal(
+    options.upstreams.vite.locations['/app/'].headers['X-Shared'],
+    'vite',
+  );
   assert.equal(
     options.upstreams.vite.locations['/app/'].headers['X-App'],
     'nested',

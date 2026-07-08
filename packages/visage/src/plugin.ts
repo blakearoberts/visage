@@ -29,7 +29,7 @@ export function visage(options: VisageOptions = {}): Plugin {
         server: {
           // Configure Vite to only allow traffic from the intended host.
           allowedHosts: [resolvedOptions.host],
-          hmr: {
+          ws: {
             protocol: 'wss',
             host: resolvedOptions.host,
             clientPort: resolvedOptions.port,

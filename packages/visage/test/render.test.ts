@@ -249,7 +249,6 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
         port: 8080,
         locations: {
           '/api/': {
-            auth: { redirect: true },
             headers: {
               'X-Service': 'api',
             },
@@ -287,6 +286,10 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     /map "\$http_sec_fetch_site:\$request_method:\$http_sec_fetch_mode:\$http_sec_fetch_dest" \$csrf_app/,
   );
   assert.match(
+    nginx,
+    /map "\$request_method:\$http_sec_fetch_mode:\$http_sec_fetch_dest" \$auth_error_page \{\s+default @auth_401;\s+~\^\(GET\|HEAD\):navigate:document\$ @auth_redirect;\s+\}/,
+  );
+  assert.match(
     upstreamBlock(nginx, 'api'),
     /zone api 64k;\s+server api:8080 resolve;/,
   );
@@ -302,10 +305,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     api,
     /auth_request_set\s+\$authorization \$upstream_http_authorization;/,
   );
-  assert.match(
-    api,
-    /error_page 401 =302 \/oauth2\/start\?rd=\$scheme:\/\/\$http_host\$request_uri;/,
-  );
+  assert.match(api, /error_page\s+401 = \$auth_error_page;/);
   assert.match(api, /proxy_set_header Cookie "";/);
   assert.match(api, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(api, /proxy_set_header X-Auth-Request-Email "";/);
@@ -326,10 +326,42 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.doesNotMatch(publicLocation, /csrf_/);
   assert.doesNotMatch(publicLocation, /add_header Vary/);
   assert.doesNotMatch(publicLocation, /auth_request/);
+  assert.doesNotMatch(publicLocation, /error_page\s+401/);
   assert.match(publicLocation, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(publicLocation, /proxy_set_header Authorization "";/);
   assert.match(publicLocation, /proxy_set_header Host public\.internal;/);
   assert.match(publicLocation, /proxy_buffer_size 8k;/);
+});
+
+test('writeNginxConfig redirects only document navigation auth failures', (t) => {
+  const config = resolvedConfig(t, {
+    upstreams: {
+      api: {
+        locations: {
+          '/api/': {},
+        },
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const api = locationBlock(nginx, '/api/');
+  const authRedirect = locationBlock(nginx, '@auth_redirect');
+  const auth401 = locationBlock(nginx, '@auth_401');
+
+  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(api, /error_page\s+401 = \$auth_error_page;/);
+  assert.match(
+    nginx,
+    /map "\$request_method:\$http_sec_fetch_mode:\$http_sec_fetch_dest" \$auth_error_page \{\s+default @auth_401;\s+~\^\(GET\|HEAD\):navigate:document\$ @auth_redirect;\s+\}/,
+  );
+  assert.match(
+    authRedirect,
+    /return 302 \/oauth2\/start\?rd=\$scheme:\/\/\$http_host\$request_uri;/,
+  );
+  assert.match(auth401, /return 401;/);
 });
 
 test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {

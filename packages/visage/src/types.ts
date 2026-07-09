@@ -355,12 +355,6 @@ export type VisageProxyPolicy = {
      */
     readonly enabled?: boolean;
     /**
-     * Whether unauthenticated browser requests should redirect to sign-in.
-     *
-     * @defaultValue `false`
-     */
-    readonly redirect?: boolean;
-    /**
      * Token forwarding behavior for the upstream `Authorization` header. Set
      * to `false` to omit a bearer token. Set to `true` to forward the
      * default bearer token for the upstream kind: an OAuth access token for

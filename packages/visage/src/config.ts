@@ -39,7 +39,6 @@ type ResolvedProxyPolicy = {
   readonly auth: {
     readonly enabled: boolean;
     readonly forward: false | 'id' | 'access';
-    readonly redirect: boolean;
   };
   readonly csrf: false | 'app' | 'api';
   readonly headers: Readonly<Record<string, string>>;
@@ -160,7 +159,7 @@ const BaseServiceOAuth2Proxy = {
 } as const satisfies ResolvedService;
 
 const DefaultProxyPolicy = {
-  auth: { enabled: true, forward: false, redirect: false },
+  auth: { enabled: true, forward: false },
   csrf: 'api',
   headers: {
     Host: '$host',
@@ -189,7 +188,7 @@ const BaseUpstreamOauth2Proxy = {
   port: 4180,
   locations: {
     '/oauth2/': {
-      auth: { enabled: false, forward: false, redirect: false },
+      auth: { enabled: false, forward: false },
       csrf: false,
       headers: {
         ...DefaultProxyPolicy.headers,
@@ -199,7 +198,7 @@ const BaseUpstreamOauth2Proxy = {
       directives: { ...DefaultProxyPolicy.directives },
     } satisfies ResolvedProxyPolicy,
     '= /oauth2/auth': {
-      auth: { enabled: false, forward: false, redirect: false },
+      auth: { enabled: false, forward: false },
       csrf: false,
       headers: {
         ...DefaultProxyPolicy.headers,
@@ -213,7 +212,7 @@ const BaseUpstreamOauth2Proxy = {
       },
     } satisfies ResolvedProxyPolicy,
     '/oauth2/sign_out': {
-      auth: { enabled: false, forward: false, redirect: false },
+      auth: { enabled: false, forward: false },
       csrf: false,
       headers: {
         ...DefaultProxyPolicy.headers,
@@ -357,7 +356,7 @@ function resolveUpstreamsOptions(
 }
 
 const BaseViteUpstreamRootLocation = {
-  auth: { enabled: true, forward: false, redirect: true },
+  auth: { enabled: true, forward: false },
   csrf: 'app',
   headers: {
     Host: '$host',
@@ -480,7 +479,6 @@ function resolveAuthPolicy(
           ? 'access'
           : 'id'
         : (auth.forward ?? false),
-    redirect: auth.redirect ?? false,
   } satisfies ResolvedProxyPolicy['auth'];
 }
 
@@ -624,7 +622,7 @@ function resolveIdpConfig({
           port: 5556,
           locations: {
             '/dex/': {
-              auth: { enabled: false, forward: false, redirect: false },
+              auth: { enabled: false, forward: false },
               csrf: false,
               headers: { ...DefaultProxyPolicy.headers },
               directives: { ...DefaultProxyPolicy.directives },

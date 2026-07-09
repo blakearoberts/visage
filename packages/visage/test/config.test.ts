@@ -338,7 +338,6 @@ test('resolveOptions applies Vite upstream defaults and merges the root location
   assert.deepEqual(options.upstreams.vite.locations['/'].auth, {
     enabled: true,
     forward: 'id',
-    redirect: true,
   });
   assert.equal(options.upstreams.vite.locations['/'].csrf, 'app');
   assert.equal(options.upstreams.vite.locations['/'].headers.Host, '$host');
@@ -544,7 +543,6 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
     enabled: true,
     forward: 'access',
-    redirect: false,
   });
   assert.equal(config.upstreams.api.locations['/api/'].csrf, 'api');
   assert.deepEqual(config.upstreams.api.locations['/api/'].headers, {
@@ -568,7 +566,6 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].auth, {
     enabled: true,
     forward: false,
-    redirect: false,
   });
   assert.equal(config.upstreams.metrics.locations['/metrics/'].csrf, 'api');
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
@@ -779,7 +776,7 @@ test('resolveConfig lets named services and upstreams override base entries', (t
         port: 3000,
         locations: {
           '/app/': {
-            auth: { redirect: true, forward: 'access' },
+            auth: { forward: 'access' },
             headers: {
               Upgrade: '$http_upgrade',
             },
@@ -809,7 +806,6 @@ test('resolveConfig lets named services and upstreams override base entries', (t
   assert.deepEqual(config.upstreams.vite.locations['/app/'].auth, {
     enabled: true,
     forward: 'access',
-    redirect: true,
   });
   assert.equal(config.upstreams.vite.locations['/app/'].headers?.Cookie, '""');
   assert.equal(config.upstreams.vite.locations['/app/'].headers?.Host, 'vite');

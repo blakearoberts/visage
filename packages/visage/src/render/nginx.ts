@@ -42,6 +42,10 @@ http {
         ~^(cross-site|same-site):GET:navigate:document$ 0;
         ~^(cross-site|same-site): 1;
     }
+    map "$request_method:$http_sec_fetch_mode:$http_sec_fetch_dest" $auth_error_page {
+        default @auth_401;
+        ~^(GET|HEAD):navigate:document$ @auth_redirect;
+    }
 
     <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
 
@@ -96,10 +100,7 @@ http {
             # Propagate refreshed session cookie.
             auth_request_set  $auth_cookie $upstream_http_set_cookie;
             add_header        Set-Cookie $auth_cookie;
-
-            <%_ if (location.auth.redirect) { %>
-            error_page 401 =302 /oauth2/start?rd=$scheme://$http_host$request_uri;
-            <%_ } %>
+            error_page        401 = $auth_error_page;
             <%_ } %>
             <%_ if (name === 'vite') { %>
             proxy_set_header <%~ it.edgeKey.header %> $edge_key;
@@ -126,6 +127,13 @@ http {
         <%_ } %>
 
         <%_ } %>
+        location @auth_redirect {
+            return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;
+        }
+
+        location @auth_401 {
+            return 401;
+        }
     }
 }
 `;

@@ -355,21 +355,16 @@ function resolveUpstreamsOptions(
   };
 }
 
-const BaseViteUpstreamRootLocation = {
+const BaseViteUpstreamRootLocation: VisageProxyPolicy = {
   auth: { enabled: true, forward: false },
   csrf: 'app',
+  ws: true,
   headers: {
     Host: '$host',
-    Upgrade: '$http_upgrade',
-    Connection: '$connection_upgrade',
     'X-Auth-Request-User': '$auth_user',
     'X-Auth-Request-Email': '$auth_email',
   },
-  directives: {
-    proxy_http_version: ['1.1'],
-    proxy_read_timeout: ['1h'],
-  },
-} satisfies ResolvedProxyPolicy;
+};
 
 function resolveViteUpstreamOptions(upstream: VisageUpstream): VisageUpstream {
   const base = BaseViteUpstreamRootLocation;
@@ -386,6 +381,7 @@ function resolveViteUpstreamOptions(upstream: VisageUpstream): VisageUpstream {
           : {
               auth: { ...base.auth, ...root.auth },
               csrf: root.csrf ?? base.csrf,
+              ws: root.ws ?? base.ws,
               headers: {
                 ...base.headers,
                 ...root.headers,
@@ -439,9 +435,10 @@ function resolveUpstreamLocationOptions(
   external: boolean,
 ): ResolvedProxyPolicy {
   const auth = resolveAuthPolicy(location.auth, external && name !== 'vite');
+  const { ws, ...policy } = location;
   return {
     ...DefaultProxyPolicy,
-    ...location,
+    ...policy,
     auth,
     csrf: location.csrf ?? (auth.enabled ? 'api' : false),
     headers: {
@@ -453,10 +450,22 @@ function resolveUpstreamLocationOptions(
       ...(auth.enabled && auth.forward === 'access'
         ? { Authorization: '"Bearer $access_token"' }
         : {}),
+      ...(ws
+        ? {
+            Connection: '$connection_upgrade',
+            Upgrade: '$http_upgrade',
+          }
+        : {}),
       ...(location.headers ?? {}),
     } satisfies ResolvedProxyPolicy['headers'],
     directives: {
       ...DefaultProxyPolicy.directives,
+      ...(ws
+        ? {
+            proxy_http_version: ['1.1'],
+            proxy_read_timeout: ['1h'],
+          }
+        : {}),
       ...Object.fromEntries(
         Object.entries(location.directives ?? {}).map(([name, value]) => [
           name,

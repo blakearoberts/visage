@@ -364,6 +364,47 @@ test('writeNginxConfig redirects only document navigation auth failures', (t) =>
   assert.match(auth401, /return 401;/);
 });
 
+test('writeNginxConfig renders WebSocket proxy policy only when enabled', (t) => {
+  const config = resolvedConfig(t, {
+    upstreams: {
+      api: {
+        locations: {
+          '/live/': { ws: true },
+          '/plain/': {},
+          '/disabled/': { ws: false },
+        },
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  const live = locationBlock(nginx, '/live/');
+  assert.match(live, /proxy_set_header Connection \$connection_upgrade;/);
+  assert.match(live, /proxy_set_header Upgrade \$http_upgrade;/);
+  assert.match(live, /proxy_http_version 1\.1;/);
+  assert.match(live, /proxy_read_timeout 1h;/);
+
+  const plain = locationBlock(nginx, '/plain/');
+  assert.doesNotMatch(
+    plain,
+    /proxy_set_header Connection \$connection_upgrade;/,
+  );
+  assert.doesNotMatch(plain, /proxy_set_header Upgrade \$http_upgrade;/);
+  assert.doesNotMatch(plain, /proxy_http_version 1\.1;/);
+  assert.doesNotMatch(plain, /proxy_read_timeout 1h;/);
+
+  const disabled = locationBlock(nginx, '/disabled/');
+  assert.doesNotMatch(
+    disabled,
+    /proxy_set_header Connection \$connection_upgrade;/,
+  );
+  assert.doesNotMatch(disabled, /proxy_set_header Upgrade \$http_upgrade;/);
+  assert.doesNotMatch(disabled, /proxy_http_version 1\.1;/);
+  assert.doesNotMatch(disabled, /proxy_read_timeout 1h;/);
+});
+
 test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   const config = resolvedConfig(t);
 

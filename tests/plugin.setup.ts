@@ -12,7 +12,7 @@ setup('start visage plugin', async () => {
   const ctx = await request.newContext();
   await expect(async () => {
     const response = await ctx.get('https://127.0.0.1:9001');
-    expect(response.ok()).toBe(true);
+    expect(response.status()).toBe(401);
   }).toPass();
   await ctx.dispose();
 });

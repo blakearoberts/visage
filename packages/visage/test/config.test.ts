@@ -346,6 +346,18 @@ test('resolveOptions applies Vite upstream defaults and merges the root location
     '$http_upgrade',
   );
   assert.equal(
+    options.upstreams.vite.locations['/'].headers.Connection,
+    '$connection_upgrade',
+  );
+  assert.deepEqual(
+    options.upstreams.vite.locations['/'].directives.proxy_http_version,
+    ['1.1'],
+  );
+  assert.deepEqual(
+    options.upstreams.vite.locations['/'].directives.proxy_read_timeout,
+    ['1h'],
+  );
+  assert.equal(
     options.upstreams.vite.locations['/'].headers['X-Shared'],
     'vite',
   );
@@ -357,6 +369,98 @@ test('resolveOptions applies Vite upstream defaults and merges the root location
   assert.equal(
     options.upstreams.vite.locations['/app/'].headers['X-App'],
     'nested',
+  );
+});
+
+test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    upstreams: {
+      api: {
+        locations: {
+          '/live/': { ws: true },
+          '/plain/': {},
+          '/disabled/': { ws: false },
+          '/custom/': {
+            ws: true,
+            headers: {
+              Connection: 'close',
+              Upgrade: '$custom_upgrade',
+            },
+            directives: {
+              proxy_http_version: '2',
+              proxy_read_timeout: '30s',
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(
+    config.upstreams.api.locations['/live/'].headers.Connection,
+    '$connection_upgrade',
+  );
+  assert.equal(
+    config.upstreams.api.locations['/live/'].headers.Upgrade,
+    '$http_upgrade',
+  );
+  assert.deepEqual(
+    config.upstreams.api.locations['/live/'].directives.proxy_http_version,
+    ['1.1'],
+  );
+  assert.deepEqual(
+    config.upstreams.api.locations['/live/'].directives.proxy_read_timeout,
+    ['1h'],
+  );
+
+  assert.equal(
+    config.upstreams.api.locations['/plain/'].headers.Connection,
+    undefined,
+  );
+  assert.equal(
+    config.upstreams.api.locations['/plain/'].headers.Upgrade,
+    undefined,
+  );
+  assert.equal(
+    config.upstreams.api.locations['/plain/'].directives.proxy_http_version,
+    undefined,
+  );
+  assert.equal(
+    config.upstreams.api.locations['/plain/'].directives.proxy_read_timeout,
+    undefined,
+  );
+  assert.equal(
+    config.upstreams.api.locations['/disabled/'].headers.Connection,
+    undefined,
+  );
+  assert.equal(
+    config.upstreams.api.locations['/disabled/'].headers.Upgrade,
+    undefined,
+  );
+  assert.equal(
+    config.upstreams.api.locations['/disabled/'].directives.proxy_http_version,
+    undefined,
+  );
+  assert.equal(
+    config.upstreams.api.locations['/disabled/'].directives.proxy_read_timeout,
+    undefined,
+  );
+
+  assert.equal(
+    config.upstreams.api.locations['/custom/'].headers.Connection,
+    'close',
+  );
+  assert.equal(
+    config.upstreams.api.locations['/custom/'].headers.Upgrade,
+    '$custom_upgrade',
+  );
+  assert.deepEqual(
+    config.upstreams.api.locations['/custom/'].directives.proxy_http_version,
+    ['2'],
+  );
+  assert.deepEqual(
+    config.upstreams.api.locations['/custom/'].directives.proxy_read_timeout,
+    ['30s'],
   );
 });
 

@@ -376,6 +376,16 @@ export type VisageProxyPolicy = {
    */
   readonly csrf?: false | 'app' | 'api';
   /**
+   * Whether to add WebSocket proxy support for this location.
+   *
+   * When enabled, Visage adds `Connection` and `Upgrade` proxy headers plus
+   * `proxy_http_version` and `proxy_read_timeout` directives unless the
+   * location explicitly overrides them.
+   *
+   * @defaultValue `false`
+   */
+  readonly ws?: boolean;
+  /**
    * Request headers to set when proxying to the upstream. Values may include
    * NGINX variables. These are merged with Visage's default proxy headers:
    * `Cookie`, `Host`, `X-Real-IP`, `X-Forwarded-For`, and

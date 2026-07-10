@@ -4,13 +4,16 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import visage from '@blakearoberts/visage';
 
-const otelLgtm = resolve(import.meta.dirname, 'otel-lgtm');
-
 export default defineConfig({
   plugins: [
     react(),
     visage({
       services: {
+        nginx: {
+          build: resolve(import.meta.dirname, 'nginx'),
+          image: 'visage-nginx-otel',
+          pull_policy: 'build',
+        },
         grafana: {
           image: 'grafana/otel-lgtm',
           environment: {
@@ -26,7 +29,9 @@ export default defineConfig({
             OTELCOL_EXTRA_ARGS:
               '--config=file:/otel-lgtm/visage/otelcol-config.yaml',
           },
-          volumes: [`${otelLgtm}:/otel-lgtm/visage:ro`],
+          volumes: [
+            `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage:ro`,
+          ],
           upstream: {
             port: 3000,
             headers: {

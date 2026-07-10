@@ -14,6 +14,8 @@ http {
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 
+    include /etc/nginx/http.d/*.conf;
+
     # Disable IPv6 DNS lookup. Docker Desktop (com.docker.backend), doesn't
     # support IPv6 traffic translation to host loopback.
     resolver 127.0.0.11 ipv6=off;
@@ -96,10 +98,11 @@ http {
         ssl_certificate_key <%~ it.ssl.key %>;
 
         access_log /var/log/nginx/access.log access_log_format;
-        set $auth_email "";
 
         # Redirect HTTP to HTTPS.
         error_page 497 =301 https://$http_host$request_uri;
+
+        set $auth_email "";
 
         <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
         <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
@@ -138,11 +141,11 @@ http {
             <%_ } %>
             <%_ if (upstream.scheme === 'https') { %>
             proxy_ssl_server_name on;
-            proxy_ssl_name <%~ upstream.host %>;
+            proxy_ssl_name        <%~ upstream.host %>;
             <%_ if (upstream.external) { %>
             proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-            proxy_ssl_verify on;
-            proxy_ssl_verify_depth 3;
+            proxy_ssl_verify              on;
+            proxy_ssl_verify_depth        3;
             <%_ } %>
             <%_ } %>
             proxy_pass <%~ upstream.scheme %>://<%~ name %>;
@@ -153,7 +156,6 @@ http {
         location @auth_redirect {
             return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;
         }
-
         location @auth_401 {
             return 401;
         }

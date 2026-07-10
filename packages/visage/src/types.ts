@@ -264,6 +264,10 @@ export type VisageOAuth2Client = {
  */
 export type VisageService = {
   /**
+   * Docker build context for the service.
+   */
+  readonly build?: string;
+  /**
    * Container image reference used for the service. Required for additional
    * services; defaults to the managed image when overriding `nginx` or
    * `oauth2_proxy`.
@@ -285,6 +289,11 @@ export type VisageService = {
    * Docker network mode rendered into the Compose service.
    */
   readonly network_mode?: string;
+  /**
+   * Compose image pull policy.
+   * @defaultValue `'missing'`
+   */
+  readonly pull_policy?: 'always' | 'build' | 'missing' | 'never';
   /**
    * Additional host-to-IP mappings rendered into the Compose service.
    */

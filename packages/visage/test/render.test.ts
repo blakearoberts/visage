@@ -352,7 +352,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(api, /proxy_hide_header X-A;/);
   assert.match(api, /proxy_hide_header X-B;/);
   assert.match(api, /proxy_ssl_server_name on;/);
-  assert.match(api, /proxy_ssl_name api;/);
+  assert.match(api, /proxy_ssl_name\s+api;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
 
   const publicLocation = locationBlock(nginx, '/public/');
@@ -638,13 +638,13 @@ test('writeNginxConfig renders external HTTPS upstreams with SNI and certificate
   assert.match(api, /proxy_set_header Host api\.example\.test;/);
   assert.match(api, /proxy_set_header Authorization "";/);
   assert.match(api, /proxy_ssl_server_name on;/);
-  assert.match(api, /proxy_ssl_name api\.example\.test;/);
+  assert.match(api, /proxy_ssl_name\s+api\.example\.test;/);
   assert.match(
     api,
     /proxy_ssl_trusted_certificate \/etc\/ssl\/certs\/ca-certificates\.crt;/,
   );
-  assert.match(api, /proxy_ssl_verify on;/);
-  assert.match(api, /proxy_ssl_verify_depth 3;/);
+  assert.match(api, /proxy_ssl_verify\s+on;/);
+  assert.match(api, /proxy_ssl_verify_depth\s+3;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
 });
 
@@ -665,9 +665,9 @@ test('writeNginxConfig does not verify local HTTPS service upstreams by default'
   const nginx = readGenerated(config, config.files.nginx[0]);
   const secure = locationBlock(nginx, '/secure/');
   assert.match(secure, /proxy_ssl_server_name on;/);
-  assert.match(secure, /proxy_ssl_name secure;/);
+  assert.match(secure, /proxy_ssl_name\s+secure;/);
   assert.doesNotMatch(secure, /proxy_ssl_trusted_certificate/);
-  assert.doesNotMatch(secure, /proxy_ssl_verify on;/);
+  assert.doesNotMatch(secure, /proxy_ssl_verify\s+on;/);
   assert.doesNotMatch(secure, /proxy_ssl_verify_depth/);
   assert.match(secure, /proxy_pass https:\/\/secure;/);
 });

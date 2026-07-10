@@ -371,10 +371,10 @@ export type VisageProxyPolicy = {
    * locations. Set this to `false` when an upstream handles CSRF itself or
    * intentionally accepts cross-site browser requests.
    *
-   * @defaultValue `'app'` for the built-in Vite root location; `'api'` for
-   * authenticated upstream locations; `false` for unauthenticated locations.
+   * @defaultValue `true` for authenticated locations; `false` for
+   * unauthenticated locations.
    */
-  readonly csrf?: false | 'app' | 'api';
+  readonly csrf?: boolean;
   /**
    * Whether to add WebSocket proxy support for this location.
    *

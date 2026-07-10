@@ -108,13 +108,14 @@ visage({
 OAuth2 Proxy identity values can also be mapped explicitly through headers such
 as `$auth_user`, `$auth_email`, `$auth_groups`, and `$auth_preferred_username`.
 
-Authenticated locations also get Fetch Metadata CSRF checks by default. The
-built-in Vite root location uses `csrf: 'app'`, which allows same-origin
-requests and top-level `GET` document navigations. Other authenticated upstream
-locations use `csrf: 'api'`, which blocks same-site and cross-site browser
-requests when modern Fetch Metadata headers are present. Set `csrf: 'app'` for
-an upstream that serves browser pages, or `csrf: false` when the upstream
-intentionally handles cross-site browser requests itself.
+Authenticated locations also get CSRF checks by default. The policy allows
+same-origin requests and top-level `GET` document navigations, blocks other
+same-site and cross-site browser requests when modern Fetch Metadata headers are
+present, and falls back to an exact `Origin` match or `Referer` origin-prefix
+match against the configured browser origin for unsafe methods when Fetch
+Metadata is absent or unrecognized. Set `csrf: false` when the upstream
+intentionally handles cross-site browser requests itself. See
+[CSRF Policy](../../docs/csrf-policy.md).
 
 ### External IdPs
 
@@ -175,15 +176,17 @@ terminates local HTTPS, and forwards authenticated identity or token material to
 configured upstreams.
 
 Please report suspected vulnerabilities through GitHub private vulnerability
-reporting as described in [Security Policy](SECURITY.md).
+reporting as described in [Security Policy](../../SECURITY.md).
 
 Do not treat the managed Dex and OAuth2 Proxy defaults as production auth
 infrastructure.
 
-Visage's CSRF policy is an edge request-isolation guard for cookie-backed
-locations. It is not a replacement for application-owned CSRF tokens where an
-application accepts form posts or other browser-submitted mutations. CSP,
-`frame-ancestors`, and other click-jacking controls remain application policy.
+Visage's CSRF policy is the edge CSRF control for cookie-backed locations.
+Application CSRF tokens are not required for ordinary same-origin SPA mutations
+under this policy. App-level tokens may still be useful when a location disables
+the edge policy, intentionally accepts cross-site browser requests, or needs a
+token that encodes additional authorization semantics. CSP, `frame-ancestors`,
+and other click-jacking controls remain application policy.
 
 ## Troubleshooting
 
@@ -192,12 +195,3 @@ application accepts form posts or other browser-submitted mutations. CSP,
 - If NGINX cannot start, check whether the configured `port` is already in use.
 - If the hostname cannot be resolved, Visage may need permission to update
   `/etc/hosts`.
-
-## TO-DO
-
-- [ ] Harden the default security posture by addressing the
-      [security hardening backlog](docs/security-hardening.md).
-- [ ] Support [runtime config reloads](docs/config-reload.md).
-- [ ] Support [Dex connectors](https://dexidp.io/docs/connectors/).
-- [ ] Support Dex on a distinct subdomain, such as `auth.localhost`.
-- [ ] Support [HTTP mode without local TLS](docs/tls-http-mode.md).

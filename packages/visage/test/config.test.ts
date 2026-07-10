@@ -339,7 +339,7 @@ test('resolveOptions applies Vite upstream defaults and merges the root location
     enabled: true,
     forward: 'id',
   });
-  assert.equal(options.upstreams.vite.locations['/'].csrf, 'app');
+  assert.equal(options.upstreams.vite.locations['/'].csrf, true);
   assert.equal(options.upstreams.vite.locations['/'].headers.Host, '$host');
   assert.equal(
     options.upstreams.vite.locations['/'].headers.Upgrade,
@@ -648,7 +648,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     enabled: true,
     forward: 'access',
   });
-  assert.equal(config.upstreams.api.locations['/api/'].csrf, 'api');
+  assert.equal(config.upstreams.api.locations['/api/'].csrf, true);
   assert.deepEqual(config.upstreams.api.locations['/api/'].headers, {
     Cookie: '""',
     'X-Auth-Request-User': '""',
@@ -671,7 +671,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     enabled: true,
     forward: false,
   });
-  assert.equal(config.upstreams.metrics.locations['/metrics/'].csrf, 'api');
+  assert.equal(config.upstreams.metrics.locations['/metrics/'].csrf, true);
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
     proxy_buffer_size: ['8k'],
   });
@@ -841,7 +841,7 @@ test('resolveConfig applies CSRF defaults and overrides', (t) => {
       api: {
         locations: {
           '/api/': {},
-          '/app/': { csrf: 'app' },
+          '/browser/': { csrf: true },
           '/webhook/': { auth: { enabled: false } },
           '/custom/': { csrf: false },
         },
@@ -849,9 +849,9 @@ test('resolveConfig applies CSRF defaults and overrides', (t) => {
     },
   });
 
-  assert.equal(config.upstreams.vite.locations['/'].csrf, 'app');
-  assert.equal(config.upstreams.api.locations['/api/'].csrf, 'api');
-  assert.equal(config.upstreams.api.locations['/app/'].csrf, 'app');
+  assert.equal(config.upstreams.vite.locations['/'].csrf, true);
+  assert.equal(config.upstreams.api.locations['/api/'].csrf, true);
+  assert.equal(config.upstreams.api.locations['/browser/'].csrf, true);
   assert.equal(config.upstreams.api.locations['/webhook/'].csrf, false);
   assert.equal(config.upstreams.api.locations['/custom/'].csrf, false);
   assert.equal(config.upstreams.dex.locations['/dex/'].csrf, false);

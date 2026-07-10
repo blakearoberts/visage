@@ -6,3 +6,6 @@ datasources:
     url: http://127.0.0.1:9090
     jsonData:
       timeInterval: 10s
+  - name: tempo
+    type: tempo
+    url: http://127.0.0.1:3200

@@ -101,7 +101,7 @@ rca_log="$(mktemp)"
 echo "Codex RCA output is filtered; raw Codex stream log: $rca_log" >&2
 
 set +e
-codex exec --ephemeral --json - <"$rca_prompt" 2>>"$rca_log" \
+/Applications/ChatGPT.app/Contents/Resources/codex exec --ephemeral --json - <"$rca_prompt" 2>>"$rca_log" \
   | tee -a "$rca_log" \
   | jq -r '
       select(.type == "item.started" or .type == "item.completed")

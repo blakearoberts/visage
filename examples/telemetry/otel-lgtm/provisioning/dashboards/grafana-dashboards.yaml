@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: Visage Dashboards (mounted)
+    type: file
+    allowUiUpdates: true
+    updateIntervalSeconds: 5
+    options:
+      path: /otel-lgtm/visage/dashboards
+      foldersFromFilesStructure: false

@@ -280,11 +280,44 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
   );
   assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
-  assert.match(nginx, /map \$http_sec_fetch_site \$csrf_api/);
+  assert.match(nginx, /map \$request_method \$csrf_method/);
+  assert.match(nginx, /GET\s+safe;/);
+  assert.match(nginx, /HEAD\s+safe;/);
+  assert.match(nginx, /OPTIONS\s+safe;/);
+  assert.match(nginx, /map \$http_origin \$csrf_origin/);
+  assert.match(nginx, /"https:\/\/app\.local\.test:9443" match;/);
+  assert.match(nginx, /map \$http_referer \$csrf_referer/);
+  assert.ok(
+    nginx.includes('"~^https://app\\.local\\.test:9443([/?#]|$)" match;'),
+  );
   assert.match(
     nginx,
-    /map "\$http_sec_fetch_site:\$request_method:\$http_sec_fetch_mode:\$http_sec_fetch_dest" \$csrf_app/,
+    /map "\$csrf_method:\$csrf_origin:\$csrf_referer" \$csrf_fallback/,
   );
+  assert.ok(nginx.includes('"~^safe:.*:.*$"     allow;'));
+  assert.match(nginx, /unsafe:match:match\s+allow;/);
+  assert.match(nginx, /unsafe:match:absent\s+allow;/);
+  assert.match(nginx, /unsafe:absent:match\s+allow;/);
+  assert.ok(
+    nginx.includes(
+      'map "$request_method:$http_sec_fetch_mode:$http_sec_fetch_dest" $csrf_doc_nav',
+    ),
+  );
+  assert.match(nginx, /GET:navigate:document\s+1;/);
+  assert.ok(
+    nginx.includes(
+      'map "$http_sec_fetch_site:$csrf_doc_nav" $csrf_fetch_metadata',
+    ),
+  );
+  assert.ok(nginx.includes('"~^(same-origin|none):(0|1)$" allow;'));
+  assert.ok(nginx.includes('"~^(same-site|cross-site):1$" allow;'));
+  assert.ok(nginx.includes('"~^(same-site|cross-site):0$" deny;'));
+  assert.match(
+    nginx,
+    /map "\$csrf_fetch_metadata:\$csrf_fallback" \$csrf_reject/,
+  );
+  assert.match(nginx, /fallback:allow\s+0;/);
+  assert.doesNotMatch(nginx, /map \.\.\.|\n\s+\.\.\./);
   assert.match(
     nginx,
     /map "\$request_method:\$http_sec_fetch_mode:\$http_sec_fetch_dest" \$auth_error_page \{\s+default @auth_401;\s+~\^\(GET\|HEAD\):navigate:document\$ @auth_redirect;\s+\}/,
@@ -297,9 +330,9 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   const api = locationBlock(nginx, '/api/');
   assert.match(
     api,
-    /add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest" always;/,
+    /add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest, Origin, Referer" always;/,
   );
-  assert.match(api, /if \(\$csrf_api\) {\s+return 403;\s+}/);
+  assert.match(api, /if \(\$csrf_reject\) {\s+return 403;\s+}/);
   assert.match(api, /auth_request\s+\/oauth2\/auth;/);
   assert.match(
     api,
@@ -488,7 +521,7 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
   const root = locationBlock(nginx, '/');
   const vite = upstreamBlock(nginx, 'vite');
 
-  assert.match(root, /if \(\$csrf_app\) {\s+return 403;\s+}/);
+  assert.match(root, /if \(\$csrf_reject\) {\s+return 403;\s+}/);
   assert.match(root, /proxy_set_header Host \$host;/);
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
   assert.match(root, /proxy_set_header X-Auth-Request-User \$auth_user;/);
@@ -528,6 +561,7 @@ test('writeNginxConfig forwards the Vite edge key from njs', (t) => {
   assert.match(nginx, /js_import edge_key from \/etc\/nginx\/edge-key\.js;/);
   assert.match(nginx, /js_shared_dict_zone zone=edge_key:32k;/);
   assert.match(nginx, /js_set \$edge_key edge_key;/);
+  assert.doesNotMatch(nginx, /csrf_referer_origin/);
   assert.match(
     root,
     new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} \\$edge_key;`),

@@ -31,16 +31,45 @@ http {
         ''      close;
     }
 
-    # Fetch Metadata CSRF guards for cookie-backed locations.
-    map $http_sec_fetch_site $csrf_api {
-        default 0;
-        same-site 1;
-        cross-site 1;
+    # Fetch Metadata CSRF guard for cookie auth locations.
+    map $request_method $csrf_method {
+        default  unsafe;
+        GET      safe;
+        HEAD     safe;
+        OPTIONS  safe;
     }
-    map "$http_sec_fetch_site:$request_method:$http_sec_fetch_mode:$http_sec_fetch_dest" $csrf_app {
-        default 0;
-        ~^(cross-site|same-site):GET:navigate:document$ 0;
-        ~^(cross-site|same-site): 1;
+    map $http_origin $csrf_origin {
+        default invalid;
+        ''      absent;
+        "<%~ it.csrf.origin %>" match;
+    }
+    map $http_referer $csrf_referer {
+        default invalid;
+        ''      absent;
+        "<%~ it.csrf.referer %>" match;
+    }
+    map "$csrf_method:$csrf_origin:$csrf_referer" $csrf_fallback {
+        default             deny;
+        "~^safe:.*:.*$"     allow;
+        unsafe:match:match  allow;
+        unsafe:match:absent allow;
+        unsafe:absent:match allow;
+    }
+    map "$request_method:$http_sec_fetch_mode:$http_sec_fetch_dest" $csrf_doc_nav {
+        default               0;
+        GET:navigate:document 1;
+    }
+    map "$http_sec_fetch_site:$csrf_doc_nav" $csrf_fetch_metadata {
+        default                       fallback;
+        "~^(same-origin|none):(0|1)$" allow;
+        "~^(same-site|cross-site):1$" allow;
+        "~^(same-site|cross-site):0$" deny;
+    }
+    map "$csrf_fetch_metadata:$csrf_fallback" $csrf_reject {
+        default        1;
+        allow:deny     0;
+        allow:allow    0;
+        fallback:allow 0;
     }
     map "$request_method:$http_sec_fetch_mode:$http_sec_fetch_dest" $auth_error_page {
         default @auth_401;
@@ -76,16 +105,10 @@ http {
         <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
         location <%~ path %> {
             <%_ if (location.csrf) { %>
-            add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest" always;
-            <%_ if (location.csrf === 'app') { %>
-            if ($csrf_app) {
+            add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest, Origin, Referer" always;
+            if ($csrf_reject) {
                 return 403;
             }
-            <%_ } else { %>
-            if ($csrf_api) {
-                return 403;
-            }
-            <%_ } %>
 
             <%_ } %>
             <%_ if (location.auth?.enabled) { %>
@@ -160,9 +183,12 @@ export function writeNginxConfig(config: VisageConfig): void {
 }
 
 function renderNginxConfig(config: VisageConfig): string {
+  const origin = `https://${config.host}:${config.port}`;
+  const referer = `~^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([/?#]|$)`;
   const data = {
     host: config.host,
     port: config.port,
+    csrf: { origin, referer },
     ssl: {
       cert: join(config.files.certs[1], 'tls.crt'),
       key: join(config.files.certs[1], 'tls.key'),

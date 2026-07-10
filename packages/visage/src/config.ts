@@ -40,7 +40,7 @@ type ResolvedProxyPolicy = {
     readonly enabled: boolean;
     readonly forward: false | 'id' | 'access';
   };
-  readonly csrf: false | 'app' | 'api';
+  readonly csrf: boolean;
   readonly headers: Readonly<Record<string, string>>;
   readonly directives: Readonly<Record<string, readonly string[]>>;
 };
@@ -160,7 +160,7 @@ const BaseServiceOAuth2Proxy = {
 
 const DefaultProxyPolicy = {
   auth: { enabled: true, forward: false },
-  csrf: 'api',
+  csrf: true,
   headers: {
     Host: '$host',
 
@@ -357,7 +357,7 @@ function resolveUpstreamsOptions(
 
 const BaseViteUpstreamRootLocation: VisageProxyPolicy = {
   auth: { enabled: true, forward: false },
-  csrf: 'app',
+  csrf: true,
   ws: true,
   headers: {
     Host: '$host',
@@ -440,7 +440,7 @@ function resolveUpstreamLocationOptions(
     ...DefaultProxyPolicy,
     ...policy,
     auth,
-    csrf: location.csrf ?? (auth.enabled ? 'api' : false),
+    csrf: location.csrf ?? auth.enabled,
     headers: {
       ...DefaultProxyPolicy.headers,
       ...(external ? { Host: host } : {}),

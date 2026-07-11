@@ -25,6 +25,28 @@ export function startCompose(config: VisageConfig): () => void {
   };
   const opts = { cwd: config.cache, env };
 
+  function validate() {
+    const args = [
+      ...compose,
+      'run',
+      '--build',
+      '--quiet-build',
+      '--rm',
+      '--no-deps',
+      'nginx',
+      'nginx',
+      '-t',
+      '-q',
+    ];
+    const result = spawnSync('docker', args, {
+      ...opts,
+      stdio: ['ignore', 'ignore', 'inherit'],
+    });
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error('Failed to validate NGINX configuration');
+    }
+  }
   function up() {
     const out = openSync(join(dir, 'compose.log'), 'w');
     const args = [
@@ -48,6 +70,7 @@ export function startCompose(config: VisageConfig): () => void {
   }
 
   down();
+  validate();
   const result = up();
   if (result.error) throw result.error;
   if (result.status !== 0) {

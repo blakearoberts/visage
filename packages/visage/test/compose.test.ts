@@ -88,24 +88,28 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
   try {
     startCompose(config);
-    const firstSecret = spawnSyncCalls[1]?.env?.[config.secrets.cookieSecret];
-    const firstEdgeKey = spawnSyncCalls[1]?.env?.[config.secrets.edgeKey];
+    const firstSecret = spawnSyncCalls[2]?.env?.[config.secrets.cookieSecret];
+    const firstEdgeKey = spawnSyncCalls[2]?.env?.[config.secrets.edgeKey];
 
     process.env[config.secrets.cookieSecret] = 'changed-cookie-secret';
     process.env[config.secrets.edgeKey] = 'changed-edge-key';
     stop = startCompose(config);
-    const secondSecret = spawnSyncCalls[3]?.env?.[config.secrets.cookieSecret];
-    const secondEdgeKey = spawnSyncCalls[3]?.env?.[config.secrets.edgeKey];
+    const secondSecret = spawnSyncCalls[5]?.env?.[config.secrets.cookieSecret];
+    const secondEdgeKey = spawnSyncCalls[5]?.env?.[config.secrets.edgeKey];
 
-    assert.equal(spawnSyncCalls.length, 4);
+    assert.equal(spawnSyncCalls.length, 6);
     assert.equal(spawnSyncCalls[0]?.command, 'docker');
     assert.ok(spawnSyncCalls[0]?.args.includes('--file=./compose.yaml'));
     assert.ok(
       spawnSyncCalls[0]?.args.includes('--project-name=compose-test-visage'),
     );
     assert.deepEqual(
-      spawnSyncCalls.map((call) => (call.args.includes('up') ? 'up' : 'down')),
-      ['down', 'up', 'down', 'up'],
+      spawnSyncCalls.map((call) =>
+        call.args.find(
+          (arg) => arg === 'down' || arg === 'run' || arg === 'up',
+        ),
+      ),
+      ['down', 'run', 'up', 'down', 'run', 'up'],
     );
     assert.deepEqual(
       spawnCalls.map((call) => call.args.slice(-2)),
@@ -125,14 +129,25 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
         'container.log',
       ],
     );
-    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-4), [
+    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-9), [
+      'run',
+      '--build',
+      '--quiet-build',
+      '--rm',
+      '--no-deps',
+      'nginx',
+      'nginx',
+      '-t',
+      '-q',
+    ]);
+    assert.deepEqual(spawnSyncCalls[2]?.args.slice(-4), [
       'up',
       '--detach',
       '--force-recreate',
       '--remove-orphans',
     ]);
-    assert.equal(spawnSyncCalls[2]?.command, 'docker');
-    assert.deepEqual(spawnSyncCalls[2]?.args.slice(-2), [
+    assert.equal(spawnSyncCalls[3]?.command, 'docker');
+    assert.deepEqual(spawnSyncCalls[3]?.args.slice(-2), [
       'down',
       '--remove-orphans',
     ]);
@@ -146,8 +161,8 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     stop();
     stop = undefined;
     assert.deepEqual(stoppedLogs, ['SIGINT']);
-    assert.equal(spawnSyncCalls.length, 5);
-    assert.deepEqual(spawnSyncCalls[4]?.args.slice(-2), [
+    assert.equal(spawnSyncCalls.length, 7);
+    assert.deepEqual(spawnSyncCalls[6]?.args.slice(-2), [
       'down',
       '--remove-orphans',
     ]);
@@ -202,13 +217,78 @@ test('startCompose cleans up failed detached startup', async (t) => {
     assert.throws(() => startCompose(config), /Failed to start Docker Compose/);
 
     assert.deepEqual(
-      spawnSyncCalls.map((call) => (call.args.includes('up') ? 'up' : 'down')),
-      ['down', 'up', 'down'],
+      spawnSyncCalls.map((call) =>
+        call.args.find(
+          (arg) => arg === 'down' || arg === 'run' || arg === 'up',
+        ),
+      ),
+      ['down', 'run', 'up', 'down'],
     );
-    assert.deepEqual(spawnSyncCalls[2]?.args.slice(-2), [
+    assert.deepEqual(spawnSyncCalls[3]?.args.slice(-2), [
       'down',
       '--remove-orphans',
     ]);
+    assert.equal(spawnCalls.length, 0);
+  } finally {
+    openSyncMock.mock.restore();
+    spawnMock.mock.restore();
+    spawnSyncMock.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
+
+test('startCompose surfaces NGINX validation errors before startup', async (t) => {
+  const config = resolveConfig({
+    ...resolveOptions({}),
+    cache: '',
+    root: 'compose-test',
+    edgeKey: 'edge-key',
+  });
+  const spawnSyncCalls: SpawnCall[] = [];
+  const spawnCalls: SpawnCall[] = [];
+  const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
+    command: string,
+    args?: readonly string[],
+    options?: SpawnSyncOptions,
+  ) => {
+    spawnSyncCalls.push({ command, args: args ?? [], env: options?.env });
+    const isValidation = args?.includes('run') === true;
+    return {
+      pid: 0,
+      output: [],
+      stdout: '',
+      stderr: isValidation ? 'nginx: configuration test failed\n' : '',
+      status: isValidation ? 1 : 0,
+      signal: null,
+    } as SpawnSyncReturns<string>;
+  }) as typeof childProcess.spawnSync);
+  const spawnMock = t.mock.method(childProcess, 'spawn', ((
+    command: string,
+    args?: readonly string[],
+    options?: SpawnOptions,
+  ) => {
+    spawnCalls.push({ command, args: args ?? [], env: options?.env });
+    return {} as ReturnType<typeof childProcess.spawn>;
+  }) as typeof childProcess.spawn);
+  syncBuiltinESMExports();
+
+  const { startCompose } = await import('../src/compose.ts');
+  const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
+  syncBuiltinESMExports();
+  try {
+    assert.throws(() => startCompose(config), {
+      name: 'Error',
+      message: 'Failed to validate NGINX configuration',
+    });
+
+    assert.deepEqual(
+      spawnSyncCalls.map((call) =>
+        call.args.find(
+          (arg) => arg === 'down' || arg === 'run' || arg === 'up',
+        ),
+      ),
+      ['down', 'run'],
+    );
     assert.equal(spawnCalls.length, 0);
   } finally {
     openSyncMock.mock.restore();

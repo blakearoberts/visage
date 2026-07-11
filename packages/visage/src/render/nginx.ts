@@ -7,6 +7,7 @@ import { VisageEdgeKeyHeader, type VisageConfig } from '../config';
 
 const template = `
 load_module modules/ngx_http_js_module.so;
+include /etc/nginx/modules/*.conf;
 
 events {}
 

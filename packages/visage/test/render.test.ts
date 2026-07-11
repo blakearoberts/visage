@@ -478,6 +478,33 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   );
 });
 
+test('writeNginxConfig resolves Compose hostnames and keeps IP addresses static', (t) => {
+  const config = resolvedConfig(t, {
+    upstreams: {
+      fixed: {
+        host: '192.0.2.1',
+        port: 8080,
+      },
+    },
+  });
+
+  writeNginxConfig(config);
+
+  const nginx = readGenerated(config, config.files.nginx[0]);
+  assert.match(
+    upstreamBlock(nginx, 'dex'),
+    /zone dex 64k;\s+server dex:5556 resolve;/,
+  );
+
+  const oauth2Proxy = upstreamBlock(nginx, 'oauth2_proxy');
+  assert.match(oauth2Proxy, /server 127\.0\.0\.1:4180;/);
+  assert.doesNotMatch(oauth2Proxy, /zone|resolve/);
+
+  const fixed = upstreamBlock(nginx, 'fixed');
+  assert.match(fixed, /server 192\.0\.2\.1:8080;/);
+  assert.doesNotMatch(fixed, /zone|resolve/);
+});
+
 test('writeNginxConfig keeps OAuth2-only sign-out returning to root', (t) => {
   const config = resolvedConfig(t, {
     idp: {

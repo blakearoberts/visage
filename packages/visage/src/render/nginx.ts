@@ -1,5 +1,6 @@
 import { Eta } from 'eta';
 import { writeFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { join } from 'node:path';
 
 import { VisageEdgeKeyHeader, type VisageConfig } from '../config';
@@ -207,7 +208,7 @@ function renderNginxConfig(config: VisageConfig): string {
           resolve:
             upstream.host === 'host.docker.internal'
               ? process.platform !== 'linux'
-              : upstream.external,
+              : isIP(upstream.host) === 0,
         },
       ]),
     ),

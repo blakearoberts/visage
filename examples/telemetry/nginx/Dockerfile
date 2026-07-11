@@ -7,8 +7,7 @@ RUN set -eux; \
     apk add --no-cache \
       --repository "https://nginx.org/packages/mainline/alpine/v${alpine_version}/main" \
       "nginx-module-otel=${NGINX_VERSION}.${OTEL_MODULE_VERSION}-r${DYNPKG_RELEASE}"; \
-    mkdir -p /etc/nginx/http.d
+    mkdir -p /etc/nginx/http.d /etc/nginx/modules
 
+COPY otel-module.conf /etc/nginx/modules/otel.conf
 COPY otel.conf /etc/nginx/http.d/otel.conf
-
-CMD ["nginx", "-g", "daemon off; load_module modules/ngx_otel_module.so;"]

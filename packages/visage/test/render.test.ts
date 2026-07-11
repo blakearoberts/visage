@@ -272,6 +272,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
 
   const nginx = readGenerated(config, config.files.nginx[0]);
   assert.match(nginx, /events \{\}/);
+  assert.match(nginx, /include \/etc\/nginx\/modules\/\*\.conf;/);
   assert.match(nginx, /listen 9443 ssl;/);
   assert.match(nginx, /server_name app\.local\.test;/);
   assert.match(nginx, /ssl_certificate\s+\/etc\/nginx\/certs\/tls\.crt;/);

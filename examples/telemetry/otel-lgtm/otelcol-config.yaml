@@ -1,5 +1,3 @@
-file_format: '1.1'
-
 receivers:
   otlp:
     protocols:
@@ -8,18 +6,91 @@ receivers:
   prometheus:
     config:
       scrape_configs:
-        - job_name: 'oauth2-proxy'
+        - job_name: oauth2-proxy
           scrape_interval: 10s
           static_configs:
-            - targets: ['nginx:4181']
+            - targets: [nginx:4181]
 
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133
-    path: '/ready'
+    path: /ready
 
 processors:
   batch:
+  transform/nginx_http_server_spans:
+    trace_statements:
+      - context: span
+        conditions:
+          - span.kind == SPAN_KIND_SERVER and IsMatch(span.name, "^[^ ]+ /.*$")
+        statements:
+          - set(span.attributes["http.request.method"], span.attributes["http.method"])
+          - set(span.attributes["url.path"], span.attributes["http.target"])
+          - replace_pattern(span.attributes["url.path"], "\\?.*", "")
+          - set(span.attributes["url.query"], span.attributes["http.target"]) where IsMatch(span.attributes["http.target"], "\\?")
+          - replace_pattern(span.attributes["url.query"], "^[^?]*\\?", "") where span.attributes["url.query"] != nil
+          - set(span.attributes["url.scheme"], span.attributes["http.scheme"])
+          - set(span.attributes["network.protocol.version"], span.attributes["http.flavor"])
+          - set(span.attributes["network.protocol.version"], "2") where span.attributes["http.flavor"] == "2.0"
+          - set(span.attributes["network.protocol.version"], "3") where span.attributes["http.flavor"] == "3.0"
+          - set(span.attributes["user_agent.original"], span.attributes["http.user_agent"])
+          - set(span.attributes["http.request.body.size"], span.attributes["http.request_content_length"])
+          - set(span.attributes["http.response.body.size"], span.attributes["http.response_content_length"])
+          - set(span.attributes["server.address"], span.attributes["net.host.name"])
+          - set(span.attributes["server.port"], span.attributes["net.host.port"])
+          - set(span.attributes["client.address"], span.attributes["net.sock.peer.addr"])
+          - set(span.attributes["network.peer.address"], span.attributes["net.sock.peer.addr"])
+          - set(span.attributes["network.peer.port"], span.attributes["net.sock.peer.port"])
+          - set(span.attributes["http.response.status_code"], span.attributes["http.status_code"])
+          - set(span.attributes["error.type"], String(span.attributes["http.status_code"])) where span.attributes["http.status_code"] >= 500
+          - set(span.status.code, STATUS_CODE_ERROR) where span.attributes["http.status_code"] >= 500
+          - set(span.name, span.attributes["http.request.method"])
+          - delete_key(span.attributes, "http.target")
+          - delete_key(span.attributes, "http.scheme")
+          - delete_key(span.attributes, "http.flavor")
+          - delete_key(span.attributes, "http.user_agent")
+          - delete_key(span.attributes, "http.request_content_length")
+          - delete_key(span.attributes, "http.response_content_length")
+          - delete_key(span.attributes, "net.host.name")
+          - delete_key(span.attributes, "net.host.port")
+          - delete_key(span.attributes, "net.sock.peer.addr")
+          - delete_key(span.attributes, "net.sock.peer.port")
+          - delete_key(span.attributes, "http.route")
+          - delete_key(span.attributes, "http.method")
+          - delete_key(span.attributes, "http.status_code")
+
+connectors:
+  span_metrics:
+    namespace: http.server.request
+    histogram:
+      unit: s
+      explicit:
+        buckets:
+          [
+            5ms,
+            10ms,
+            25ms,
+            50ms,
+            75ms,
+            100ms,
+            250ms,
+            500ms,
+            750ms,
+            1s,
+            2.5s,
+            5s,
+            7.5s,
+            10s,
+          ]
+    dimensions:
+      - name: http.request.method
+      - name: url.scheme
+      - name: error.type
+      - name: http.response.status_code
+      - name: network.protocol.version
+      - name: server.address
+      - name: server.port
+    exclude_dimensions: [span.name, span.kind, status.code]
 
 exporters:
   otlp_http/metrics:
@@ -36,9 +107,9 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp_http/traces]
+      processors: [transform/nginx_http_server_spans, batch]
+      exporters: [otlp_http/traces, span_metrics]
     metrics:
-      receivers: [prometheus]
+      receivers: [prometheus, span_metrics]
       processors: [batch]
       exporters: [otlp_http/metrics]

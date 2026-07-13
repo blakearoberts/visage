@@ -28,6 +28,8 @@ export default defineConfig({
             GF_PATHS_PROVISIONING: '/otel-lgtm/visage/provisioning',
             OTELCOL_EXTRA_ARGS:
               '--config=file:/otel-lgtm/visage/otelcol-config.yaml',
+            TEMPO_EXTRA_ARGS:
+              '--config.file=/otel-lgtm/visage/tempo-config.yaml',
           },
           volumes: [
             `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage:ro`,

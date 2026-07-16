@@ -6,9 +6,9 @@ Releases are GitHub Actions-driven. The workflows are split by entrypoint:
 - The `CI` workflow runs the shared checks for pull requests and pushes to
   `main`.
 - The `Publish` workflow runs after a successful `CI` workflow from a push to
-  `main`; it publishes the next RC to npm with the `next` dist-tag for ordinary
-  merges, or publishes a stable release with the `latest` dist-tag for release
-  merges.
+  `main`; ordinary merges publish the next RC only to npm with the `next`
+  dist-tag, while release merges publish to npm with the `latest` dist-tag and
+  create the stable Git tag and GitHub Release.
 - Manual `Prepare Release` workflow dispatch from `main` prepares a stable
   version bump pull request for manual review and merge.
 
@@ -54,10 +54,8 @@ npm version 0.1.0-rc.0 --workspace @blakearoberts/visage --no-git-tag-version --
 When that PR merges and CI passes on `main`, the publish workflow publishes the
 next RC for that seeded train.
 
-The RC git tag points at the `main` commit that passed CI. The GitHub prerelease
-body starts with a package section that links to the exact npm package version,
-then includes GitHub-generated release notes from the previous reachable `v*`
-tag, including merged pull request links and the compare link.
+The RC is published only to npm with the `next` dist-tag and provenance. The
+workflow does not create a Git tag or GitHub Release for an RC.
 
 ## Stable Releases
 

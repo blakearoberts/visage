@@ -164,7 +164,8 @@ jobs:
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
           permission-contents: write
 
-      - name: Publish GitHub release
+      - name: Publish stable GitHub release
+        if: env.PUBLISH_MODE == 'stable'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
@@ -174,21 +175,16 @@ jobs:
           release_tag="v$PUBLISH_VERSION"
 
           release_notes_args=(-f "tag_name=$release_tag")
-          if [[ "$PUBLISH_MODE" == "stable" ]]; then
-            notes_target="${RELEASE_COMMIT}^"
-            previous_tag="$(
-              git for-each-ref \
-                --merged "$notes_target" \
-                --sort=-version:refname \
-                --format='%(refname:strip=2)' \
-                refs/tags |
-                grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
-                head -n 1 || true
-            )"
-          else
-            notes_target="$RELEASE_COMMIT"
-            previous_tag="$(git describe --first-parent --tags --match 'v[0-9]*' --abbrev=0 "${RELEASE_COMMIT}^" 2>/dev/null || true)"
-          fi
+          notes_target="${RELEASE_COMMIT}^"
+          previous_tag="$(
+            git for-each-ref \
+              --merged "$notes_target" \
+              --sort=-version:refname \
+              --format='%(refname:strip=2)' \
+              refs/tags |
+              grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+              head -n 1 || true
+          )"
 
           release_notes_args+=(-f "target_commitish=$notes_target")
           if [[ -n "$previous_tag" ]]; then
@@ -208,13 +204,7 @@ jobs:
           git tag "$release_tag" "$RELEASE_COMMIT"
           git push "$authenticated_origin" "$release_tag"
 
-          prerelease=()
-          if [[ "$PUBLISH_MODE" == "rc" ]]; then
-            prerelease=(--prerelease)
-          fi
-
           gh release create "$release_tag" \
             --verify-tag \
-            "${prerelease[@]}" \
             --title "$release_tag" \
             --notes-file release-notes.md

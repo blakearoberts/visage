@@ -21,15 +21,12 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      - name: npm pack
-        run: |
-          mkdir -p package
-          npm pack --workspace @blakearoberts/visage --pack-destination package
+      - run: npm pack --workspace @blakearoberts/visage
 
       - uses: actions/upload-artifact@v7
         with:
-          name: package
-          path: package/*.tgz
+          archive: false
+          path: '*.tgz'
           retention-days: 1
 
   e2e:

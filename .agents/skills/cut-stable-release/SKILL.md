@@ -28,7 +28,7 @@ existing release flow, not to replace it.
 2. Report the inferred version and evidence. If the version is ambiguous, ask
    the user before continuing.
 3. Verify local and remote release state is safe.
-4. Dispatch the `Prepare Release` workflow from `main`.
+4. Dispatch the `Release` workflow from `main`.
 5. Wait for the workflow-created release pull request and report its link for
    manual review and merge.
 6. After the user confirms the pull request was merged, watch `CI` on the exact
@@ -97,18 +97,18 @@ For branch, tag, and npm existence checks, no output or a non-zero exit can be
 the expected safe result. If `npm view` prints the version, stop because the
 package is already published.
 
-## Prepare Release
+## Release
 
 Dispatch the existing workflow from `main`:
 
 ```sh
-gh workflow run "Prepare Release" --ref main -f "version=${VERSION}"
+gh workflow run "Release" --ref main -f "version=${VERSION}"
 ```
 
 Find and watch the workflow run:
 
 ```sh
-gh run list --workflow "Prepare Release" --branch main --limit 5
+gh run list --workflow "Release" --branch main --limit 5
 gh run watch "${RUN_ID}" --exit-status
 ```
 

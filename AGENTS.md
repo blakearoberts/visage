@@ -31,8 +31,7 @@ This file is intended for LLM based collaborators.
      GitHub CLI is installed and authenticated, `main` is current, the target
      tag does not already exist, and the package version is not already
      published to npm.
-  4. Trigger the `Prepare Release` workflow from `main` with the inferred
-     version.
+  4. Trigger the `Release` workflow from `main` with the inferred version.
   5. Wait for the workflow to create the `release/vX.Y.Z` pull request, then
      report the pull request link to the user for manual review and merge.
   6. Do not merge the release pull request, force-push release branches, move or

@@ -1,0 +1,80 @@
+name: Publish GitHub Release
+
+on:
+  workflow_call:
+    inputs:
+      package-name:
+        required: true
+        type: string
+      publish-version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: ${{ inputs.package-name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          PUBLISH_VERSION: ${{ inputs.publish-version }}
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          release_tag="v$PUBLISH_VERSION"
+
+          release_notes_args=(-f "tag_name=$release_tag")
+          notes_target="${RELEASE_COMMIT}^"
+          previous_tag="$(
+            git for-each-ref \
+              --merged "$notes_target" \
+              --sort=-version:refname \
+              --format='%(refname:strip=2)' \
+              refs/tags |
+              grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+              head -n 1 || true
+          )"
+
+          release_notes_args+=(-f "target_commitish=$notes_target")
+          if [[ -n "$previous_tag" ]]; then
+            release_notes_args+=(-f "previous_tag_name=$previous_tag")
+          fi
+
+          release_notes="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" "${release_notes_args[@]}" --jq .body)"
+          {
+            echo "## Package"
+            echo
+            echo "- npm: [$PACKAGE_NAME@$PUBLISH_VERSION](https://www.npmjs.com/package/$PACKAGE_NAME/v/$PUBLISH_VERSION)"
+            echo
+            printf '%s\n' "$release_notes"
+          } > release-notes.md
+
+          authenticated_origin="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git tag "$release_tag" "$RELEASE_COMMIT"
+          git push "$authenticated_origin" "$release_tag"
+
+          gh release create "$release_tag" \
+            --verify-tag \
+            --title "$release_tag" \
+            --notes-file release-notes.md

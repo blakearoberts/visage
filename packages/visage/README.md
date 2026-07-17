@@ -105,8 +105,11 @@ visage({
 });
 ```
 
-OAuth2 Proxy identity values can also be mapped explicitly through headers such
-as `$auth_user`, `$auth_email`, `$auth_groups`, and `$auth_preferred_username`.
+OAuth2 Proxy exposes the canonical authenticated principal as `$auth_user`,
+which Visage forwards to the Vite app as `X-Auth-Request-User`. Additional
+identity values such as `$auth_email`, `$auth_groups`, and
+`$auth_preferred_username` are optional and depend on the requested scopes and
+identity provider claims.
 
 Authenticated locations also get CSRF checks by default. The policy allows
 same-origin requests and top-level `GET` document navigations, blocks other

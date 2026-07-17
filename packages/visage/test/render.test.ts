@@ -281,6 +281,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
   );
   assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
+  assert.match(nginx, /log_format access_log_format '.*\$auth_user.*';/);
   assert.match(nginx, /map \$request_method \$csrf_method/);
   assert.match(nginx, /GET\s+safe;/);
   assert.match(nginx, /HEAD\s+safe;/);

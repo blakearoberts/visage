@@ -27,7 +27,7 @@ http {
         "~^[0-9]{4}-[0-9]{2}-[0-9]{2}T([0-9]{2}:[0-9]{2}:[0-9]{2})" $1;
         default $time_iso8601;
     }
-    log_format access_log_format '$access_log_time | $status | $request_method $request_uri | $auth_email | $proxy_host';
+    log_format access_log_format '$access_log_time | $status | $request_method $request_uri | $auth_user | $proxy_host';
 
     # Allow WebSockets (Vite HMR).
     map $http_upgrade $connection_upgrade {
@@ -103,8 +103,6 @@ http {
 
         # Redirect HTTP to HTTPS.
         error_page 497 =301 https://$http_host$request_uri;
-
-        set $auth_email "";
 
         <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
         <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>

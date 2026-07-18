@@ -8,4 +8,4 @@ script = "npm install"
 [[actions]]
 name = "Auto-Merge"
 icon = "tool"
-command = "bash .codex/environments/auto-merge-and-cleanup.sh"
+command = "bash .agents/skills/auto-merge/scripts/auto-merge.sh"

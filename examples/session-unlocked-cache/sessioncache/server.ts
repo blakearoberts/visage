@@ -43,7 +43,7 @@ export function createSessionCacheMiddleware(): NextHandleFunction {
   }
 
   return (request, response, next) => {
-    const scope = request.headers['x-auth-request-email'];
+    const scope = request.headers['x-auth-request-user'];
     if (
       request.method === 'GET' &&
       (request.headers.accept ?? '').includes('text/html') &&

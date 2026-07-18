@@ -248,7 +248,7 @@ export type VisageOAuth2Client = {
   /**
    * OIDC scopes requested by OAuth2 Proxy.
    *
-   * @defaultValue `['openid', 'email', 'profile', 'offline_access']`
+   * @defaultValue `['openid', 'offline_access']`
    */
   readonly scopes?: readonly string[];
 };

@@ -210,6 +210,12 @@ const BaseUpstreamOauth2Proxy = {
         proxy_pass_request_body: ['off'],
       },
     } satisfies ResolvedProxyPolicy,
+    '= /oauth2/userinfo': {
+      auth: { enabled: false, forward: false },
+      csrf: false,
+      headers: {},
+      directives: { return: ['404'] },
+    } satisfies ResolvedProxyPolicy,
     '/oauth2/sign_out': {
       auth: { enabled: false, forward: false },
       csrf: false,
@@ -236,7 +242,7 @@ const DefaultDexUsers: readonly VisageDexUser[] = [
 const DefaultOAuth2Client = {
   id: 'visage',
   secret: 'visage-secret',
-  scopes: ['openid', 'email', 'profile', 'offline_access'],
+  scopes: ['openid', 'offline_access'],
   public: false,
 } as const satisfies ResolvedOAuth2Client;
 

@@ -17,7 +17,7 @@ const visage = createVisageServer({
       image: 'traefik/whoami',
       upstream: {
         locations: {
-          '/blob/': { headers: { 'X-Auth-Request-Email': '$auth_email' } },
+          '/blob/': { headers: { 'X-Auth-Request-User': '$auth_user' } },
         },
       },
     },

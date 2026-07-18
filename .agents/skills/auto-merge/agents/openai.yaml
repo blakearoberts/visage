@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Auto-Merge'
+  short_description: 'Run auto-merge and report results'
+  default_prompt: 'Use $auto-merge to run the auto-merge script and report its output.'

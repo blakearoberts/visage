@@ -1,74 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+pr_create_attempts=15
+pr_create_poll_interval_seconds=2
 timeout_seconds=900
 poll_interval_seconds=15
-dry_run=0
+pr_url=""
+branch=""
 
-usage() {
-  cat <<'USAGE'
-Usage: watch-pr-merge-and-cleanup.sh [--dry-run]
+while [ "$pr_create_attempts" -gt 0 ]; do
+  branch="$(git branch --show-current || true)"
 
-Environment:
-  PR_MERGE_CLEANUP_PR_URL      GitHub pull request URL to watch.
-  PR_MERGE_CLEANUP_BRANCH      Local PR branch to delete after merge.
-USAGE
-}
+  if [ -n "$branch" ]; then
+    pr_url="$(gh pr list --head "$branch" --state open --json url --jq '.[0].url // empty')"
+  fi
 
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --dry-run)
-      dry_run=1
-      ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      echo "Unknown argument: $1" >&2
-      usage >&2
-      exit 2
-      ;;
-  esac
-  shift
+  if [ -n "$pr_url" ]; then
+    break
+  fi
+
+  pr_create_attempts=$((pr_create_attempts - 1))
+  if [ "$pr_create_attempts" -gt 0 ]; then
+    sleep "$pr_create_poll_interval_seconds"
+  fi
 done
 
-need_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Required command not found: $1" >&2
-    exit 127
+if [ -z "$branch" ]; then
+  echo "Timed out waiting for the create PR flow to check out a local branch." >&2
+  exit 1
+fi
+
+if [ -z "$pr_url" ]; then
+  echo "Timed out waiting for a PR for the current branch: $branch" >&2
+  exit 1
+fi
+
+is_draft="$(gh pr view "$pr_url" --json isDraft --jq '.isDraft')"
+
+if [ "$is_draft" = "true" ]; then
+  echo "Marking draft PR ready for review: $pr_url"
+  gh pr ready "$pr_url" > >(cat)
+fi
+
+gh pr merge --auto --merge "$pr_url" > >(cat)
+
+pr_state="$(gh pr view "$pr_url" --json mergeStateStatus,baseRefName --jq '[.mergeStateStatus, .baseRefName] | join("\u001f")')"
+IFS=$'\037' read -r merge_state_status base_branch <<<"$pr_state"
+
+if [ "$merge_state_status" = "BEHIND" ]; then
+  git fetch origin "$base_branch"
+  if ! git rebase FETCH_HEAD; then
+    git rebase --abort
+    echo "Auto-merge is enabled, but the branch is out of date and could not be rebased cleanly onto $base_branch." >&2
+    exit 1
   fi
-}
-
-require_env() {
-  local name="$1"
-  if [ -z "${!name:-}" ]; then
-    echo "Required environment variable is missing: $name" >&2
-    exit 2
-  fi
-}
-
-need_cmd gh
-need_cmd git
-need_cmd date
-need_cmd sleep
-
-require_env PR_MERGE_CLEANUP_PR_URL
-require_env PR_MERGE_CLEANUP_BRANCH
-
-pr_url="$PR_MERGE_CLEANUP_PR_URL"
-branch="$PR_MERGE_CLEANUP_BRANCH"
+  git push --force-with-lease
+fi
 
 read_pr_metadata() {
   gh pr view "$pr_url" \
-    --json state,mergedAt,baseRefName,headRefName,url \
-    --jq '[.state, (.mergedAt // "-"), .baseRefName, .headRefName, .url] | join("\u001f")'
+    --json state,mergedAt,baseRefName,url \
+    --jq '[.state, (.mergedAt // "-"), .baseRefName, .url] | join("\u001f")'
 }
 
 set_pr_metadata() {
   local metadata
   metadata="$(read_pr_metadata)"
-  IFS=$'\037' read -r state merged_at base_ref head_ref canonical_url <<<"$metadata"
+  IFS=$'\037' read -r state merged_at base_ref canonical_url <<<"$metadata"
   if [ "$merged_at" = "-" ]; then
     merged_at=""
   fi
@@ -124,40 +122,7 @@ sync_post_merge_checkout() {
   fi
 }
 
-print_plan() {
-  local state="$1"
-  local merged_at="$2"
-  local base_ref="$3"
-  local head_ref="$4"
-  local canonical_url="$5"
-
-  echo "PR: $canonical_url"
-  echo "State: $state"
-  echo "Merged at: ${merged_at:-<not merged>}"
-  echo "Base: $base_ref"
-  echo "Head: $head_ref"
-  echo "Local branch: $branch"
-
-  if [ "$state" = "MERGED" ]; then
-    if is_primary_checkout; then
-      echo "Dry run: would fetch/prune origin, require a clean tree, switch to local $base_ref, fast-forward it from origin/$base_ref, then delete $branch with git branch -d."
-    else
-      echo "Dry run: would fetch/prune origin, require a clean tree, switch to detached origin/$base_ref, then delete $branch with git branch -d."
-    fi
-  elif [ "$state" = "CLOSED" ]; then
-    echo "Dry run: PR is closed without a merge; cleanup would stop without changing Git state."
-  else
-    echo "Dry run: PR is not merged yet; cleanup would watch required checks, stop on terminal required-check failure, and wait before changing Git state."
-  fi
-}
-
 set_pr_metadata
-
-if [ "$dry_run" -eq 1 ]; then
-  print_plan "$state" "$merged_at" "$base_ref" "$head_ref" "$canonical_url"
-  exit 0
-fi
-
 deadline=$(( $(date +%s) + timeout_seconds ))
 
 while [ "$state" != "MERGED" ]; do
@@ -183,7 +148,6 @@ while [ "$state" != "MERGED" ]; do
     if [ -n "$failed_check_description" ]; then
       echo "Description: $failed_check_description" >&2
     fi
-    echo "Auto-merge RCA required before rerun: inspect the failed run/job logs, identify the failing test or command, cite log evidence, separate facts from inferences, recommend a fix, and state what was verified or remains unverified." >&2
     exit 1
   elif [ "$failed_check_status" -ne 1 ]; then
     exit 1
@@ -197,7 +161,6 @@ while [ "$state" != "MERGED" ]; do
 
   echo "Waiting for PR merge: $canonical_url (state: $state)"
   sleep "$poll_interval_seconds"
-
   set_pr_metadata
 done
 

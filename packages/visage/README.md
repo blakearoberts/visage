@@ -134,6 +134,13 @@ Configure `authorization`, `token`, or `jwks` only when the provider endpoints
 must be rendered explicitly instead of discovered from the issuer. Configure
 `end_session_endpoint` when the provider supports OIDC end-session redirects.
 
+Visage delegates principal admission to the identity provider and configures
+OAuth2 Proxy to accept any non-empty email asserted by that issuer. With managed
+Dex, `idp.users` is the complete eligible user list. With an external IdP, its
+client registration and application-assignment policy must ensure every identity
+that can obtain an OIDC response for the Visage client is intended to access the
+local application; Visage does not apply an additional email-domain allowlist.
+
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
 ## System Block Diagram

@@ -928,7 +928,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.cookie_csrf_per_request, true);
   assert.equal(oauth2Proxy.cookie_csrf_per_request_limit, '16');
   assert.equal(oauth2Proxy.cookie_path, '/');
-  assert.deepEqual(oauth2Proxy.email_domains, ['example.com']);
+  assert.deepEqual(oauth2Proxy.email_domains, ['*']);
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
   assert.deepEqual(oauth2Proxy.trusted_proxy_ips, ['127.0.0.1']);
   assert.equal(oauth2Proxy.set_xauthrequest, true);
@@ -949,7 +949,6 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
       clientId: 'local-app',
       clientSecret: null,
       scopes: ['openid', 'email', 'profile', 'offline_access'],
-      emailDomains: ['example.test'],
     },
   });
 
@@ -963,7 +962,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   assert.equal(oauth2Proxy.client_secret_file, '/dev/null');
   assert.equal(oauth2Proxy.code_challenge_method, 'S256');
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
-  assert.deepEqual(oauth2Proxy.email_domains, ['example.test']);
+  assert.deepEqual(oauth2Proxy.email_domains, ['*']);
 });
 
 test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t) => {

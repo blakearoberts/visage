@@ -251,9 +251,15 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
         locations: {
           '/api/': {
             headers: {
+              'X-Auth-Request-Groups': '$auth_groups',
+              'X-Auth-Request-Preferred-Username': '$auth_preferred_username',
               'X-Service': 'api',
             },
             directives: {
+              auth_request_set: [
+                '$auth_groups $upstream_http_x_auth_request_groups',
+                '$auth_preferred_username $upstream_http_x_auth_request_preferred_username',
+              ],
               proxy_buffer_size: '16k',
               proxy_hide_header: ['X-A', 'X-B'],
             },
@@ -345,12 +351,23 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     api,
     /auth_request_set\s+\$auth_email \$upstream_http_x_auth_request_email;/,
   );
+  assert.match(
+    api,
+    /auth_request_set \$auth_groups \$upstream_http_x_auth_request_groups;/,
+  );
+  assert.match(
+    api,
+    /auth_request_set \$auth_preferred_username \$upstream_http_x_auth_request_preferred_username;/,
+  );
   assert.match(api, /error_page\s+401 = \$auth_error_page;/);
   assert.match(api, /proxy_set_header Cookie "";/);
   assert.match(api, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(api, /proxy_set_header X-Auth-Request-Email "";/);
-  assert.match(api, /proxy_set_header X-Auth-Request-Groups "";/);
-  assert.match(api, /proxy_set_header X-Auth-Request-Preferred-Username "";/);
+  assert.match(api, /proxy_set_header X-Auth-Request-Groups \$auth_groups;/);
+  assert.match(
+    api,
+    /proxy_set_header X-Auth-Request-Preferred-Username \$auth_preferred_username;/,
+  );
   assert.match(api, /proxy_set_header Authorization "";/);
   assert.match(api, /proxy_set_header Host api;/);
   assert.match(api, /proxy_set_header X-Service api;/);
@@ -559,7 +576,10 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
 
   assert.match(root, /if \(\$csrf_reject\) {\s+return 403;\s+}/);
   assert.match(root, /proxy_set_header Host \$host;/);
-  assert.match(root, /auth_request_set\s+\$auth_email "";/);
+  assert.match(
+    root,
+    /auth_request_set\s+\$auth_user \$upstream_http_x_auth_request_user;\n[^\S\r\n]+auth_request_set\s+\$auth_email "";\n[^\S\r\n]+auth_request_set\s+\$auth_cookie \$upstream_http_set_cookie;/,
+  );
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
   assert.match(root, /proxy_set_header X-Auth-Request-User \$auth_user;/);
   assert.match(root, /proxy_set_header X-Auth-Request-Email \$auth_email;/);

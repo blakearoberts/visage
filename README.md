@@ -84,42 +84,6 @@ visage({
 });
 ```
 
-Authenticated upstream locations do not forward bearer tokens by default. Set
-`auth.forward` to `true` to forward the default bearer token for the upstream
-kind: external upstreams receive the OAuth access token, while local service
-upstreams receive the OIDC ID token.
-
-Hosted backend APIs that validate bearer auth should generally receive the
-access token, provided the token is issued for that API's issuer, audience, and
-scopes. Use `'access'` or `'id'` when you need to force a specific token kind.
-
-```ts
-visage({
-  upstreams: {
-    api: {
-      locations: {
-        '/api/': { auth: { forward: true } },
-      },
-    },
-  },
-});
-```
-
-OAuth2 Proxy exposes the canonical authenticated principal as `$auth_user`,
-which Visage forwards to the Vite app as `X-Auth-Request-User`. Additional
-identity values such as `$auth_email`, `$auth_groups`, and
-`$auth_preferred_username` are optional and depend on the requested scopes and
-identity provider claims.
-
-Authenticated locations also get CSRF checks by default. The policy allows
-same-origin requests and top-level `GET` document navigations, blocks other
-same-site and cross-site browser requests when modern Fetch Metadata headers are
-present, and falls back to an exact `Origin` match or `Referer` origin-prefix
-match against the configured browser origin for unsafe methods when Fetch
-Metadata is absent or unrecognized. Set `csrf: false` when the upstream
-intentionally handles cross-site browser requests itself. See
-[CSRF Policy](docs/csrf-policy.md).
-
 ### External IdPs
 
 External OIDC providers use issuer discovery by default:

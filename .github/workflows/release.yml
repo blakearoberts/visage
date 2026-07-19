@@ -1,4 +1,4 @@
-name: Prepare Release
+name: Release
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   prepare:
-    name: Prepare Release PR
+    name: Prepare
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -30,7 +30,7 @@ jobs:
           node-version: 26
           registry-url: https://registry.npmjs.org
 
-      - name: Resolve release version
+      - name: Resolve version
         id: release-version
         shell: bash
         run: |
@@ -56,7 +56,7 @@ jobs:
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
           echo "tag=v$release_version" >> "$GITHUB_OUTPUT"
 
-      - name: Validate release target
+      - name: Validate target
         env:
           PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}
           PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
@@ -102,7 +102,7 @@ jobs:
             exit 1
           fi
 
-      - name: Bump release version
+      - name: Bump version
         env:
           PACKAGE_VERSION: ${{ steps.release-version.outputs.version }}
         run: |
@@ -123,7 +123,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Create release pull request
+      - name: Create PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PACKAGE_NAME: ${{ steps.release-version.outputs.package-name }}

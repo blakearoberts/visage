@@ -1,0 +1,139 @@
+name: Publish npm Package
+
+on:
+  workflow_call:
+    inputs:
+      package-name:
+        required: true
+        type: string
+    outputs:
+      stable-version:
+        value: ${{ jobs.publish.outputs.stable-version }}
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: ${{ inputs.package-name }}
+    runs-on: ubuntu-latest
+    outputs:
+      stable-version: ${{ steps.publish-target.outputs.stable-version }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve publish target
+        id: publish-target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_NAME: ${{ inputs.package-name }}
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+
+          checkout_version="$(
+            npm pkg get version --workspace "$PACKAGE_NAME" --json |
+              jq --exit-status --raw-output --arg package "$PACKAGE_NAME" '.[$package]'
+          )"
+          package_filename="${PACKAGE_NAME#@}"
+          echo "artifact-name=${package_filename//\//-}-$checkout_version.tgz" >> "$GITHUB_OUTPUT"
+
+          merge_pr="$(
+            gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/pulls" \
+              --jq '.[] | select(.base.ref == "main") | .head.ref' |
+              head -n 1
+          )"
+
+          if [[ "$WORKFLOW_HEAD_BRANCH" == "main" && "$merge_pr" == "release/v$checkout_version" && "$checkout_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            {
+              echo "NPM_DIST_TAG=latest"
+              echo "PUBLISH_VERSION=$checkout_version"
+              echo "REWRITE_VERSION=false"
+            } >> "$GITHUB_ENV"
+            echo "stable-version=$checkout_version" >> "$GITHUB_OUTPUT"
+            echo "Resolved stable publish for $PACKAGE_NAME@$checkout_version from $merge_pr to $WORKFLOW_HEAD_BRANCH."
+            exit 0
+          fi
+
+          if [[ "$checkout_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.([0-9]+))?$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            committed_rc="${BASH_REMATCH[5]:-}"
+          else
+            echo "Unsupported package version: $checkout_version" >&2
+            exit 1
+          fi
+
+          if [[ -n "$committed_rc" ]]; then
+            rc_base="$major.$minor.$patch"
+            minimum_rc=$((10#$committed_rc))
+          else
+            rc_base="$major.$minor.$((patch + 1))"
+            minimum_rc=0
+          fi
+
+          escaped_rc_base="${rc_base//./\\.}"
+          max_rc=-1
+          while IFS= read -r published_version; do
+            if [[ "$published_version" =~ ^$escaped_rc_base-rc\.([0-9]+)$ ]]; then
+              published_rc=$((10#${BASH_REMATCH[1]}))
+              if (( published_rc > max_rc )); then
+                max_rc="$published_rc"
+              fi
+            fi
+          done < <(npm view "$PACKAGE_NAME" versions --parseable 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+' || true)
+
+          next_rc=$((max_rc + 1))
+          if (( next_rc < minimum_rc )); then
+            next_rc="$minimum_rc"
+          fi
+          rc_version="$rc_base-rc.$next_rc"
+
+          {
+            echo "NPM_DIST_TAG=next"
+            echo "PUBLISH_VERSION=$rc_version"
+            echo "REWRITE_VERSION=true"
+          } >> "$GITHUB_ENV"
+          echo "Resolved RC publish for $PACKAGE_NAME@$rc_version from $merge_pr to $WORKFLOW_HEAD_BRANCH."
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.publish-target.outputs.artifact-name }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Prepare package
+        run: |
+          set -euo pipefail
+
+          rm -rf package-publish package-work
+          mkdir -p package-publish
+
+          if [[ "$REWRITE_VERSION" == "true" ]]; then
+            mkdir -p package-work
+            tar -xzf *.tgz -C package-work
+            (
+              cd package-work/package
+              npm version "$PUBLISH_VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
+            )
+            npm pack ./package-work/package --pack-destination package-publish --ignore-scripts
+          else
+            cp *.tgz package-publish/
+          fi
+
+      - run: npm publish ./package-publish/*.tgz --access public --tag "$NPM_DIST_TAG" --provenance

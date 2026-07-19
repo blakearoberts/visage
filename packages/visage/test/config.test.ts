@@ -68,7 +68,7 @@ test('resolveOptions applies public defaults', () => {
   assert.deepEqual(options.oauth2, {
     id: 'visage',
     secret: 'visage-secret',
-    scopes: ['openid', 'email', 'profile', 'offline_access'],
+    scopes: ['openid', 'offline_access'],
     public: false,
   });
 });

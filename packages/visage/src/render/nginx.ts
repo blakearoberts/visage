@@ -119,7 +119,8 @@ http {
             auth_request_set  $authorization $upstream_http_authorization;
             auth_request_set  $access_token $upstream_http_x_auth_request_access_token;
             auth_request_set  $auth_user $upstream_http_x_auth_request_user;
-            auth_request_set  $auth_email $upstream_http_x_auth_request_email;
+            <%_ /* Explicit clear when oauth2-proxy sets sub as email header value. */ %>
+            auth_request_set  $auth_email <%~ it.email ? '$upstream_http_x_auth_request_email' : '""' %>;
             auth_request_set  $auth_groups $upstream_http_x_auth_request_groups;
             auth_request_set  $auth_preferred_username $upstream_http_x_auth_request_preferred_username;
 
@@ -190,6 +191,7 @@ function renderNginxConfig(config: VisageConfig): string {
   const data = {
     host: config.host,
     port: config.port,
+    email: config.oauth2.scopes.includes('email'),
     csrf: { origin, referer },
     ssl: {
       cert: join(config.files.certs[1], 'tls.crt'),

@@ -16,9 +16,7 @@ test.describe('server', () => {
     await passwordInput.fill(user.password);
     await loginButton.click();
 
-    await expect(page.locator('[data-test-id="ssr-identity"]')).toContainText(
-      user.email,
-    );
+    await expect(page.locator('[data-test-id="ssr-identity"]')).not.toBeEmpty();
     await expect(page.locator('[data-test-id="csr-identity"]')).toContainText(
       'Hostname',
     );

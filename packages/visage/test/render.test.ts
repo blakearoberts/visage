@@ -244,6 +244,7 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
 
 test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => {
   const config = resolvedConfig(t, {
+    oauth2: { scopes: ['openid', 'email', 'offline_access'] },
     upstreams: {
       api: {
         port: 8080,
@@ -339,6 +340,10 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(
     api,
     /auth_request_set\s+\$authorization \$upstream_http_authorization;/,
+  );
+  assert.match(
+    api,
+    /auth_request_set\s+\$auth_email \$upstream_http_x_auth_request_email;/,
   );
   assert.match(api, /error_page\s+401 = \$auth_error_page;/);
   assert.match(api, /proxy_set_header Cookie "";/);
@@ -440,7 +445,7 @@ test('writeNginxConfig renders WebSocket proxy policy only when enabled', (t) =>
   assert.doesNotMatch(disabled, /proxy_read_timeout 1h;/);
 });
 
-test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
+test('writeNginxConfig keeps required Dex and OAuth2 Proxy endpoints public', (t) => {
   const config = resolvedConfig(t);
 
   writeNginxConfig(config);
@@ -450,6 +455,7 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   const oauth2ProxyUpstream = upstreamBlock(nginx, 'oauth2_proxy');
   const oauth2Proxy = locationBlock(nginx, '/oauth2/');
   const oauth2Auth = locationBlock(nginx, '= /oauth2/auth');
+  const oauth2UserInfo = locationBlock(nginx, '= /oauth2/userinfo');
   const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
 
   assert.match(oauth2ProxyUpstream, /server 127\.0\.0\.1:4180;/);
@@ -468,6 +474,7 @@ test('writeNginxConfig keeps Dex and OAuth2 Proxy endpoints public', (t) => {
   assert.match(oauth2Auth, /proxy_pass_request_body off;/);
   assert.match(oauth2Auth, /proxy_set_header Content-Length "";/);
   assert.match(oauth2Auth, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2UserInfo, /return 404;/);
   assert.doesNotMatch(oauth2SignOut, /auth_request/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(oauth2SignOut, /proxy_set_header Authorization "";/);
@@ -552,6 +559,7 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
 
   assert.match(root, /if \(\$csrf_reject\) {\s+return 403;\s+}/);
   assert.match(root, /proxy_set_header Host \$host;/);
+  assert.match(root, /auth_request_set\s+\$auth_email "";/);
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
   assert.match(root, /proxy_set_header X-Auth-Request-User \$auth_user;/);
   assert.match(root, /proxy_set_header X-Auth-Request-Email \$auth_email;/);
@@ -928,8 +936,9 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.cookie_csrf_per_request, true);
   assert.equal(oauth2Proxy.cookie_csrf_per_request_limit, '16');
   assert.equal(oauth2Proxy.cookie_path, '/');
+  assert.equal(oauth2Proxy.oidc_email_claim, 'sub');
   assert.deepEqual(oauth2Proxy.email_domains, ['*']);
-  assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
+  assert.equal(oauth2Proxy.scope, 'openid offline_access');
   assert.deepEqual(oauth2Proxy.trusted_proxy_ips, ['127.0.0.1']);
   assert.equal(oauth2Proxy.set_xauthrequest, true);
   assert.equal(oauth2Proxy.set_authorization_header, true);
@@ -961,6 +970,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   assert.equal(oauth2Proxy.client_secret, undefined);
   assert.equal(oauth2Proxy.client_secret_file, '/dev/null');
   assert.equal(oauth2Proxy.code_challenge_method, 'S256');
+  assert.equal(oauth2Proxy.oidc_email_claim, 'email');
   assert.equal(oauth2Proxy.scope, 'openid email profile offline_access');
   assert.deepEqual(oauth2Proxy.email_domains, ['*']);
 });

@@ -8,6 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     visage({
+      oauth2: { scopes: ['openid', 'email', 'offline_access'] },
       services: {
         nginx: {
           build: resolve(import.meta.dirname, 'nginx'),
@@ -21,7 +22,6 @@ export default defineConfig({
             GF_AUTH_PROXY_ENABLED: 'true',
             GF_AUTH_PROXY_HEADER_NAME: 'X-Auth-Request-Email',
             GF_AUTH_PROXY_HEADER_PROPERTY: 'email',
-            GF_AUTH_PROXY_HEADERS: 'Name:X-Auth-Request-Preferred-Username',
             GF_SERVER_ROOT_URL: 'https://localhost:9001/grafana/',
             GF_SERVER_SERVE_FROM_SUB_PATH: 'true',
             GF_USERS_AUTO_ASSIGN_ORG_ROLE: 'Editor',
@@ -38,7 +38,6 @@ export default defineConfig({
             port: 3000,
             headers: {
               'X-Auth-Request-Email': '$auth_email',
-              'X-Auth-Request-Preferred-Username': '$auth_preferred_username',
             },
             locations: {
               '/grafana/api/live/': { ws: true },

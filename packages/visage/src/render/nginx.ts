@@ -121,10 +121,7 @@ http {
             auth_request_set  $auth_user $upstream_http_x_auth_request_user;
             <%_ /* Explicit clear when oauth2-proxy sets sub as email header value. */ %>
             auth_request_set  $auth_email <%~ it.email ? '$upstream_http_x_auth_request_email' : '""' %>;
-            auth_request_set  $auth_groups $upstream_http_x_auth_request_groups;
-            auth_request_set  $auth_preferred_username $upstream_http_x_auth_request_preferred_username;
-
-            # Propagate refreshed session cookie.
+            <%_ /* Propagate refreshed session cookie. */ %>
             auth_request_set  $auth_cookie $upstream_http_set_cookie;
             add_header        Set-Cookie $auth_cookie;
             error_page        401 = $auth_error_page;

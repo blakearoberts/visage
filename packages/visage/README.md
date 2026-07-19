@@ -105,11 +105,44 @@ visage({
 });
 ```
 
-OAuth2 Proxy exposes the canonical authenticated principal as `$auth_user`,
-which Visage forwards to the Vite app as `X-Auth-Request-User`. Additional
-identity values such as `$auth_email`, `$auth_groups`, and
-`$auth_preferred_username` are optional and depend on the requested scopes and
-identity provider claims.
+OAuth2 Proxy returns the canonical authenticated principal in
+`X-Auth-Request-User`. Visage captures it as `$auth_user` and forwards it to the
+Vite app. When `oauth2.scopes` includes `email`, Visage also captures
+`X-Auth-Request-Email` as `$auth_email` and forwards it to the Vite app. Without
+the `email` scope, `$auth_email` is empty and NGINX omits the header.
+
+OAuth2 Proxy can also return `X-Auth-Request-Groups` and
+`X-Auth-Request-Preferred-Username`, but Visage does not capture or forward them
+automatically. Capture and forward optional identity values on each location
+that needs them:
+
+```ts
+visage({
+  upstreams: {
+    api: {
+      locations: {
+        '/api/': {
+          directives: {
+            auth_request_set: [
+              '$auth_groups $upstream_http_x_auth_request_groups',
+              '$auth_preferred_username $upstream_http_x_auth_request_preferred_username',
+            ],
+          },
+          headers: {
+            'X-Auth-Request-Groups': '$auth_groups',
+            'X-Auth-Request-Preferred-Username': '$auth_preferred_username',
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+Requested scopes and identity provider claims determine whether OAuth2 Proxy can
+populate these values. Visage clears incoming `X-Auth-Request-*` identity
+headers before proxying to prevent callers from spoofing them; explicit location
+headers such as those above override the corresponding clears.
 
 Authenticated locations also get CSRF checks by default. The policy allows
 same-origin requests and top-level `GET` document navigations, blocks other

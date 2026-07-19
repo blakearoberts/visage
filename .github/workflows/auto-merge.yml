@@ -1,6 +1,8 @@
 name: Auto-Merge
 
 on:
+  push:
+    branches: [main]
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -16,6 +18,7 @@ jobs:
     name: Enable Auto-Merge
     runs-on: ubuntu-latest
     if: >-
+      github.event_name == 'workflow_run' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.actor.login == 'dependabot[bot]'
@@ -50,3 +53,32 @@ jobs:
           fi
 
           gh pr merge --auto --merge --delete-branch "$pr_url"
+
+  rebase:
+    name: Rebase Dependabot Pull Requests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+
+      - name: Request rebases
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          gh pr list \
+            --author 'app/dependabot' \
+            --base main \
+            --state open \
+            --json url \
+            --jq '.[].url' |
+            while IFS= read -r pr_url; do
+              gh pr comment "$pr_url" --body '@dependabot rebase'
+            done

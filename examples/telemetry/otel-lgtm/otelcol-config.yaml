@@ -3,6 +3,8 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
   prometheus:
     config:
       scrape_configs:
@@ -101,6 +103,10 @@ exporters:
     endpoint: http://127.0.0.1:4418
     tls:
       insecure: true
+  otlp_http/logs:
+    endpoint: http://127.0.0.1:3100/otlp
+    tls:
+      insecure: true
 
 service:
   extensions: [health_check]
@@ -113,3 +119,7 @@ service:
       receivers: [prometheus, span_metrics]
       processors: [batch]
       exporters: [otlp_http/metrics]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/logs]

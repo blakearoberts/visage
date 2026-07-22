@@ -46,6 +46,18 @@ export default defineConfig({
           },
         },
       },
+      upstreams: {
+        otelcol: {
+          host: 'grafana',
+          scheme: 'http',
+          port: 4318,
+          locations: {
+            '/t/': {
+              directives: { rewrite: '^/t/(.*)$ /$1 break' },
+            },
+          },
+        },
+      },
     }),
   ],
 });

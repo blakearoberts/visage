@@ -9,3 +9,6 @@ datasources:
   - name: tempo
     type: tempo
     url: http://127.0.0.1:3200
+  - name: loki
+    type: loki
+    url: http://127.0.0.1:3100

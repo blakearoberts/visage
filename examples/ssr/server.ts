@@ -24,14 +24,12 @@ const vite = await createViteServer({
 app.use(vite.middlewares);
 app.use(ssrHandler(vite));
 
-process.once('SIGINT', shutdown);
-process.once('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 async function shutdown() {
   await vite.close();
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
+  await new Promise<void>((resolve) => server.close(() => resolve()));
   visage.close();
   process.exit(0);
 }

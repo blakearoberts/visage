@@ -21,7 +21,18 @@ updates:
         patterns:
           - '*'
   - package-ecosystem: 'docker-compose'
-    directory: '/packages/visage'
+    directories:
+      - '/packages/visage'
+      - '/packages/oauth2-proxy-operator'
+    schedule:
+      interval: 'weekly'
+    groups:
+      docker-images:
+        patterns:
+          - '*'
+  - package-ecosystem: 'docker'
+    directories:
+      - '**/*'
     schedule:
       interval: 'weekly'
     groups:

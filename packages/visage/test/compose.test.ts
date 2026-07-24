@@ -5,6 +5,7 @@ import type {
   SpawnSyncReturns,
 } from 'node:child_process';
 import childProcess from 'node:child_process';
+import type { PathLike } from 'node:fs';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { basename } from 'node:path';
@@ -79,7 +80,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
   const { startCompose } = await import('../src/compose.ts');
   const openSyncCalls: string[] = [];
-  const openSyncMock = t.mock.method(fs, 'openSync', (path) => {
+  const openSyncMock = t.mock.method(fs, 'openSync', (path: PathLike) => {
     openSyncCalls.push(String(path));
     return 2;
   });

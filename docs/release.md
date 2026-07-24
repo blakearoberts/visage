@@ -23,7 +23,6 @@ flowchart LR
 ```mermaid
 flowchart LR
   subgraph ci_yml[ci.yml]
-    direction TD
     ci_checks[Checks]
   end
   subgraph checks_yml[checks.yml]
@@ -31,14 +30,18 @@ flowchart LR
     E2E
   end
   subgraph publish_yml["publish.yml | @blakearoberts/visage"]
+    resolve_version_job[Resolve Version]
     pub_npm_job[Publish npm Package]
     pub_gh_job[Publish Release]
-    pub_npm_job -.->|stable version| pub_gh_job
+    resolve_version_job -->|next version| pub_npm_job
+    resolve_version_job -.->|stable release| pub_gh_job
+    pub_npm_job -->|on success| pub_gh_job
   end
   pr_merge(["push.branches: [main]"]) --> ci_yml
   ci_checks -->|uses| checks_yml
   ci_yml -->|"on complete"| publish_yml
-  pub_npm_job --->|uses| pub_npm_yml([publish-npm.yml])
+  resolve_version_job -->|uses| resolve_version_yml([resolve-version.yml])
+  pub_npm_job -->|uses| pub_npm_yml([publish-npm.yml])
   pub_gh_job -->|uses| pub_gh_yml([publish-gh.yml])
 ```
 
@@ -74,11 +77,11 @@ The prepare workflow:
 1. Verifies the run is still on the latest `main`.
 2. Verifies the release tag and npm package version do not already exist.
 3. Updates `packages/visage/package.json` and `package-lock.json`.
-4. Pushes a `release/v<version>` branch with the release automation app.
+4. Pushes a `release/visage/v<version>` branch with the release automation app.
 5. Opens or updates a `chore(release): v<version>` pull request into `main`.
 
 The release pull request is the manual review point. It should use the
-same-repository `release/v<version>` branch and only change
+same-repository `release/visage/v<version>` branch and only change
 `packages/visage/package.json` and `package-lock.json`.
 
 If the release pull request checks fail, the pull request remains open as the
@@ -115,8 +118,9 @@ after a stable release.
 - Only `blakearoberts` may dispatch stable releases.
 - The `main` branch ruleset must allow merge commits because stable release pull
   requests should be merged that way.
-- Release pull requests must use a same-repository `release/v<version>` head
-  branch and only change `packages/visage/package.json` and `package-lock.json`
-  to match the release workflow's expected version-bump boundary.
+- Release pull requests must use a same-repository `release/visage/v<version>`
+  head branch and only change `packages/visage/package.json` and
+  `package-lock.json` to match the release workflow's expected version-bump
+  boundary.
 - The repository has a `v* release tags` ruleset for `refs/tags/v*` that blocks
   creation, updates, and deletion except by the release automation app.

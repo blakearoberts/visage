@@ -17,26 +17,38 @@ env:
   PACKAGE_NAME: &package-name '@blakearoberts/visage'
 
 jobs:
+  resolve-version:
+    name: Resolve Version
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/resolve-version.yml
+    with:
+      package-name: *package-name
+
   publish-npm:
     name: Publish npm Package
-    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'
+    needs: resolve-version
     permissions:
       actions: read
       contents: read
       id-token: write
-      pull-requests: read
     uses: ./.github/workflows/publish-npm.yml
     with:
+      artifact-name: blakearoberts-visage-${{ needs.resolve-version.outputs.current-version }}.tgz
       package-name: *package-name
+      stable-release: ${{ needs.resolve-version.outputs.stable-release == 'true' }}
+      next-version: ${{ needs.resolve-version.outputs.next-version }}
 
   publish-release:
     name: Publish Release
-    needs: publish-npm
-    if: needs.publish-npm.outputs.stable-version != ''
+    needs: [resolve-version, publish-npm]
+    if: needs.resolve-version.outputs.stable-release == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/publish-gh.yml
     with:
       package-name: *package-name
-      publish-version: ${{ needs.publish-npm.outputs.stable-version }}
+      publish-version: ${{ needs.resolve-version.outputs.next-version }}
     secrets: inherit

@@ -77,7 +77,7 @@ git status --short
 git fetch origin main --tags --prune
 git rev-parse main
 git rev-parse origin/main
-git ls-remote --heads origin "release/v${VERSION}"
+git ls-remote --heads origin "release/visage/v${VERSION}"
 git rev-parse --verify --quiet "refs/tags/v${VERSION}"
 git ls-remote --tags origin "v${VERSION}"
 npm view "@blakearoberts/visage@${VERSION}" version
@@ -89,7 +89,7 @@ Required state:
 - The checkout has no unexplained dirty state that would confuse release
   reasoning.
 - Local `main` and `origin/main` identify the same commit.
-- `release/v${VERSION}` does not already exist on origin.
+- `release/visage/v${VERSION}` does not already exist on origin.
 - `v${VERSION}` does not exist locally or remotely.
 - `@blakearoberts/visage@${VERSION}` is not already published to npm.
 
@@ -115,14 +115,14 @@ gh run watch "${RUN_ID}" --exit-status
 After it succeeds, find the release pull request:
 
 ```sh
-gh pr list --base main --head "release/v${VERSION}" --state open --json url,title,headRefName,baseRefName
+gh pr list --base main --head "release/visage/v${VERSION}" --state open --json url,title,headRefName,baseRefName
 gh pr view "${PR_URL}" --json url,title,headRefName,baseRefName,files,commits,checks
 ```
 
 Verify the pull request:
 
 - title is `chore(release): v${VERSION}`
-- head is the same-repository `release/v${VERSION}` branch
+- head is the same-repository `release/visage/v${VERSION}` branch
 - base is `main`
 - changed files are only `packages/visage/package.json` and `package-lock.json`
 

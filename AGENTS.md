@@ -32,8 +32,8 @@ This file is intended for LLM based collaborators.
      tag does not already exist, and the package version is not already
      published to npm.
   4. Trigger the `Release` workflow from `main` with the inferred version.
-  5. Wait for the workflow to create the `release/vX.Y.Z` pull request, then
-     report the pull request link to the user for manual review and merge.
+  5. Wait for the workflow to create the `release/visage/vX.Y.Z` pull request,
+     then report the pull request link to the user for manual review and merge.
   6. Do not merge the release pull request, force-push release branches, move or
      recreate tags, publish to npm manually, edit release or publish workflows,
      bypass checks, or otherwise force the release through.

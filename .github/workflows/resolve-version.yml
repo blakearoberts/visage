@@ -1,0 +1,128 @@
+name: Resolve Version
+
+on:
+  workflow_call:
+    inputs:
+      head-branch:
+        default: ${{ github.event.workflow_run.head_branch }}
+        description: Branch containing the commit.
+        required: false
+        type: string
+      head-sha:
+        default: ${{ github.event.workflow_run.head_sha }}
+        description: Commit containing the package version state.
+        required: false
+        type: string
+      package-name:
+        description: npm package name and workspace selector used to identify the component release branch.
+        required: true
+        type: string
+    outputs:
+      current-version:
+        description: Version committed for the package.
+        value: ${{ jobs.resolve.outputs.current-version }}
+      next-version:
+        description: Resolved version.
+        value: ${{ jobs.resolve.outputs.next-version }}
+      stable-release:
+        description: Whether the resolved version is stable.
+        value: ${{ jobs.resolve.outputs.stable-release }}
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: ${{ inputs.package-name }}
+    runs-on: ubuntu-latest
+    outputs:
+      current-version: ${{ steps.version.outputs.current-version }}
+      next-version: ${{ steps.version.outputs.next-version }}
+      stable-release: ${{ steps.version.outputs.stable-release }}
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.head-sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Resolve
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ inputs.head-branch }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+          PACKAGE_NAME: ${{ inputs.package-name }}
+        run: |
+          set -euo pipefail
+
+          current_version="$(
+            npm pkg get version --workspace "$PACKAGE_NAME" --json |
+              jq --exit-status --raw-output --arg package "$PACKAGE_NAME" '.[$package]'
+          )"
+          echo "current-version=$current_version" >> "$GITHUB_OUTPUT"
+
+          component_name="${PACKAGE_NAME##*/}"
+          release_branch="release/$component_name/v$current_version"
+
+          merge_pr="$(
+            gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/pulls" \
+              --jq '.[] | select(.base.ref == "main") | .head.ref' |
+              head -n 1
+          )"
+
+          if [[ "$HEAD_BRANCH" == "main" && "$merge_pr" == "$release_branch" && "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            {
+              echo "next-version=$current_version"
+              echo "stable-release=true"
+            } >> "$GITHUB_OUTPUT"
+            echo "Resolved stable publish for $PACKAGE_NAME@$current_version from $merge_pr to $HEAD_BRANCH."
+            exit 0
+          fi
+
+          if [[ "$current_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-rc\.([0-9]+))?$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+            committed_rc="${BASH_REMATCH[5]:-}"
+          else
+            echo "Unsupported package version: $current_version" >&2
+            exit 1
+          fi
+
+          if [[ -n "$committed_rc" ]]; then
+            rc_base="$major.$minor.$patch"
+            minimum_rc=$((10#$committed_rc))
+          else
+            rc_base="$major.$minor.$((patch + 1))"
+            minimum_rc=0
+          fi
+
+          escaped_rc_base="${rc_base//./\\.}"
+          max_rc=-1
+          while IFS= read -r published_version; do
+            if [[ "$published_version" =~ ^$escaped_rc_base-rc\.([0-9]+)$ ]]; then
+              published_rc=$((10#${BASH_REMATCH[1]}))
+              if (( published_rc > max_rc )); then
+                max_rc="$published_rc"
+              fi
+            fi
+          done < <(npm view "$PACKAGE_NAME" versions --parseable 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+' || true)
+
+          next_rc=$((max_rc + 1))
+          if (( next_rc < minimum_rc )); then
+            next_rc="$minimum_rc"
+          fi
+          rc_version="$rc_base-rc.$next_rc"
+
+          {
+            echo "next-version=$rc_version"
+            echo "stable-release=false"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved RC publish for $PACKAGE_NAME@$rc_version from $merge_pr to $HEAD_BRANCH."

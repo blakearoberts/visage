@@ -1,0 +1,130 @@
+name: Publish Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      context:
+        required: true
+        type: string
+      image-name:
+        required: true
+        type: string
+      stable:
+        required: true
+        type: boolean
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-tags:
+    name: Resolve Tags
+    runs-on: ubuntu-latest
+    outputs:
+      tags: ${{ steps.tags.outputs.tags }}
+    permissions:
+      contents: read
+    steps:
+      - id: tags
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}
+          STABLE: ${{ inputs.stable }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$STABLE" == "true" ]]; then
+            {
+              echo 'tags<<EOF'
+              echo "$IMAGE:$VERSION"
+              echo "$IMAGE:latest"
+              echo EOF
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=$IMAGE:next" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    name: ${{ inputs.image-name }}
+    needs: resolve-tags
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      context: ${{ inputs.context }}
+      head-sha: ${{ github.event.workflow_run.head_sha }}
+      push: true
+      tags: ${{ needs.resolve-tags.outputs.tags }}
+      version: ${{ inputs.version }}
+
+  cleanup:
+    name: Cleanup ${{ inputs.image-name }}
+    needs: [resolve-tags, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Delete untagged manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+          OWNER: ${{ github.repository_owner }}
+          OWNER_TYPE: ${{ github.event.repository.owner.type }}
+          PUBLISHED_IMAGES: ${{ needs.resolve-tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$OWNER_TYPE" == "Organization" ]]; then
+            package_versions="orgs/$OWNER/packages/container/$IMAGE_NAME/versions"
+          else
+            package_versions="users/$OWNER/packages/container/$IMAGE_NAME/versions"
+          fi
+
+          tagged_images="$(
+            {
+              printf '%s\n' "$PUBLISHED_IMAGES"
+              gh api --paginate "$package_versions?per_page=100" \
+                --jq '.[] | .metadata.container.tags[]?' |
+                sed "s|^|$IMAGE:|"
+            } |
+              sed '/^$/d' |
+              sort -u
+          )"
+
+          referenced_digests="$(
+            while IFS= read -r tagged_image; do
+              image_metadata="$(docker buildx imagetools inspect "$tagged_image" --format '{{json .}}')"
+              jq --raw-output \
+                '(.manifest.digest, .manifest.manifests[]?.digest) | select(. != null)' \
+                <<< "$image_metadata"
+            done <<< "$tagged_images" |
+              sort -u
+          )"
+
+          untagged_versions="$(
+            gh api --paginate "$package_versions?per_page=100" \
+              --jq '.[] | select((.metadata.container.tags | length) == 0) | [.id, .name] | @tsv'
+          )"
+
+          while IFS=$'\t' read -r version_id digest; do
+            [[ -n "$version_id" ]] || continue
+            if grep -F -x -q -- "$digest" <<< "$referenced_digests"; then
+              continue
+            fi
+
+            echo "Deleting untagged manifest $digest."
+            gh api --method DELETE "$package_versions/$version_id"
+          done <<< "$untagged_versions"

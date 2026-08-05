@@ -41,9 +41,22 @@ jobs:
       stable-release: ${{ needs.resolve-version.outputs.stable-release == 'true' }}
       next-version: ${{ needs.resolve-version.outputs.next-version }}
 
+  publish-docker:
+    name: Publish Docker Image
+    needs: resolve-version
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-docker.yml
+    with:
+      context: packages/visage/nginx
+      image-name: visage-nginx
+      stable: ${{ needs.resolve-version.outputs.stable-release == 'true' }}
+      version: ${{ needs.resolve-version.outputs.next-version }}
+
   publish-release:
     name: Publish Release
-    needs: [resolve-version, publish-npm]
+    needs: resolve-version
     if: needs.resolve-version.outputs.stable-release == 'true'
     permissions:
       contents: read

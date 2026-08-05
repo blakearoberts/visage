@@ -1,10 +1,9 @@
 # Telemetry
 
 Visage should provide first-class, opt-in configuration for telemetry emitted by
-its managed NGINX and OAuth2 Proxy services. Applications should own collectors,
-storage, dashboards, and products such as Grafana. The
-[telemetry example](../examples/telemetry) proves the integration, but several
-Visage-side seams remain hard-coded.
+its managed NGINX and OAuth2 Proxy services. The
+[telemetry example](../examples/telemetry) proves the integration, but Visage
+could do better to support configuration of telemetry signals out-of-the-box.
 
 ## Traces
 
@@ -13,20 +12,23 @@ Current state:
 - The NGINX renderer hard-codes the njs `load_module` directive and a wildcard
   `include /etc/nginx/http.d/*.conf;`. It cannot declare explicit additional
   modules or named configuration files.
-- The telemetry example builds a custom NGINX image that installs the OTel
-  module, loads it from the image command, and copies in `otel.conf`.
+- The telemetry example builds a custom NGINX image that installs and loads the
+  OTel module and copies in `otel.conf`.
+- The `Publish` workflow publishes a package-owned image from
+  `packages/visage/nginx` that installs the module but neither loads nor
+  configures it. RCs update its `next` tag, while stable versions publish
+  versioned and `latest` tags. Visage does not select that image by default yet.
 - `otel.conf` hard-codes the collector endpoint, service name, context
   propagation, and `ParentBased(root=AlwaysOff)` sampling policy.
-- The custom image is built on demand and is not published by this project. Its
-  base image is outside the Docker Compose manifest covered by Dependabot.
+- The example still builds its local image on demand. Dependabot monitors the
+  package-owned image's NGINX base image separately from the Docker Compose
+  manifest.
 
 Desired state:
 
-- Visage explicitly configures opt-in NGINX tracing, including the module,
-  collector endpoint, resource identity, propagation, and sampling policy.
+- Visage supports configuring the export of NGINX proxied traffic as spans.
 - Additional NGINX configuration is expressed as explicit files instead of a
   global wildcard include.
-- Collector and tracing-backend configuration remains application-owned.
 
 ## Metrics
 
@@ -39,9 +41,9 @@ Current state:
 
 Desired state:
 
-- Visage has an explicit option for enabling and configuring OAuth2 Proxy
-  metrics, and exposes the resulting scrape target to consumers.
-- Visage does not configure Prometheus, collectors, or dashboards.
+- Visage supports configuring the export of OAuth2 Proxy metrics to consumers.
+- Visage supports configuring the export of NGINX proxied traffic spans as
+  aggregated metrics.
 
 ## Logs
 

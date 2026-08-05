@@ -28,3 +28,7 @@ updates:
       docker-images:
         patterns:
           - '*'
+  - package-ecosystem: 'docker'
+    directory: '/packages/visage/nginx'
+    schedule:
+      interval: 'weekly'

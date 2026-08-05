@@ -68,3 +68,12 @@ jobs:
             examples/external-idp/node_modules/.vite/visage/logs/**
           include-hidden-files: true
           retention-days: 1
+
+  docker:
+    name: Docker Image
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      context: packages/visage/nginx
+      head-sha: ${{ github.sha }}

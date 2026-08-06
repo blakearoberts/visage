@@ -7,7 +7,7 @@
     "check": "npm run check:type",
     "check:type": "npm run typecheck",
     "dev": "vite",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@blakearoberts/visage": "file:../../packages/visage",

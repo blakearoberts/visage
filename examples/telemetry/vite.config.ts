@@ -11,9 +11,9 @@ export default defineConfig({
       oauth2: { scopes: ['openid', 'email', 'offline_access'] },
       services: {
         nginx: {
-          build: resolve(import.meta.dirname, 'nginx'),
-          image: 'visage-nginx-otel',
-          pull_policy: 'build',
+          environment: {
+            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://grafana:4317',
+          },
         },
         grafana: {
           image: 'grafana/otel-lgtm',

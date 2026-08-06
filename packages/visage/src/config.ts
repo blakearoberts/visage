@@ -101,6 +101,7 @@ type ResolvedConfigUpstream = ResolvedUpstream & {
 export type VisageConfig = {
   readonly host: string;
   readonly port: number;
+  readonly package: string;
   readonly cookie: ResolvedCookiePolicy;
   readonly edgeKey: string;
   readonly idp: ResolvedIdpConfig;
@@ -108,11 +109,8 @@ export type VisageConfig = {
 
   readonly cache: string;
   readonly files: {
-    readonly certs: Volume;
     readonly compose: string;
     readonly dex: Volume;
-    readonly nginx: Volume;
-    readonly nginxEdgeKeyJS: Volume;
     readonly oauth2Proxy: Volume;
   };
   readonly secrets: {
@@ -120,8 +118,9 @@ export type VisageConfig = {
     readonly clientSecret: string;
     readonly edgeKey: string;
   };
-  readonly compose: {
-    readonly name: string;
+  readonly nginx: {
+    readonly mount: Volume;
+    readonly modules: readonly string[];
   };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
@@ -145,6 +144,9 @@ const BaseServiceDex = {
 
 const BaseServiceNginx = {
   image: DockerImages.nginx.image,
+  environment: {
+    OTEL_SERVICE_NAME: 'nginx',
+  },
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
 } as const satisfies ResolvedService;
@@ -311,13 +313,15 @@ function resolveServicesOptions(
     ...services,
     nginx: {
       ...BaseServiceNginx,
-      ...{
-        ...(services.nginx ?? {}),
-        extra_hosts: [
-          ...BaseServiceNginx.extra_hosts,
-          ...(services.nginx?.extra_hosts ?? []),
-        ],
+      ...(services.nginx ?? {}),
+      environment: {
+        ...BaseServiceNginx.environment,
+        ...(services.nginx?.environment ?? {}),
       },
+      extra_hosts: [
+        ...BaseServiceNginx.extra_hosts,
+        ...(services.nginx?.extra_hosts ?? []),
+      ],
     },
     oauth2_proxy: {
       ...BaseServiceOAuth2Proxy,
@@ -535,17 +539,15 @@ export function resolveConfig(
   return {
     host: options.host,
     port: options.port,
+    package: resolvePackage(options.root),
     cookie: options.cookie,
     edgeKey: options.edgeKey,
     idp,
     oauth2: options.oauth2,
     cache: options.cache,
     files: {
-      certs: ['./certs', '/etc/nginx/certs'],
       compose: './compose.yaml',
       dex: ['./dex.yaml', '/etc/dex/dex.yaml'],
-      nginx: ['./nginx.conf', '/etc/nginx/nginx.conf'],
-      nginxEdgeKeyJS: ['./nginx-edge-key.js', '/etc/nginx/edge-key.js'],
       oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
     },
     secrets: {
@@ -553,8 +555,12 @@ export function resolveConfig(
       clientSecret: 'OAUTH2_CLIENT_SECRET',
       edgeKey: 'VISAGE_EDGE_KEY',
     },
-    compose: {
-      name: resolveComposeName(options.root),
+    nginx: {
+      mount: ['./nginx', '/etc/nginx'],
+      modules: [
+        '/usr/lib/nginx/modules/ngx_http_js_module.so',
+        '/usr/lib/nginx/modules/ngx_otel_module.so',
+      ],
     },
     services: {
       ...('dex' in idp
@@ -587,21 +593,13 @@ export function resolveConfig(
   };
 }
 
-function resolveComposeName(root: string): string {
-  const name = (packageName(root) ?? basename(resolve(root)))
-    .toLowerCase()
-    .replace(/^[^a-z0-9]+/, '')
-    .replace(/[^a-z0-9_-]+/g, '-');
-  return `${name}-visage`;
-}
-
-function packageName(root: string): string | undefined {
+function resolvePackage(root: string): string {
   try {
     return JSON.parse(
       readFileSync(join(root, 'package.json'), 'utf8'),
     ).name.trim();
   } catch {
-    return undefined;
+    return basename(resolve(root));
   }
 }
 

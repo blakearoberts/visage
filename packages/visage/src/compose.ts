@@ -10,7 +10,10 @@ export function startCompose(config: VisageConfig): () => void {
     'compose',
     '--ansi=never',
     `--file=${config.files.compose}`,
-    `--project-name=${config.compose.name}`,
+    `--project-name=${config.package
+      .toLowerCase()
+      .replace(/^[^a-z0-9]+/, '')
+      .replace(/[^a-z0-9_-]+/g, '-')}-visage`,
     `--profile=${process.platform}`,
   ];
   const dir = join(config.cache, 'logs');

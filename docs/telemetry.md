@@ -9,26 +9,17 @@ could do better to support configuration of telemetry signals out-of-the-box.
 
 Current state:
 
-- The NGINX renderer hard-codes the njs `load_module` directive and a wildcard
-  `include /etc/nginx/http.d/*.conf;`. It cannot declare explicit additional
-  modules or named configuration files.
-- The telemetry example builds a custom NGINX image that installs and loads the
-  OTel module and copies in `otel.conf`.
-- The `Publish` workflow publishes a package-owned image from
-  `packages/visage/nginx` that installs the module but neither loads nor
-  configures it. RCs update its `next` tag, while stable versions publish
-  versioned and `latest` tags. Visage does not select that image by default yet.
-- `otel.conf` hard-codes the collector endpoint, service name, context
-  propagation, and `ParentBased(root=AlwaysOff)` sampling policy.
-- The example still builds its local image on demand. Dependabot monitors the
-  package-owned image's NGINX base image separately from the Docker Compose
-  manifest.
+- `otel.conf` hard-codes context propagation and the
+  `ParentBased(root=AlwaysOff)` sampling policy.
+- Visage defaults resource attributes for access spans:
+  - `service.name`: The value, `nginx`.
+  - `service.namespace`: The consumer's exact npm package name.
+  - `service.instance.id`: The Docker container ID provided through `HOSTNAME`.
+  - `service.version`: The value of `NGINX_VERSION`.
 
 Desired state:
 
-- Visage supports configuring the export of NGINX proxied traffic as spans.
-- Additional NGINX configuration is expressed as explicit files instead of a
-  global wildcard include.
+- Visage supports configuring the NGINX otel module.
 
 ## Metrics
 
@@ -41,9 +32,9 @@ Current state:
 
 Desired state:
 
-- Visage supports configuring the export of OAuth2 Proxy metrics to consumers.
-- Visage supports configuring the export of NGINX proxied traffic spans as
-  aggregated metrics.
+- Visage supports configuring OAuth2 Proxy metrics.
+- Visage supports converting NGINX spans to metrics.
+- Visage supports converting OAuth2 Proxy logs to metrics.
 
 ## Logs
 
@@ -64,3 +55,4 @@ Desired state:
   and server modes.
 - Sensitive values are redacted before persistence, with structured,
   collector-friendly output available for application-owned pipelines.
+- Visage supports exporting container logs of Visage managed services.

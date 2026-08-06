@@ -15,7 +15,7 @@ import {
 import {
   writeComposeConfig,
   writeDexConfig,
-  writeNginxConfig,
+  writeNginxAssets,
   writeOauth2ProxyConfig,
 } from './render';
 import type { VisageOptions } from './types';
@@ -92,7 +92,7 @@ export async function startVisageServer(
   if ('dex' in config.idp) {
     writeDexConfig(config);
   }
-  writeNginxConfig(config);
+  writeNginxAssets(config);
   writeOauth2ProxyConfig(config);
 
   return startCompose(config);

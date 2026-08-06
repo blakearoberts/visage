@@ -9,7 +9,7 @@
     "dev": "vite",
     "start:idp": "docker compose -p external-idp -f compose.idp.yaml up -d",
     "stop:idp": "docker compose -p external-idp down",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@blakearoberts/visage": "file:../../packages/visage",

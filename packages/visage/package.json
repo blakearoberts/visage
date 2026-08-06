@@ -48,7 +48,7 @@
     "build": "rollup -c",
     "check": "npm run typecheck",
     "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

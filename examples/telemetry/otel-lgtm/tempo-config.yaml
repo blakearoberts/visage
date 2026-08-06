@@ -41,4 +41,4 @@ metrics_generator:
 overrides:
   defaults:
     metrics_generator:
-      processors: [service-graphs]
+      processors: [local-blocks, service-graphs]

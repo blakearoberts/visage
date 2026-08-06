@@ -16,7 +16,7 @@ import {
 } from '../src/config.ts';
 import { writeComposeConfig } from '../src/render/compose.ts';
 import { writeDexConfig } from '../src/render/dex.ts';
-import { writeNginxConfig } from '../src/render/nginx.ts';
+import { writeNginxAssets } from '../src/render/nginx.ts';
 import { writeOauth2ProxyConfig } from '../src/render/oauth2-proxy.ts';
 import type { VisageOptions } from '../src/types.ts';
 
@@ -48,6 +48,10 @@ function resolvedConfig(
 
 function readGenerated(config: VisageConfig, file: string) {
   return readFileSync(join(config.cache, file), 'utf8');
+}
+
+function readGeneratedNginx(config: VisageConfig, file: string) {
+  return readGenerated(config, join(config.nginx.mount[0], file));
 }
 
 function locationBlock(rendered: string, path: string) {
@@ -104,6 +108,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     {
       services: {
         nginx: {
+          environment: {
+            OTEL_SERVICE_NAMESPACE: 'custom-namespace',
+          },
           volumes: ['./nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro'],
         },
         oauth2_proxy: {
@@ -138,6 +145,10 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
+  assert.deepEqual(compose.services.nginx.environment, {
+    OTEL_SERVICE_NAME: 'nginx',
+    OTEL_SERVICE_NAMESPACE: 'custom-namespace',
+  });
   assert.deepEqual(compose.services.nginx.secrets, ['VISAGE_EDGE_KEY']);
   assert.deepEqual(compose.services.nginx.ports, ['127.0.0.1:9443:9443']);
   assert.deepEqual(compose.services.nginx.extra_hosts, [
@@ -145,9 +156,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.equal(compose.services.nginx.depends_on, undefined);
   assert.deepEqual(compose.services.nginx.volumes, [
-    './certs:/etc/nginx/certs:ro',
-    './nginx.conf:/etc/nginx/nginx.conf:ro',
-    './nginx-edge-key.js:/etc/nginx/edge-key.js:ro',
+    './nginx:/etc/nginx',
     './nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro',
   ]);
   assert.equal(compose.services.oauth2_proxy.extra_hosts, undefined);
@@ -204,6 +213,10 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
+  assert.equal(
+    compose.services.nginx.environment.OTEL_SERVICE_NAMESPACE,
+    'render-test',
+  );
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
   ]);
@@ -242,7 +255,7 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   assert.equal(compose.services.oauth2_proxy.networks, undefined);
 });
 
-test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => {
+test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => {
   const config = resolvedConfig(t, {
     oauth2: { scopes: ['openid', 'email', 'offline_access'] },
     upstreams: {
@@ -275,14 +288,41 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.match(nginx, /events \{\}/);
-  assert.match(nginx, /include \/etc\/nginx\/modules\/\*\.conf;/);
+  assert.match(
+    nginx,
+    /load_module \/usr\/lib\/nginx\/modules\/ngx_otel_module\.so;/,
+  );
   assert.match(nginx, /listen 9443 ssl;/);
   assert.match(nginx, /server_name app\.local\.test;/);
   assert.match(nginx, /ssl_certificate\s+\/etc\/nginx\/certs\/tls\.crt;/);
+  assert.match(
+    locationBlock(nginx, '/api/'),
+    /otel_span_name "\$request_method \/api\/";/,
+  );
+  assert.match(
+    locationBlock(nginx, '= /oauth2/auth'),
+    /otel_span_name "\$request_method \/oauth2\/auth";/,
+  );
+
+  const otel = readGeneratedNginx(config, 'templates/otel.conf.template');
+  assert.equal(
+    otel,
+    `otel_exporter {
+    endpoint \${OTEL_EXPORTER_OTLP_ENDPOINT};
+}
+otel_service_name \${OTEL_SERVICE_NAME};
+otel_resource_attr service.namespace "\${OTEL_SERVICE_NAMESPACE}";
+otel_resource_attr service.instance.id "\${HOSTNAME}";
+otel_resource_attr service.version "\${NGINX_VERSION}";
+otel_trace on;
+otel_trace_context propagate;
+otel_span_name "$request_method";
+`,
+  );
   assert.match(
     nginx,
     /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
@@ -390,7 +430,7 @@ test('writeNginxConfig renders upstreams, auth, redirects, and headers', (t) => 
   assert.match(publicLocation, /proxy_buffer_size 8k;/);
 });
 
-test('writeNginxConfig redirects only document navigation auth failures', (t) => {
+test('writeNginxAssets redirects only document navigation auth failures', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
       api: {
@@ -401,9 +441,9 @@ test('writeNginxConfig redirects only document navigation auth failures', (t) =>
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const api = locationBlock(nginx, '/api/');
   const authRedirect = locationBlock(nginx, '@auth_redirect');
   const auth401 = locationBlock(nginx, '@auth_401');
@@ -421,7 +461,7 @@ test('writeNginxConfig redirects only document navigation auth failures', (t) =>
   assert.match(auth401, /return 401;/);
 });
 
-test('writeNginxConfig renders WebSocket proxy policy only when enabled', (t) => {
+test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
       api: {
@@ -434,9 +474,9 @@ test('writeNginxConfig renders WebSocket proxy policy only when enabled', (t) =>
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const live = locationBlock(nginx, '/live/');
   assert.match(live, /proxy_set_header Connection \$connection_upgrade;/);
   assert.match(live, /proxy_set_header Upgrade \$http_upgrade;/);
@@ -462,12 +502,12 @@ test('writeNginxConfig renders WebSocket proxy policy only when enabled', (t) =>
   assert.doesNotMatch(disabled, /proxy_read_timeout 1h;/);
 });
 
-test('writeNginxConfig keeps required Dex and OAuth2 Proxy endpoints public', (t) => {
+test('writeNginxAssets keeps required Dex and OAuth2 Proxy endpoints public', (t) => {
   const config = resolvedConfig(t);
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const dex = locationBlock(nginx, '/dex/');
   const oauth2ProxyUpstream = upstreamBlock(nginx, 'oauth2_proxy');
   const oauth2Proxy = locationBlock(nginx, '/oauth2/');
@@ -504,7 +544,7 @@ test('writeNginxConfig keeps required Dex and OAuth2 Proxy endpoints public', (t
   );
 });
 
-test('writeNginxConfig resolves Compose hostnames and keeps IP addresses static', (t) => {
+test('writeNginxAssets resolves Compose hostnames and keeps IP addresses static', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
       fixed: {
@@ -514,9 +554,9 @@ test('writeNginxConfig resolves Compose hostnames and keeps IP addresses static'
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.match(
     upstreamBlock(nginx, 'dex'),
     /zone dex 64k;\s+server dex:5556 resolve;/,
@@ -531,23 +571,23 @@ test('writeNginxConfig resolves Compose hostnames and keeps IP addresses static'
   assert.doesNotMatch(fixed, /zone|resolve/);
 });
 
-test('writeNginxConfig keeps OAuth2-only sign-out returning to root', (t) => {
+test('writeNginxAssets keeps OAuth2-only sign-out returning to root', (t) => {
   const config = resolvedConfig(t, {
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
   assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
   assert.doesNotMatch(oauth2SignOut, /id_token_hint/);
 });
 
-test('writeNginxConfig quotes external IdP sign-out redirects', (t) => {
+test('writeNginxAssets quotes external IdP sign-out redirects', (t) => {
   const config = resolvedConfig(t, {
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
@@ -555,9 +595,9 @@ test('writeNginxConfig quotes external IdP sign-out redirects', (t) => {
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
   assert.match(
     oauth2SignOut,
@@ -565,12 +605,12 @@ test('writeNginxConfig quotes external IdP sign-out redirects', (t) => {
   );
 });
 
-test('writeNginxConfig preserves browser host for the built-in Vite upstream', (t) => {
+test('writeNginxAssets preserves browser host for the built-in Vite upstream', (t) => {
   const config = resolvedConfig(t);
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const root = locationBlock(nginx, '/');
   const vite = upstreamBlock(nginx, 'vite');
 
@@ -599,7 +639,7 @@ test('writeNginxConfig preserves browser host for the built-in Vite upstream', (
   }
 });
 
-test('writeNginxConfig forwards the Vite edge key from njs', (t) => {
+test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
   const config = resolvedConfig(
     t,
     {
@@ -610,11 +650,14 @@ test('writeNginxConfig forwards the Vite edge key from njs', (t) => {
     'edge-key',
   );
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const root = locationBlock(nginx, '/');
-  assert.match(nginx, /load_module modules\/ngx_http_js_module\.so;/);
+  assert.match(
+    nginx,
+    /load_module \/usr\/lib\/nginx\/modules\/ngx_http_js_module\.so;/,
+  );
   assert.match(nginx, /js_import edge_key from \/etc\/nginx\/edge-key\.js;/);
   assert.match(nginx, /js_shared_dict_zone zone=edge_key:32k;/);
   assert.match(nginx, /js_set \$edge_key edge_key;/);
@@ -625,7 +668,7 @@ test('writeNginxConfig forwards the Vite edge key from njs', (t) => {
   );
   assert.doesNotMatch(root, /edge-key/);
   assert.equal(
-    readGenerated(config, config.files.nginxEdgeKeyJS[0]),
+    readGeneratedNginx(config, 'edge-key.js'),
     `import fs from 'fs';
 export default function value() {
   let key = ngx.shared.edge_key.get('edge_key');
@@ -639,7 +682,7 @@ export default function value() {
   );
 });
 
-test('writeNginxConfig renders explicit Vite edge key overrides after the managed edge key', (t) => {
+test('writeNginxAssets renders explicit Vite edge key overrides after the managed edge key', (t) => {
   const config = resolvedConfig(
     t,
     {
@@ -659,9 +702,9 @@ test('writeNginxConfig renders explicit Vite edge key overrides after the manage
     'edge-key',
   );
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const root = locationBlock(readGenerated(config, config.files.nginx[0]), '/');
+  const root = locationBlock(readGeneratedNginx(config, 'nginx.conf'), '/');
   assert.match(
     root,
     new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} overridden;`),
@@ -672,7 +715,7 @@ test('writeNginxConfig renders explicit Vite edge key overrides after the manage
   );
 });
 
-test('writeNginxConfig renders external HTTPS upstreams with SNI and certificate verification', (t) => {
+test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate verification', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
       api: {
@@ -682,9 +725,9 @@ test('writeNginxConfig renders external HTTPS upstreams with SNI and certificate
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.match(
     upstreamBlock(nginx, 'api'),
     /zone api 64k;\s+server api\.example\.test:443 resolve;/,
@@ -705,7 +748,7 @@ test('writeNginxConfig renders external HTTPS upstreams with SNI and certificate
   assert.match(api, /proxy_pass https:\/\/api;/);
 });
 
-test('writeNginxConfig does not verify local HTTPS service upstreams by default', (t) => {
+test('writeNginxAssets does not verify local HTTPS service upstreams by default', (t) => {
   const config = resolvedConfig(t, {
     services: {
       secure: {
@@ -717,9 +760,9 @@ test('writeNginxConfig does not verify local HTTPS service upstreams by default'
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const secure = locationBlock(nginx, '/secure/');
   assert.match(secure, /proxy_ssl_server_name on;/);
   assert.match(secure, /proxy_ssl_name\s+secure;/);
@@ -729,7 +772,7 @@ test('writeNginxConfig does not verify local HTTPS service upstreams by default'
   assert.match(secure, /proxy_pass https:\/\/secure;/);
 });
 
-test('writeNginxConfig resolves automatic token forwarding by upstream kind', (t) => {
+test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t) => {
   const config = resolvedConfig(t, {
     services: {
       api: {
@@ -746,9 +789,9 @@ test('writeNginxConfig resolves automatic token forwarding by upstream kind', (t
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const api = locationBlock(nginx, '/api/');
   const external = locationBlock(nginx, '/external/');
   assert.match(api, /proxy_set_header Authorization \$authorization;/);
@@ -765,7 +808,7 @@ test('writeNginxConfig resolves automatic token forwarding by upstream kind', (t
   );
 });
 
-test('writeNginxConfig supports explicit access-token forwarding', (t) => {
+test('writeNginxAssets supports explicit access-token forwarding', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
       api: {
@@ -779,16 +822,16 @@ test('writeNginxConfig supports explicit access-token forwarding', (t) => {
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /proxy_set_header Authorization "Bearer \$access_token";/);
   assert.doesNotMatch(api, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(api, /proxy_set_header Authorization \$authorization;/);
 });
 
-test('writeNginxConfig does not duplicate root locations for root external IdP issuers', (t) => {
+test('writeNginxAssets does not duplicate root locations for root external IdP issuers', (t) => {
   const config = resolvedConfig(t, {
     idp: {
       issuer: 'https://idp.example.test',
@@ -798,23 +841,23 @@ test('writeNginxConfig does not duplicate root locations for root external IdP i
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.equal(locationCount(nginx, '/'), 1);
   assert.doesNotMatch(nginx, /proxy_pass https:\/\/idp;/);
 });
 
-test('writeNginxConfig does not render external IdP upstream locations', (t) => {
+test('writeNginxAssets does not render external IdP upstream locations', (t) => {
   const config = resolvedConfig(t, {
     idp: {
       issuer: 'https://idp.example.test/idp',
     },
   });
 
-  writeNginxConfig(config);
+  writeNginxAssets(config);
 
-  const nginx = readGenerated(config, config.files.nginx[0]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.equal(locationCount(nginx, '/idp'), 0);
   assert.doesNotMatch(nginx, /proxy_pass https:\/\/idp;/);
 });

@@ -8,7 +8,7 @@ session cookie lifecycle semantics.
 Install Visage from npm:
 
 ```console
-npm install @blakearoberts/visage@next
+npm install @blakearoberts/visage@latest
 ```
 
 Add the plugin to `vite.config.ts`:
@@ -105,22 +105,23 @@ See [`VisageOptions`](packages/visage/src/types.ts) for the full option surface.
 ```mermaid
 flowchart LR
   browser([Browser])
-  subgraph "Visage / Docker Compose Project"
-    NGINX
-    oauth2[OAuth2 Proxy]
-    idp(["Dex / IdP"])
-    services([Services])
-  end
   vite([Vite])
   upstreams([Upstreams])
 
-  browser --> NGINX
-  browser --> idp
-  NGINX --> oauth2
-  oauth2 --> idp
-  NGINX --> vite
-  NGINX ---> services
-  NGINX ---> upstreams
+  subgraph docker[Docker]
+    nginx([NGINX])
+    services([Services])
+    Oauth2-Proxy
+    idp(["IdP (Dex)"])
+
+    nginx -.-> idp
+    nginx -.-> Oauth2-Proxy -.-> idp
+    nginx --> services
+  end
+
+  browser --> nginx
+  nginx --> vite
+  nginx ---> upstreams
 ```
 
 ## Required Tools
@@ -129,17 +130,6 @@ flowchart LR
   support through `docker compose`.
 - [`mkcert`](https://github.com/FiloSottile/mkcert#installation) installed on
   `PATH`, or configured with `VISAGE_MKCERT=/path/to/mkcert`.
-
-## Managed Docker Images
-
-Visage pulls these as needed based on configuration:
-
-| Service                                                      | Image                                                                                       | Pin                                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| [NGINX](https://nginx.org/)                                  | [`nginx`](https://hub.docker.com/_/nginx)                                                   | [manifest](packages/visage/docker-compose.images.yml) |
-| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | [manifest](packages/visage/docker-compose.images.yml) |
-| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                    | [manifest](packages/visage/docker-compose.images.yml) |
-| [Socat](https://www.dest-unreach.org/socat/)                 | [`alpine/socat`](https://hub.docker.com/r/alpine/socat)                                     | [manifest](packages/visage/docker-compose.images.yml) |
 
 ## Security Notes
 

@@ -48,6 +48,30 @@ Visage can also use a hosted IdP, so local frontend code can call hosted backend
 APIs with real credentials. That avoids frontend-only auth mocks or backend-only
 local bypasses: code can be written for production and still work locally.
 
+## System Block Diagram
+
+```mermaid
+flowchart LR
+  browser([Browser])
+  vite([Vite])
+  upstreams([Upstreams])
+
+  subgraph docker[Docker]
+    nginx([NGINX])
+    services([Services])
+    Oauth2-Proxy
+    idp(["IdP (Dex)"])
+
+    nginx -.-> idp
+    nginx -.-> Oauth2-Proxy -.-> idp
+    nginx --> services
+  end
+
+  browser --> nginx
+  nginx --> vite
+  nginx ---> upstreams
+```
+
 ## Configuration
 
 Visage is configured through `visage(options?)` in `vite.config.ts`.
@@ -176,24 +200,6 @@ local application; Visage does not apply an additional email-domain allowlist.
 
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
-## System Block Diagram
-
-```mermaid
-flowchart LR
-  Browser
-  NGINX
-  Oauth2-Proxy
-  Vite
-  IDP["IdP (Dex)"]
-  ServicesUpstreams["Services / Upstreams"]
-
-  Browser --> NGINX
-  NGINX --> Oauth2-Proxy
-  Oauth2-Proxy --> IDP
-  NGINX --> Vite
-  NGINX --> ServicesUpstreams
-```
-
 ## Required Tools
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2
@@ -205,12 +211,15 @@ flowchart LR
 
 Visage pulls these as needed based on configuration:
 
-| Service                                                      | Image                                                                                       | Pin                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------- |
-| [NGINX](https://nginx.org/)                                  | [`nginx`](https://hub.docker.com/_/nginx)                                                   | [manifest](docker-compose.images.yml) |
-| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) | [manifest](docker-compose.images.yml) |
-| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                    | [manifest](docker-compose.images.yml) |
-| [Socat](https://www.dest-unreach.org/socat/)                 | [`alpine/socat`](https://hub.docker.com/r/alpine/socat)                                     | [manifest](docker-compose.images.yml) |
+| Service                                                      | Image                                                                                       |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| [NGINX](https://nginx.org/)                                  | [`visage-nginx`](https://github.com/blakearoberts/visage/pkgs/container/visage-nginx)       |
+| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) |
+| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                    |
+| [Socat](https://www.dest-unreach.org/socat/)                 | [`alpine/socat`](https://hub.docker.com/r/alpine/socat)                                     |
+
+The image tags Visage uses by default are defined by the manifest file,
+[docker-compose.images.yml](docker-compose.images.yml).
 
 ## Security Notes
 

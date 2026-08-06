@@ -1,13 +1,14 @@
 import { Eta } from 'eta';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { join } from 'node:path';
 
 import { VisageEdgeKeyHeader, type VisageConfig } from '../config';
 
 const template = `
-load_module modules/ngx_http_js_module.so;
-include /etc/nginx/modules/*.conf;
+<%_ for (const module of it.modules) { %>
+load_module <%~ module %>;
+<%_ } %>
 
 events {}
 
@@ -107,6 +108,8 @@ http {
         <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
         <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
         location <%~ path %> {
+            otel_span_name "$request_method <%~ location.target %>";
+
             <%_ if (location.csrf) { %>
             add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest, Origin, Referer" always;
             if ($csrf_reject) {
@@ -152,9 +155,11 @@ http {
 
         <%_ } %>
         location @auth_redirect {
+            otel_span_name "$request_method @auth_redirect";
             return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;
         }
         location @auth_401 {
+            otel_span_name "$request_method @auth_401";
             return 401;
         }
     }
@@ -172,14 +177,33 @@ export default function value() {
 }
 `;
 
-export function writeNginxConfig(config: VisageConfig): void {
-  const file = join(config.cache, config.files.nginx[0]);
+const otelTemplate = `otel_exporter {
+    endpoint \${OTEL_EXPORTER_OTLP_ENDPOINT};
+}
+otel_service_name \${OTEL_SERVICE_NAME};
+otel_resource_attr service.namespace "\${OTEL_SERVICE_NAMESPACE}";
+otel_resource_attr service.instance.id "\${HOSTNAME}";
+otel_resource_attr service.version "\${NGINX_VERSION}";
+otel_trace on;
+otel_trace_context propagate;
+otel_span_name "$request_method";
+`;
+
+export function writeNginxAssets(config: VisageConfig): void {
+  const directory = join(config.cache, config.nginx.mount[0]);
+  mkdirSync(join(directory, 'http.d'), { recursive: true });
+  mkdirSync(join(directory, 'templates'), { recursive: true });
+
+  const file = join(directory, 'nginx.conf');
   const render = renderNginxConfig(config);
   writeFileSync(file, render, 'utf-8');
 
-  const edgeKeyFile = join(config.cache, config.files.nginxEdgeKeyJS[0]);
+  const edgeKeyFile = join(directory, 'edge-key.js');
   const edgeKeyRender = renderEdgeKeyJS(config.secrets.edgeKey);
   writeFileSync(edgeKeyFile, edgeKeyRender, 'utf-8');
+
+  const otelFile = join(directory, 'templates', 'otel.conf.template');
+  writeFileSync(otelFile, otelTemplate, 'utf-8');
 }
 
 function renderNginxConfig(config: VisageConfig): string {
@@ -188,21 +212,31 @@ function renderNginxConfig(config: VisageConfig): string {
   const data = {
     host: config.host,
     port: config.port,
+    modules: config.nginx.modules,
     email: config.oauth2.scopes.includes('email'),
     csrf: { origin, referer },
     ssl: {
-      cert: join(config.files.certs[1], 'tls.crt'),
-      key: join(config.files.certs[1], 'tls.key'),
+      cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),
+      key: join(config.nginx.mount[1], 'certs', 'tls.key'),
     },
     edgeKey: {
       header: VisageEdgeKeyHeader,
-      script: config.files.nginxEdgeKeyJS[1],
+      script: join(config.nginx.mount[1], 'edge-key.js'),
     },
     upstreams: Object.fromEntries(
       Object.entries(config.upstreams).map(([name, upstream]) => [
         name,
         {
           ...upstream,
+          locations: Object.fromEntries(
+            Object.entries(upstream.locations).map(([path, location]) => [
+              path,
+              {
+                ...location,
+                target: path.replace(/^(?:\^~|~\*|[=~])\s*/, ''),
+              },
+            ]),
+          ),
           resolve:
             upstream.host === 'host.docker.internal'
               ? process.platform !== 'linux'

@@ -24,7 +24,7 @@ processors:
     trace_statements:
       - context: span
         conditions:
-          - span.kind == SPAN_KIND_SERVER and IsMatch(span.name, "^[^ ]+ /.*$")
+          - span.kind == SPAN_KIND_SERVER and span.attributes["http.method"] != nil
         statements:
           - set(span.attributes["http.request.method"], span.attributes["http.method"])
           - set(span.attributes["url.path"], span.attributes["http.target"])
@@ -46,7 +46,6 @@ processors:
           - set(span.attributes["http.response.status_code"], span.attributes["http.status_code"])
           - set(span.attributes["error.type"], String(span.attributes["http.status_code"])) where span.attributes["http.status_code"] >= 500
           - set(span.status.code, STATUS_CODE_ERROR) where span.attributes["http.status_code"] >= 500
-          - set(span.name, span.attributes["http.request.method"])
           - delete_key(span.attributes, "http.target")
           - delete_key(span.attributes, "http.scheme")
           - delete_key(span.attributes, "http.flavor")
@@ -57,7 +56,6 @@ processors:
           - delete_key(span.attributes, "net.host.port")
           - delete_key(span.attributes, "net.sock.peer.addr")
           - delete_key(span.attributes, "net.sock.peer.port")
-          - delete_key(span.attributes, "http.route")
           - delete_key(span.attributes, "http.method")
           - delete_key(span.attributes, "http.status_code")
 

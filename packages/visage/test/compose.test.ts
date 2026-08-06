@@ -19,12 +19,15 @@ type SpawnCall = {
 };
 
 test('startCompose restarts Compose with in-memory edge and cookie secrets', async (t) => {
-  const config = resolveConfig({
-    ...resolveOptions({}),
-    cache: '',
-    root: 'compose-test',
-    edgeKey: 'edge-key',
-  });
+  const config = {
+    ...resolveConfig({
+      ...resolveOptions({}),
+      cache: '',
+      root: 'compose-test',
+      edgeKey: 'edge-key',
+    }),
+    package: '@blakearoberts/visage',
+  };
   const previousCookieSecret = process.env[config.secrets.cookieSecret];
   const previousEdgeKey = process.env[config.secrets.edgeKey];
   delete process.env[config.secrets.cookieSecret];
@@ -101,7 +104,9 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     assert.equal(spawnSyncCalls[0]?.command, 'docker');
     assert.ok(spawnSyncCalls[0]?.args.includes('--file=./compose.yaml'));
     assert.ok(
-      spawnSyncCalls[0]?.args.includes('--project-name=compose-test-visage'),
+      spawnSyncCalls[0]?.args.includes(
+        '--project-name=blakearoberts-visage-visage',
+      ),
     );
     assert.deepEqual(
       spawnSyncCalls.map((call) =>

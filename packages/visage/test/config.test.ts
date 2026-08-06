@@ -584,6 +584,9 @@ test('resolveConfig preserves managed service defaults for partial service overr
     },
     services: {
       nginx: {
+        environment: {
+          OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
+        },
         extra_hosts: ['idp.localhost:host-gateway'],
       },
     },
@@ -592,6 +595,20 @@ test('resolveConfig preserves managed service defaults for partial service overr
   assert.deepEqual(config.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
     'idp.localhost:host-gateway',
+  ]);
+  assert.deepEqual(config.services.nginx.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
+    OTEL_SERVICE_NAME: 'nginx',
+  });
+  assert.equal(config.package, 'test-app');
+  assert.equal(
+    config.services.nginx.image,
+    'ghcr.io/blakearoberts/visage-nginx:next',
+  );
+  assert.deepEqual(config.nginx.mount, ['./nginx', '/etc/nginx']);
+  assert.deepEqual(config.nginx.modules, [
+    '/usr/lib/nginx/modules/ngx_http_js_module.so',
+    '/usr/lib/nginx/modules/ngx_otel_module.so',
   ]);
   assert.deepEqual(config.services.oauth2_proxy.command, [
     '--config',
@@ -636,10 +653,6 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.oauth2_proxy.host, '127.0.0.1');
   assert.equal(config.upstreams.oauth2_proxy.port, 4180);
   assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
-  assert.deepEqual(config.compose, {
-    name: 'test-app-visage',
-  });
-
   assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
     enabled: true,
     forward: 'access',
@@ -687,7 +700,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
 });
 
-test('resolveConfig derives Compose project names from scoped package names', (t) => {
+test('resolveConfig resolves scoped package names', (t) => {
   const root = tempCache(t);
   writeFileSync(
     join(root, 'package.json'),
@@ -702,7 +715,7 @@ test('resolveConfig derives Compose project names from scoped package names', (t
     edgeKey: 'edge-key',
   });
 
-  assert.equal(config.compose.name, 'blakearoberts-visage-visage');
+  assert.equal(config.package, '@blakearoberts/visage');
 });
 
 test('resolveConfig preserves the edge key without mutating Vite headers', (t) => {
@@ -860,6 +873,10 @@ test('resolveConfig lets named services and upstreams override base entries', (t
       nginx: {
         image: 'custom-nginx:test',
         depends_on: ['api'],
+        environment: {
+          OTEL_SERVICE_NAME: 'custom-nginx',
+          OTEL_SERVICE_NAMESPACE: 'custom-namespace',
+        },
       },
       api: {
         image: 'example/api:test',
@@ -889,6 +906,10 @@ test('resolveConfig lets named services and upstreams override base entries', (t
   assert.deepEqual(config.services.nginx, {
     image: 'custom-nginx:test',
     depends_on: ['api'],
+    environment: {
+      OTEL_SERVICE_NAME: 'custom-nginx',
+      OTEL_SERVICE_NAMESPACE: 'custom-namespace',
+    },
     extra_hosts: ['host.docker.internal:host-gateway'],
     restart: 'always',
   });

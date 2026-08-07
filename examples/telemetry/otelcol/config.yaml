@@ -93,16 +93,8 @@ connectors:
     exclude_dimensions: [span.name, span.kind, status.code]
 
 exporters:
-  otlp_http/metrics:
-    endpoint: http://127.0.0.1:9090/api/v1/otlp
-    tls:
-      insecure: true
-  otlp_http/traces:
-    endpoint: http://127.0.0.1:4418
-    tls:
-      insecure: true
-  otlp_http/logs:
-    endpoint: http://127.0.0.1:3100/otlp
+  otlp_grpc:
+    endpoint: grafana:4317
     tls:
       insecure: true
 
@@ -112,12 +104,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [transform/nginx_http_server_spans, batch]
-      exporters: [otlp_http/traces, span_metrics]
+      exporters: [otlp_grpc, span_metrics]
     metrics:
       receivers: [prometheus, span_metrics]
       processors: [batch]
-      exporters: [otlp_http/metrics]
+      exporters: [otlp_grpc]
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp_http/logs]
+      exporters: [otlp_grpc]

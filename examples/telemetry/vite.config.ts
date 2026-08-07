@@ -12,8 +12,14 @@ export default defineConfig({
       services: {
         nginx: {
           environment: {
-            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://grafana:4317',
+            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
           },
+        },
+        otelcol: {
+          image: 'otel/opentelemetry-collector-contrib:0.151.0',
+          volumes: [
+            `${resolve(import.meta.dirname, 'otelcol')}:/etc/otelcol-contrib:ro`,
+          ],
         },
         grafana: {
           image: 'grafana/otel-lgtm',
@@ -26,8 +32,6 @@ export default defineConfig({
             GF_SERVER_SERVE_FROM_SUB_PATH: 'true',
             GF_USERS_AUTO_ASSIGN_ORG_ROLE: 'Editor',
             GF_PATHS_PROVISIONING: '/otel-lgtm/visage/provisioning',
-            OTELCOL_EXTRA_ARGS:
-              '--config=file:/otel-lgtm/visage/otelcol-config.yaml',
             TEMPO_EXTRA_ARGS:
               '--config.file=/otel-lgtm/visage/tempo-config.yaml',
           },
@@ -48,7 +52,6 @@ export default defineConfig({
       },
       upstreams: {
         otelcol: {
-          host: 'grafana',
           scheme: 'http',
           port: 4318,
           locations: {

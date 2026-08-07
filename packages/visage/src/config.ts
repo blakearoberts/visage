@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { parse } from 'yaml';
 
@@ -54,6 +55,7 @@ type ResolvedUpstream = {
 type ResolvedVisageOptions = {
   readonly host: string;
   readonly port: number;
+  readonly telemetry: boolean;
   readonly cookie: ResolvedCookiePolicy;
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
@@ -102,6 +104,7 @@ export type VisageConfig = {
   readonly host: string;
   readonly port: number;
   readonly package: string;
+  readonly telemetry: boolean;
   readonly cookie: ResolvedCookiePolicy;
   readonly edgeKey: string;
   readonly idp: ResolvedIdpConfig;
@@ -144,9 +147,6 @@ const BaseServiceDex = {
 
 const BaseServiceNginx = {
   image: DockerImages.nginx.image,
-  environment: {
-    OTEL_SERVICE_NAME: 'nginx',
-  },
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
 } as const satisfies ResolvedService;
@@ -158,6 +158,32 @@ const BaseServiceOAuth2Proxy = {
   network_mode: 'service:nginx',
   restart: 'always',
 } as const satisfies ResolvedService;
+
+const OTelCollectorConfig = fileURLToPath(
+  new URL('../otelcol', import.meta.url),
+);
+
+const BaseServiceOTelCollector = {
+  image: DockerImages.otelcol.image,
+  depends_on: ['nginx'],
+  environment: {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
+  },
+  network_mode: 'service:nginx',
+  restart: 'always',
+  volumes: [`${OTelCollectorConfig}:/etc/otelcol-contrib:ro`],
+  upstream: {
+    host: '127.0.0.1',
+    scheme: 'http',
+    port: 4318,
+    locations: {
+      '/t/': {
+        auth: { enabled: true },
+        directives: { rewrite: '^/t/(.*)$ /$1 break' },
+      },
+    },
+  },
+} as const satisfies VisageService;
 
 const DefaultProxyPolicy = {
   auth: { enabled: true, forward: false },
@@ -258,10 +284,12 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   } = options;
   const cookieName = cookie.name ?? 'sess';
   const publicClient = oauth2.clientSecret === null;
-  const services = resolveServicesOptions(options.services);
+  const telemetry = options.telemetry !== undefined;
+  const services = resolveServicesOptions(options.services, telemetry);
   return {
     host,
     port,
+    telemetry,
     cookie: {
       ...DefaultCookiePolicy,
       cookie_name:
@@ -308,6 +336,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
 
 function resolveServicesOptions(
   services: Record<string, VisageService> | undefined = {},
+  telemetry: boolean,
 ): Record<string, VisageService> {
   return {
     ...services,
@@ -315,7 +344,12 @@ function resolveServicesOptions(
       ...BaseServiceNginx,
       ...(services.nginx ?? {}),
       environment: {
-        ...BaseServiceNginx.environment,
+        ...(telemetry
+          ? {
+              OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4317',
+              OTEL_SERVICE_NAME: 'nginx',
+            }
+          : {}),
         ...(services.nginx?.environment ?? {}),
       },
       extra_hosts: [
@@ -327,6 +361,18 @@ function resolveServicesOptions(
       ...BaseServiceOAuth2Proxy,
       ...(services.oauth2_proxy ?? {}),
     },
+    ...(telemetry
+      ? {
+          otelcol: {
+            ...BaseServiceOTelCollector,
+            ...(services.otelcol ?? {}),
+            environment: {
+              ...BaseServiceOTelCollector.environment,
+              ...(services.otelcol?.environment ?? {}),
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -540,6 +586,7 @@ export function resolveConfig(
     host: options.host,
     port: options.port,
     package: resolvePackage(options.root),
+    telemetry: options.telemetry,
     cookie: options.cookie,
     edgeKey: options.edgeKey,
     idp,
@@ -559,7 +606,9 @@ export function resolveConfig(
       mount: ['./nginx', '/etc/nginx'],
       modules: [
         '/usr/lib/nginx/modules/ngx_http_js_module.so',
-        '/usr/lib/nginx/modules/ngx_otel_module.so',
+        ...(options.telemetry
+          ? ['/usr/lib/nginx/modules/ngx_otel_module.so']
+          : []),
       ],
     },
     services: {

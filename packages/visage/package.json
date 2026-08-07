@@ -35,7 +35,8 @@
   },
   "files": [
     "dist",
-    "docker-compose.images.yml"
+    "docker-compose.images.yml",
+    "otelcol"
   ],
   "engines": {
     "node": ">=20"

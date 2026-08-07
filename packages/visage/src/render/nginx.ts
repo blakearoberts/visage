@@ -17,7 +17,9 @@ http {
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 
-    include /etc/nginx/http.d/*.conf;
+    <%_ if (it.telemetry) { %>
+    include /etc/nginx/http.d/otel.conf;
+    <%_ } %>
 
     # Disable IPv6 DNS lookup. Docker Desktop (com.docker.backend), doesn't
     # support IPv6 traffic translation to host loopback.
@@ -108,7 +110,10 @@ http {
         <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
         <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
         location <%~ path %> {
+            <%_ if (it.telemetry) { %>
             otel_span_name "$request_method <%~ location.target %>";
+
+            <%_ } %>
 
             <%_ if (location.csrf) { %>
             add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest, Origin, Referer" always;
@@ -155,11 +160,15 @@ http {
 
         <%_ } %>
         location @auth_redirect {
+            <%_ if (it.telemetry) { %>
             otel_span_name "$request_method @auth_redirect";
+            <%_ } %>
             return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;
         }
         location @auth_401 {
+            <%_ if (it.telemetry) { %>
             otel_span_name "$request_method @auth_401";
+            <%_ } %>
             return 401;
         }
     }
@@ -212,6 +221,7 @@ function renderNginxConfig(config: VisageConfig): string {
   const data = {
     host: config.host,
     port: config.port,
+    telemetry: config.telemetry,
     modules: config.nginx.modules,
     email: config.oauth2.scopes.includes('email'),
     csrf: { origin, referer },

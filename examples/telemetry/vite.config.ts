@@ -9,11 +9,10 @@ export default defineConfig({
     react(),
     visage({
       oauth2: { scopes: ['openid', 'email', 'offline_access'] },
+      telemetry: {},
       services: {
-        nginx: {
-          environment: {
-            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://grafana:4317',
-          },
+        otelcol: {
+          environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
         },
         grafana: {
           image: 'grafana/otel-lgtm',
@@ -26,8 +25,6 @@ export default defineConfig({
             GF_SERVER_SERVE_FROM_SUB_PATH: 'true',
             GF_USERS_AUTO_ASSIGN_ORG_ROLE: 'Editor',
             GF_PATHS_PROVISIONING: '/otel-lgtm/visage/provisioning',
-            OTELCOL_EXTRA_ARGS:
-              '--config=file:/otel-lgtm/visage/otelcol-config.yaml',
             TEMPO_EXTRA_ARGS:
               '--config.file=/otel-lgtm/visage/tempo-config.yaml',
           },
@@ -42,18 +39,6 @@ export default defineConfig({
             locations: {
               '/grafana/api/live/': { ws: true },
               '/grafana/': {},
-            },
-          },
-        },
-      },
-      upstreams: {
-        otelcol: {
-          host: 'grafana',
-          scheme: 'http',
-          port: 4318,
-          locations: {
-            '/t/': {
-              directives: { rewrite: '^/t/(.*)$ /$1 break' },
             },
           },
         },

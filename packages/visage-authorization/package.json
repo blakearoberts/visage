@@ -1,0 +1,23 @@
+{
+  "name": "@blakearoberts/visage-authorization",
+  "private": true,
+  "description": "OIDC SSO broker for Visage.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "jose": "^6.2.8",
+    "oidc-provider": "^9.13.3",
+    "openid-client": "^6.8.9"
+  },
+  "devDependencies": {
+    "@types/oidc-provider": "^9.13.1"
+  }
+}

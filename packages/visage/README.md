@@ -200,6 +200,22 @@ local application; Visage does not apply an additional email-domain allowlist.
 
 See [`VisageOptions`](src/types.ts) for the full option surface.
 
+### Telemetry
+
+Add `telemetry: {}` to run Visage's managed OpenTelemetry Collector.
+
+- Visage configures:
+  - NGINX to export access spans to the Collector;
+  - OAuth2 Proxy to expose a Prometheus metrics listener for the Collector;
+  - The Collector to accept authenticated OTLP/HTTP signals at `/t/`.
+
+- The Collector shares NGINX's network namespace and binds its receivers to
+  loopback, so its endpoints are not exposed directly.
+
+- The Collector exports OTLP to `host.docker.internal:4317` by default; the
+  [telemetry example](../../examples/telemetry) targets a Visage managed service
+  (Grafana) instead.
+
 ## Required Tools
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2
@@ -211,12 +227,13 @@ See [`VisageOptions`](src/types.ts) for the full option surface.
 
 Visage pulls these as needed based on configuration:
 
-| Service                                                      | Image                                                                                       |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| [NGINX](https://nginx.org/)                                  | [`visage-nginx`](https://github.com/blakearoberts/visage/pkgs/container/visage-nginx)       |
-| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy) |
-| [Dex](https://dexidp.io/)                                    | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                    |
-| [Socat](https://www.dest-unreach.org/socat/)                 | [`alpine/socat`](https://hub.docker.com/r/alpine/socat)                                     |
+| Service                                                             | Image                                                                                                   |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [NGINX](https://nginx.org/)                                         | [`visage-nginx`](https://github.com/blakearoberts/visage/pkgs/container/visage-nginx)                   |
+| [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/)        | [`quay.io/oauth2-proxy/oauth2-proxy`](https://quay.io/repository/oauth2-proxy/oauth2-proxy)             |
+| [Dex](https://dexidp.io/)                                           | [`ghcr.io/dexidp/dex`](https://github.com/dexidp/dex/pkgs/container/dex)                                |
+| [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) | [`otel/opentelemetry-collector-contrib`](https://hub.docker.com/r/otel/opentelemetry-collector-contrib) |
+| [Socat](https://www.dest-unreach.org/socat/)                        | [`alpine/socat`](https://hub.docker.com/r/alpine/socat)                                                 |
 
 The image tags Visage uses by default are defined by the manifest file,
 [docker-compose.images.yml](docker-compose.images.yml).

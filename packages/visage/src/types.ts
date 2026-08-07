@@ -29,6 +29,11 @@ export type VisageOptions = {
    */
   readonly oauth2?: VisageOAuth2Client;
   /**
+   * Enables Visage-managed collection of NGINX traces, OAuth2 Proxy metrics,
+   * and OTLP signals sent through the protected `/t/` route.
+   */
+  readonly telemetry?: Readonly<Record<string, never>>;
+  /**
    * Additional or replacement Docker Compose services managed with the Vite
    * dev-server lifecycle.
    */

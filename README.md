@@ -158,3 +158,5 @@ and other click-jacking controls remain application policy.
 - [ ] Support [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support [HTTP mode without local TLS](docs/tls-http-mode.md).
+- [ ] Support delegated, audience-restricted authorization between services,
+      with RFC 8693 token exchange implementing the delegation.

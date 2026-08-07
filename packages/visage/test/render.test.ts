@@ -109,7 +109,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
       services: {
         nginx: {
           environment: {
-            OTEL_SERVICE_NAMESPACE: 'custom-namespace',
+            CUSTOM_NGINX_SETTING: 'value',
           },
           volumes: ['./nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro'],
         },
@@ -146,8 +146,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.environment, {
-    OTEL_SERVICE_NAME: 'nginx',
-    OTEL_SERVICE_NAMESPACE: 'custom-namespace',
+    CUSTOM_NGINX_SETTING: 'value',
   });
   assert.deepEqual(compose.services.nginx.secrets, ['VISAGE_EDGE_KEY']);
   assert.deepEqual(compose.services.nginx.ports, ['127.0.0.1:9443:9443']);
@@ -191,6 +190,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     restart: 'on-failure',
     volumes: ['./api.yml:/etc/api/api.yml:ro'],
   });
+  assert.equal(compose.services.otelcol, undefined);
   assert.equal(compose.networks, undefined);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
@@ -213,10 +213,8 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
-  assert.equal(
-    compose.services.nginx.environment.OTEL_SERVICE_NAMESPACE,
-    'render-test',
-  );
+  assert.deepEqual(compose.services.nginx.environment, {});
+  assert.equal(compose.services.otelcol, undefined);
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
   ]);
@@ -232,6 +230,40 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
       environment: 'VISAGE_EDGE_KEY',
     },
   });
+});
+
+test('writeComposeConfig isolates the managed OpenTelemetry Collector with NGINX', (t) => {
+  const config = resolvedConfig(t, {
+    telemetry: {},
+    services: {
+      otelcol: {
+        environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
+      },
+    },
+  });
+
+  writeComposeConfig(config);
+
+  const compose = parse(readGenerated(config, config.files.compose));
+  assert.deepEqual(compose.services.nginx.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4317',
+    OTEL_SERVICE_NAME: 'nginx',
+    OTEL_SERVICE_NAMESPACE: 'render-test',
+  });
+  assert.equal(compose.services.otelcol.image, DockerImages.otelcol.image);
+  assert.deepEqual(compose.services.otelcol.depends_on, ['nginx']);
+  assert.equal(compose.services.otelcol.network_mode, 'service:nginx');
+  assert.deepEqual(compose.services.otelcol.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317',
+  });
+  assert.equal(compose.services.otelcol.ports, undefined);
+  assert.equal(compose.services.otelcol.networks, undefined);
+  assert.equal(compose.services.otelcol.restart, 'always');
+  assert.equal(compose.services.otelcol.volumes.length, 1);
+  assert.match(
+    compose.services.otelcol.volumes[0],
+    /packages\/visage\/otelcol:\/etc\/otelcol-contrib:ro$/,
+  );
 });
 
 test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
@@ -257,6 +289,7 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
 
 test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => {
   const config = resolvedConfig(t, {
+    telemetry: {},
     oauth2: { scopes: ['openid', 'email', 'offline_access'] },
     upstreams: {
       api: {
@@ -296,6 +329,7 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
     nginx,
     /load_module \/usr\/lib\/nginx\/modules\/ngx_otel_module\.so;/,
   );
+  assert.match(nginx, /include \/etc\/nginx\/http\.d\/otel\.conf;/);
   assert.match(nginx, /listen 9443 ssl;/);
   assert.match(nginx, /server_name app\.local\.test;/);
   assert.match(nginx, /ssl_certificate\s+\/etc\/nginx\/certs\/tls\.crt;/);
@@ -428,6 +462,21 @@ otel_span_name "$request_method";
   assert.match(publicLocation, /proxy_set_header Authorization "";/);
   assert.match(publicLocation, /proxy_set_header Host public\.internal;/);
   assert.match(publicLocation, /proxy_buffer_size 8k;/);
+});
+
+test('writeNginxAssets omits OpenTelemetry config when telemetry is disabled', (t) => {
+  const config = resolvedConfig(t);
+
+  writeNginxAssets(config);
+
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  assert.doesNotMatch(nginx, /ngx_otel_module/);
+  assert.doesNotMatch(nginx, /include \/etc\/nginx\/http\.d\/otel\.conf;/);
+  assert.doesNotMatch(nginx, /otel_span_name/);
+  assert.match(
+    readGeneratedNginx(config, 'templates/otel.conf.template'),
+    /otel_trace on;/,
+  );
 });
 
 test('writeNginxAssets redirects only document navigation auth failures', (t) => {
@@ -969,7 +1018,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
-  assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
+  assert.equal(oauth2Proxy.metrics_address, undefined);
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
   assert.equal(oauth2Proxy.login_url, 'https://app.local.test:9443/dex/auth');
@@ -1013,6 +1062,17 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   ]);
 
   writeOauth2ProxyConfig(config);
+});
+
+test('writeOauth2ProxyConfig binds telemetry metrics to NGINX loopback', (t) => {
+  const config = resolvedConfig(t, { telemetry: {} });
+
+  writeOauth2ProxyConfig(config);
+
+  const oauth2Proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.equal(oauth2Proxy.metrics_address, '127.0.0.1:4181');
 });
 
 test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {

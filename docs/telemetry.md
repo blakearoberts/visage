@@ -1,40 +1,49 @@
 # Telemetry
 
-Visage should provide first-class, opt-in configuration for telemetry emitted by
-its managed NGINX and OAuth2 Proxy services. The
-[telemetry example](../examples/telemetry) proves the integration, but Visage
-could do better to support configuration of telemetry signals out-of-the-box.
+Visage provides opt-in telemetry collection for its managed NGINX and OAuth2
+Proxy services. Set `telemetry: {}` to run the managed OpenTelemetry Collector.
+
+```mermaid
+flowchart LR
+  subgraph network["shared Docker network"]
+    NGINX --> OAuth2-Proxy
+    NGINX -.->|forwards telemetry| otelcol
+    NGINX -..->|exports spans| otelcol
+    otelcol -.->|scrapes metrics| OAuth2-Proxy
+  end
+
+  browser([Browser]) --> NGINX
+  NGINX --> idp([Dex])
+  NGINX ---> vite([Vite])
+  OAuth2-Proxy --> idp
+
+  host([host.docker.internal:4317])
+  otelcol[OpenTelemetry Collector]
+  otelcol -..->|exports telemetry| host
+```
+
+See the [telemetry example](../examples/telemetry) for how to configure Grafana
+as a managed Visage service.
 
 ## Traces
 
-Current state:
+When telemetry is enabled, Visage configures NGINX to export spans to the
+OpenTelemetry Collector. The NGINX spans are configured with the following
+resource attributes:
 
-- `otel.conf` hard-codes context propagation and the
-  `ParentBased(root=AlwaysOff)` sampling policy.
-- Visage defaults resource attributes for access spans:
-  - `service.name`: The value, `nginx`.
-  - `service.namespace`: The consumer's exact npm package name.
-  - `service.instance.id`: The Docker container ID provided through `HOSTNAME`.
-  - `service.version`: The value of `NGINX_VERSION`.
-
-Desired state:
-
-- Visage supports configuring the NGINX otel module.
+- `service.name=nginx`
+- `service.namespace` set to the NPM package name
+- `service.instance.id=${HOSTNAME}` (Docker container ID)
+- `service.version=${NGINX_VERSION}`
 
 ## Metrics
 
-Current state:
+When telemetry is enabled, Visage configures:
 
-- OAuth2 Proxy always receives `metrics_address = "0.0.0.0:4181"`, even when
-  nothing scrapes it.
-- The telemetry example's collector scrapes that listener through the shared
-  NGINX network namespace at `nginx:4181` and exports the metrics to Prometheus.
-
-Desired state:
-
-- Visage supports configuring OAuth2 Proxy metrics.
-- Visage supports converting NGINX spans to metrics.
-- Visage supports converting OAuth2 Proxy logs to metrics.
+- OAuth2 Proxy to serve Prometheus metrics at `127.0.0.1:4181` which the
+  OpenTelemetry Collector scrapes and exports.
+- The Collector scrapes OAuth2 Proxy's Prometheus metrics.
+- The Collector converts NGINX spans to explicit bucket histograms.
 
 ## Logs
 

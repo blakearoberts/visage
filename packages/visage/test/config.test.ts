@@ -47,6 +47,9 @@ test('resolveOptions applies public defaults', () => {
 
   assert.equal(options.host, 'localhost');
   assert.equal(options.port, 9001);
+  assert.equal(options.telemetry, false);
+  assert.equal(options.services.otelcol, undefined);
+  assert.equal(options.upstreams.otelcol, undefined);
   assert.deepEqual(options.cookie, {
     cookie_name: '__Host-sess',
     cookie_expire: '8h',
@@ -70,6 +73,35 @@ test('resolveOptions applies public defaults', () => {
     secret: 'visage-secret',
     scopes: ['openid', 'offline_access'],
     public: false,
+  });
+});
+
+test('resolveOptions enables the managed OpenTelemetry Collector', () => {
+  const options = resolveOptions({ telemetry: {} });
+
+  assert.equal(options.telemetry, true);
+  assert.equal(
+    options.services.otelcol.image,
+    'otel/opentelemetry-collector-contrib:0.151.0',
+  );
+  assert.deepEqual(options.services.otelcol.depends_on, ['nginx']);
+  assert.equal(options.services.otelcol.network_mode, 'service:nginx');
+  assert.deepEqual(options.services.otelcol.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
+  });
+  assert.deepEqual(options.services.nginx.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4317',
+    OTEL_SERVICE_NAME: 'nginx',
+  });
+  assert.equal(options.upstreams.otelcol.host, '127.0.0.1');
+  assert.equal(options.upstreams.otelcol.port, 4318);
+  assert.deepEqual(options.upstreams.otelcol.locations['/t/'].auth, {
+    enabled: true,
+    forward: false,
+  });
+  assert.deepEqual(options.upstreams.otelcol.locations['/t/'].directives, {
+    proxy_buffer_size: ['8k'],
+    rewrite: ['^/t/(.*)$ /$1 break'],
   });
 });
 
@@ -579,6 +611,7 @@ test('resolveConfig omits external IdP upstream locations for root issuer paths'
 
 test('resolveConfig preserves managed service defaults for partial service overrides', (t) => {
   const { config } = resolveForTest(t, {
+    telemetry: {},
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
     },
@@ -617,6 +650,9 @@ test('resolveConfig preserves managed service defaults for partial service overr
   assert.deepEqual(config.services.oauth2_proxy.depends_on, ['nginx']);
   assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
+  assert.equal(config.services.otelcol.network_mode, 'service:nginx');
+  assert.deepEqual(config.services.otelcol.depends_on, ['nginx']);
+  assert.equal(config.telemetry, true);
 });
 
 test('resolveConfig applies defaults and normalizes upstream locations', (t) => {

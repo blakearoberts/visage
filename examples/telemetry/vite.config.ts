@@ -9,17 +9,10 @@ export default defineConfig({
     react(),
     visage({
       oauth2: { scopes: ['openid', 'email', 'offline_access'] },
+      telemetry: {},
       services: {
-        nginx: {
-          environment: {
-            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
-          },
-        },
         otelcol: {
-          image: 'otel/opentelemetry-collector-contrib:0.151.0',
-          volumes: [
-            `${resolve(import.meta.dirname, 'otelcol')}:/etc/otelcol-contrib:ro`,
-          ],
+          environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
         },
         grafana: {
           image: 'grafana/otel-lgtm',
@@ -46,17 +39,6 @@ export default defineConfig({
             locations: {
               '/grafana/api/live/': { ws: true },
               '/grafana/': {},
-            },
-          },
-        },
-      },
-      upstreams: {
-        otelcol: {
-          scheme: 'http',
-          port: 4318,
-          locations: {
-            '/t/': {
-              directives: { rewrite: '^/t/(.*)$ /$1 break' },
             },
           },
         },

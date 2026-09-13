@@ -4,8 +4,8 @@ services:
   nginx:
     image: ghcr.io/blakearoberts/visage-nginx:next
   oauth2_proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.3
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4
   otelcol:
-    image: otel/opentelemetry-collector-contrib:0.151.0
+    image: otel/opentelemetry-collector-contrib:0.160.0
   socat:
     image: alpine/socat:1.8.1.3

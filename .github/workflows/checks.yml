@@ -21,12 +21,22 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      - run: npm pack --workspace @blakearoberts/visage
+      - name: npm pack
+        run: |
+          mkdir -p artifacts/visage artifacts/visage-authorization
+          npm pack --workspace @blakearoberts/visage --pack-destination artifacts/visage
+          npm pack --workspace @blakearoberts/visage-authorization --pack-destination artifacts/visage-authorization
 
       - uses: actions/upload-artifact@v7
         with:
           archive: false
-          path: '*.tgz'
+          path: artifacts/visage
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: artifacts/visage-authorization
           retention-days: 1
 
   e2e:
@@ -52,6 +62,7 @@ jobs:
         run: |
           docker compose -f packages/visage/docker-compose.images.yml pull
           docker pull traefik/whoami
+          docker pull openpolicyagent/opa:1.19.0
 
       - run: npm ci
       - run: npm run test:e2e
@@ -65,6 +76,7 @@ jobs:
             test-results
             examples/simple/node_modules/.vite/visage/logs/**
             examples/ssr/.visage/logs/**
+            examples/authorization/.visage/logs/**
             examples/external-idp/node_modules/.vite/visage/logs/**
           include-hidden-files: true
           retention-days: 1

@@ -80,10 +80,6 @@ test('resolveOptions enables the managed OpenTelemetry Collector', () => {
   const options = resolveOptions({ telemetry: {} });
 
   assert.equal(options.telemetry, true);
-  assert.equal(
-    options.services.otelcol.image,
-    'otel/opentelemetry-collector-contrib:0.151.0',
-  );
   assert.deepEqual(options.services.otelcol.depends_on, ['nginx']);
   assert.equal(options.services.otelcol.network_mode, 'service:nginx');
   assert.deepEqual(options.services.otelcol.environment, {

@@ -27,7 +27,7 @@ function renderDexConfig(config: VisageConfig): string {
   return stringify({
     issuer: oidc.issuer,
     storage: { type: 'memory' },
-    web: { http: `0.0.0.0:${upstream.dex.port}` },
+    web: { http: `127.0.0.1:${upstream.dex.port}` },
     oauth2: { skipApprovalScreen: true },
     staticClients: [
       {

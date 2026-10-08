@@ -80,7 +80,7 @@ test('resolveOptions enables the managed OpenTelemetry Collector', () => {
   const options = resolveOptions({ telemetry: {} });
 
   assert.equal(options.telemetry, true);
-  assert.deepEqual(options.services.otelcol.depends_on, ['nginx']);
+  assert.equal(options.services.otelcol.depends_on, undefined);
   assert.equal(options.services.otelcol.network_mode, 'service:nginx');
   assert.deepEqual(options.services.otelcol.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
@@ -517,7 +517,7 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.deepEqual(config.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
   ]);
-  assert.deepEqual(config.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(config.services.oauth2_proxy.depends_on, undefined);
   assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
   assert.equal(config.upstreams.dex, undefined);
@@ -643,11 +643,11 @@ test('resolveConfig preserves managed service defaults for partial service overr
     '--config',
     '/etc/oauth2-proxy/config.yml',
   ]);
-  assert.deepEqual(config.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(config.services.oauth2_proxy.depends_on, undefined);
   assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
   assert.equal(config.services.otelcol.network_mode, 'service:nginx');
-  assert.deepEqual(config.services.otelcol.depends_on, ['nginx']);
+  assert.equal(config.services.otelcol.depends_on, undefined);
   assert.equal(config.telemetry, true);
 });
 

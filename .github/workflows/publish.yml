@@ -49,8 +49,7 @@ jobs:
       packages: write
     uses: ./.github/workflows/publish-docker.yml
     with:
-      context: packages/visage/nginx
-      image-name: visage-nginx
+      context: visage/nginx
       stable: ${{ needs.resolve-version.outputs.stable-release == 'true' }}
       version: ${{ needs.resolve-version.outputs.next-version }}
 

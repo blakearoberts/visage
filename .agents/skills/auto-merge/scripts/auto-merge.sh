@@ -81,19 +81,24 @@ read_terminal_required_check() {
     gh pr checks "$pr_url" \
       --required \
       --json name,state,bucket,workflow,description,link \
-      --jq 'map(select(.bucket == "fail" or .bucket == "cancel"))[0] // empty | [(.name // ""), (.state // ""), (.bucket // ""), (.workflow // ""), (.description // ""), (.link // "")] | join("\u001f")'
+      --jq 'map(select(.bucket == "fail" or .bucket == "cancel"))[0] // empty | [(.name // ""), (.state // ""), (.bucket // ""), (.workflow // ""), (.description // ""), (.link // "")] | join("\u001f")' 2>&1
   )"
   checks_status="$?"
   set -e
 
-  if [ -n "$terminal_check" ]; then
-    echo "$terminal_check"
-    return 0
+  if [ "$checks_status" -eq 1 ] && [ "$terminal_check" = "no checks reported on the '$branch' branch" ]; then
+    return 1
   fi
 
   if [ "$checks_status" -ne 0 ] && [ "$checks_status" -ne 8 ]; then
+    echo "$terminal_check" >&2
     echo "Unable to read required PR checks for $canonical_url; gh exited with status $checks_status." >&2
     return 2
+  fi
+
+  if [ -n "$terminal_check" ]; then
+    echo "$terminal_check"
+    return 0
   fi
 
   return 1

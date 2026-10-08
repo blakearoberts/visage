@@ -6,9 +6,6 @@ on:
       context:
         required: true
         type: string
-      image-name:
-        required: true
-        type: string
       stable:
         required: true
         type: boolean
@@ -20,35 +17,41 @@ permissions:
   contents: read
 
 jobs:
-  resolve-tags:
-    name: Resolve Tags
+  resolve:
+    name: Resolve
     runs-on: ubuntu-latest
     outputs:
+      image-name: ${{ steps.tags.outputs.image-name }}
       tags: ${{ steps.tags.outputs.tags }}
     permissions:
       contents: read
     steps:
       - id: tags
         env:
-          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}
+          CONTEXT: ${{ inputs.context }}
+          OWNER: ${{ github.repository_owner }}
           STABLE: ${{ inputs.stable }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          image_name="${CONTEXT//\//-}"
+          image="ghcr.io/$OWNER/$image_name"
+          echo "image-name=$image_name" >> "$GITHUB_OUTPUT"
+
           if [[ "$STABLE" == "true" ]]; then
             {
               echo 'tags<<EOF'
-              echo "$IMAGE:$VERSION"
-              echo "$IMAGE:latest"
+              echo "$image:$VERSION"
+              echo "$image:latest"
               echo EOF
             } >> "$GITHUB_OUTPUT"
           else
-            echo "tags=$IMAGE:next" >> "$GITHUB_OUTPUT"
+            echo "tags=$image:next" >> "$GITHUB_OUTPUT"
           fi
 
   publish:
-    name: ${{ inputs.image-name }}
-    needs: resolve-tags
+    name: ${{ needs.resolve.outputs.image-name }}
+    needs: resolve
     permissions:
       contents: read
       packages: write
@@ -57,12 +60,12 @@ jobs:
       context: ${{ inputs.context }}
       head-sha: ${{ github.event.workflow_run.head_sha }}
       push: true
-      tags: ${{ needs.resolve-tags.outputs.tags }}
+      tags: ${{ needs.resolve.outputs.tags }}
       version: ${{ inputs.version }}
 
   cleanup:
-    name: Cleanup ${{ inputs.image-name }}
-    needs: [resolve-tags, publish]
+    name: Cleanup ${{ needs.resolve.outputs.image-name }}
+    needs: [resolve, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,11 +82,11 @@ jobs:
       - name: Delete untagged manifests
         env:
           GH_TOKEN: ${{ github.token }}
-          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}
-          IMAGE_NAME: ${{ inputs.image-name }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ needs.resolve.outputs.image-name }}
+          IMAGE_NAME: ${{ needs.resolve.outputs.image-name }}
           OWNER: ${{ github.repository_owner }}
           OWNER_TYPE: ${{ github.event.repository.owner.type }}
-          PUBLISHED_IMAGES: ${{ needs.resolve-tags.outputs.tags }}
+          PUBLISHED_IMAGES: ${{ needs.resolve.outputs.tags }}
         run: |
           set -euo pipefail
 

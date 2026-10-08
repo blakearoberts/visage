@@ -140,6 +140,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     '/etc/dex/dex.yaml',
   ]);
   assert.equal(compose.services.dex.restart, 'always');
+  assert.equal(compose.services.dex.network_mode, 'service:nginx');
   assert.deepEqual(compose.services.dex.volumes, [
     './dex.yaml:/etc/dex/dex.yaml:ro',
   ]);
@@ -159,7 +160,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     './nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro',
   ]);
   assert.equal(compose.services.oauth2_proxy.extra_hosts, undefined);
-  assert.deepEqual(compose.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(compose.services.oauth2_proxy.depends_on, undefined);
   assert.equal(compose.services.oauth2_proxy.network_mode, 'service:nginx');
   assert.equal(compose.services.oauth2_proxy.networks, undefined);
   assert.equal(compose.services.oauth2_proxy.restart, 'always');
@@ -251,7 +252,7 @@ test('writeComposeConfig isolates the managed OpenTelemetry Collector with NGINX
     OTEL_SERVICE_NAMESPACE: 'render-test',
   });
   assert.equal(compose.services.otelcol.image, DockerImages.otelcol.image);
-  assert.deepEqual(compose.services.otelcol.depends_on, ['nginx']);
+  assert.equal(compose.services.otelcol.depends_on, undefined);
   assert.equal(compose.services.otelcol.network_mode, 'service:nginx');
   assert.deepEqual(compose.services.otelcol.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317',
@@ -281,7 +282,7 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   assert.deepEqual(compose.services.nginx.extra_hosts, [
     'host.docker.internal:host-gateway',
   ]);
-  assert.deepEqual(compose.services.oauth2_proxy.depends_on, ['nginx']);
+  assert.equal(compose.services.oauth2_proxy.depends_on, undefined);
   assert.equal(compose.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(compose.services.oauth2_proxy.network_mode, 'service:nginx');
   assert.equal(compose.services.oauth2_proxy.networks, undefined);
@@ -596,6 +597,10 @@ test('writeNginxAssets keeps required Dex and OAuth2 Proxy endpoints public', (t
 test('writeNginxAssets resolves Compose hostnames and keeps IP addresses static', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
+      backend: {
+        host: 'backend',
+        port: 8080,
+      },
       fixed: {
         host: '192.0.2.1',
         port: 8080,
@@ -607,9 +612,13 @@ test('writeNginxAssets resolves Compose hostnames and keeps IP addresses static'
 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.match(
-    upstreamBlock(nginx, 'dex'),
-    /zone dex 64k;\s+server dex:5556 resolve;/,
+    upstreamBlock(nginx, 'backend'),
+    /zone backend 64k;\s+server backend:8080 resolve;/,
   );
+
+  const dex = upstreamBlock(nginx, 'dex');
+  assert.match(dex, /server 127\.0\.0\.1:5556;/);
+  assert.doesNotMatch(dex, /zone|resolve/);
 
   const oauth2Proxy = upstreamBlock(nginx, 'oauth2_proxy');
   assert.match(oauth2Proxy, /server 127\.0\.0\.1:4180;/);
@@ -919,7 +928,7 @@ test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) =>
   const dex = parse(readGenerated(config, config.files.dex[0]));
   assert.equal(dex.issuer, 'https://app.local.test:9443/dex');
   assert.deepEqual(dex.storage, { type: 'memory' });
-  assert.deepEqual(dex.web, { http: '0.0.0.0:5556' });
+  assert.deepEqual(dex.web, { http: '127.0.0.1:5556' });
   assert.deepEqual(dex.staticClients, [
     {
       id: 'visage',
@@ -1022,8 +1031,8 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
   assert.equal(oauth2Proxy.login_url, 'https://app.local.test:9443/dex/auth');
-  assert.equal(oauth2Proxy.redeem_url, 'http://dex:5556/dex/token');
-  assert.equal(oauth2Proxy.oidc_jwks_url, 'http://dex:5556/dex/keys');
+  assert.equal(oauth2Proxy.redeem_url, 'http://127.0.0.1:5556/dex/token');
+  assert.equal(oauth2Proxy.oidc_jwks_url, 'http://127.0.0.1:5556/dex/keys');
   assert.equal(
     oauth2Proxy.redirect_url,
     'https://app.local.test:9443/oauth2/callback',

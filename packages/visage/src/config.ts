@@ -142,6 +142,7 @@ export const DockerImages = parse(
 const BaseServiceDex = {
   image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yaml'],
+  network_mode: 'service:nginx',
   restart: 'always',
 } as const satisfies ResolvedService;
 
@@ -154,7 +155,6 @@ const BaseServiceNginx = {
 const BaseServiceOAuth2Proxy = {
   image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
-  depends_on: ['nginx'],
   network_mode: 'service:nginx',
   restart: 'always',
 } as const satisfies ResolvedService;
@@ -165,7 +165,6 @@ const OTelCollectorConfig = fileURLToPath(
 
 const BaseServiceOTelCollector = {
   image: DockerImages.otelcol.image,
-  depends_on: ['nginx'],
   environment: {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
   },
@@ -671,12 +670,12 @@ function resolveIdpConfig({
       oidc: {
         issuer: `https://${host}:${port}/dex`,
         authorization: `https://${host}:${port}/dex/auth`,
-        token: 'http://dex:5556/dex/token',
-        jwks: 'http://dex:5556/dex/keys',
+        token: 'http://127.0.0.1:5556/dex/token',
+        jwks: 'http://127.0.0.1:5556/dex/keys',
       },
       upstream: {
         dex: {
-          host: 'dex',
+          host: '127.0.0.1',
           scheme: 'http',
           port: 5556,
           locations: {

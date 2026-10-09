@@ -1,0 +1,29 @@
+{
+  "name": "authorization",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --outDir dist/server --ssr src/entry-server.tsx",
+    "check": "npm run typecheck",
+    "dev": "node --use-system-ca --use-bundled-ca --import tsx server.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@blakearoberts/visage": "file:../../packages/visage",
+    "@blakearoberts/visage-authorization": "file:../../packages/visage-authorization",
+    "connect": "^3.7.0",
+    "jose": "^6.2.8",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/connect": "^3.4.38",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "tsx": "^4.23.5",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.0"
+  }
+}

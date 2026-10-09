@@ -41,6 +41,7 @@ export default defineConfig({
   projects: [
     ...addExampleSpec('plugin', 'https://localhost:9001'),
     ...addExampleSpec('server', 'https://localhost:9003'),
+    ...addExampleSpec('authorization', 'https://localhost:9005'),
     ...addExampleSpec('external-idp', 'https://localhost:9002'),
   ],
   use: {

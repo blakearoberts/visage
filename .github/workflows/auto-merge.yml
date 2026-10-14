@@ -90,8 +90,9 @@ jobs:
           )"
 
           for pr_number in $pr_numbers; do
-            merge_state="$(gh pr view "$pr_number" --json mergeStateStatus --jq '.mergeStateStatus')"
-            if [ "$merge_state" = 'BEHIND' ]; then
+            head_sha="$(gh pr view "$pr_number" --json headRefOid --jq '.headRefOid')"
+            behind_by="$(gh api "repos/$GH_REPO/compare/main...$head_sha" --jq '.behind_by')"
+            if [ "$behind_by" -gt 0 ]; then
               gh pr update-branch "$pr_number"
             fi
           done

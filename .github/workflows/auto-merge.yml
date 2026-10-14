@@ -1,6 +1,8 @@
 name: Auto-Merge
 
 on:
+  push:
+    branches: [main]
   workflow_run:
     workflows: [CI]
     types: [completed]
@@ -51,3 +53,45 @@ jobs:
           fi
 
           gh pr merge --auto --merge --delete-branch "$pr_url"
+
+  update:
+    name: Update Dependabot Branches
+    needs: enable
+    if: >-
+      always() &&
+      (github.event_name == 'push' || needs.enable.result == 'success')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: visage-dependabot-update
+      cancel-in-progress: false
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Update branches
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          pr_numbers="$(
+            gh pr list \
+              --base main \
+              --author 'dependabot[bot]' \
+              --limit 100 \
+              --json number,headRefName,autoMergeRequest \
+              --jq '.[] | select(.autoMergeRequest != null and (.headRefName | startswith("dependabot/"))) | .number'
+          )"
+
+          for pr_number in $pr_numbers; do
+            merge_state="$(gh pr view "$pr_number" --json mergeStateStatus --jq '.mergeStateStatus')"
+            if [ "$merge_state" = 'BEHIND' ]; then
+              gh pr update-branch "$pr_number"
+            fi
+          done

@@ -1,0 +1,6 @@
+resources:
+  user_api: urn:visage:example:user-api
+clients:
+  web-app:
+    scopes:
+      - user.read

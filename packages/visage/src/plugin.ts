@@ -24,20 +24,26 @@ export function visage(options: VisageOptions = {}): Plugin {
     name: 'visage',
     apply: 'serve',
 
-    config() {
+    config(config) {
       return {
         server: {
           // Configure Vite to only allow traffic from the intended host.
           allowedHosts: [resolvedOptions.host],
-          ws: {
-            protocol: 'wss',
-            host: resolvedOptions.host,
-            clientPort: resolvedOptions.port,
-          },
           // Overwrite the localhost default which may resolve to an IPv6
           // loopback. Docker Desktop (com.docker.backend), doesn't support IPv6
           // traffic translation to host loopback.
           host: '127.0.0.1',
+          // Overwrite WebSocket configuration to use SSL unless WebSockets
+          // have been disabled.
+          ...(config.server?.ws !== false
+            ? {
+                ws: {
+                  protocol: 'wss',
+                  host: resolvedOptions.host,
+                  clientPort: resolvedOptions.port,
+                },
+              }
+            : {}),
         },
       };
     },

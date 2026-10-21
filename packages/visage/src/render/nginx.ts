@@ -1,7 +1,8 @@
-import { Eta } from 'eta';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { join } from 'node:path';
+
+import { Eta } from 'eta';
 
 import { VisageEdgeKeyHeader, type VisageConfig } from '../config';
 
@@ -16,6 +17,15 @@ http {
     js_import edge_key from <%~ it.edgeKey.script %>;
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
+
+    map $http_cookie $app_cookie {
+        default "";
+        "~(?:^|;)[[:blank:]]*(<%~ it.cookie_name %>=[^;]*)" $1;
+    }
+    map $auth_set_cookie $next_app_cookie {
+        default $app_cookie;
+        "~^(<%~ it.cookie_name %>=[^;]*)" $1;
+    }
 
     <%_ if (it.telemetry) { %>
     include /etc/nginx/http.d/otel.conf;
@@ -129,9 +139,11 @@ http {
             auth_request_set  $auth_user $upstream_http_x_auth_request_user;
             <%_ /* Explicit clear when oauth2-proxy sets sub as email header value. */ %>
             auth_request_set  $auth_email <%~ it.email ? '$upstream_http_x_auth_request_email' : '""' %>;
-            <%_ /* Propagate refreshed session cookie. */ %>
-            auth_request_set  $auth_cookie $upstream_http_set_cookie;
-            add_header        Set-Cookie $auth_cookie;
+            auth_request_set  $auth_set_cookie $upstream_http_set_cookie;
+            <%_ if (location.target !== '/oauth2/sign_out') { %>
+            <%_ /* Propagate refreshed session cookie to downstream user agent. */ %>
+            add_header        Set-Cookie $auth_set_cookie;
+            <%_ } %>
             error_page        401 = $auth_error_page;
             <%_ } %>
             <%_ if (name === 'vite') { %>
@@ -163,12 +175,14 @@ http {
             <%_ if (it.telemetry) { %>
             otel_span_name "$request_method @auth_redirect";
             <%_ } %>
+            add_header Set-Cookie $auth_set_cookie always;
             return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;
         }
         location @auth_401 {
             <%_ if (it.telemetry) { %>
             otel_span_name "$request_method @auth_401";
             <%_ } %>
+            add_header Set-Cookie $auth_set_cookie always;
             return 401;
         }
     }
@@ -224,6 +238,9 @@ function renderNginxConfig(config: VisageConfig): string {
     telemetry: config.telemetry,
     modules: config.nginx.modules,
     email: config.oauth2.scopes.includes('email'),
+    cookie_name: JSON.stringify(
+      config.cookie.cookie_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    ).slice(1, -1),
     csrf: { origin, referer },
     ssl: {
       cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),

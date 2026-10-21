@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 
 function useWhoami() {
   const { data: whoami } = useSWR<string>('/whoami/');
@@ -59,6 +59,7 @@ export function App() {
       </div>
 
       <h2>/whoami/</h2>
+      <button onClick={() => void mutate('/whoami/')}>Revalidate</button>
       <IdentityPre rows={rows} />
     </main>
   );

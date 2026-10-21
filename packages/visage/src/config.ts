@@ -33,6 +33,7 @@ type ResolvedOAuth2Client = {
   readonly secret?: string;
   readonly scopes: readonly string[];
   readonly public: boolean;
+  readonly postLogoutRedirectUri: string;
 };
 
 type ResolvedProxyPolicy = {
@@ -204,6 +205,7 @@ const DefaultProxyPolicy = {
     'X-Forwarded-Proto': '$scheme',
   },
   directives: {
+    // Cookies make you fat.
     proxy_buffer_size: ['8k'],
   },
 } as const satisfies ResolvedProxyPolicy;
@@ -218,7 +220,7 @@ const BaseUpstreamOauth2Proxy = {
       csrf: false,
       headers: {
         ...DefaultProxyPolicy.headers,
-        Cookie: '$http_cookie', // Forward session cookie.
+        Cookie: '$http_cookie',
         'X-Auth-Request-Redirect': '$request_uri',
       },
       directives: { ...DefaultProxyPolicy.directives },
@@ -228,7 +230,7 @@ const BaseUpstreamOauth2Proxy = {
       csrf: false,
       headers: {
         ...DefaultProxyPolicy.headers,
-        Cookie: '$http_cookie', // Forward session cookie.
+        Cookie: '$app_cookie',
         'Content-Length': '""',
       },
       directives: {
@@ -244,11 +246,11 @@ const BaseUpstreamOauth2Proxy = {
       directives: { return: ['404'] },
     } satisfies ResolvedProxyPolicy,
     '/oauth2/sign_out': {
-      auth: { enabled: false, forward: false },
+      auth: { enabled: true, forward: false },
       csrf: false,
       headers: {
         ...DefaultProxyPolicy.headers,
-        Cookie: '$http_cookie', // Forward session cookie.
+        Cookie: '$next_app_cookie',
         'X-Auth-Request-Redirect': '/',
       },
       directives: { ...DefaultProxyPolicy.directives },
@@ -266,13 +268,6 @@ const DefaultDexUsers: readonly VisageDexUser[] = [
   { email: 'user@example.com', password: 'pass' },
 ];
 
-const DefaultOAuth2Client = {
-  id: 'visage',
-  secret: 'visage-secret',
-  scopes: ['openid', 'offline_access'],
-  public: false,
-} as const satisfies ResolvedOAuth2Client;
-
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const {
     host = 'localhost',
@@ -282,7 +277,6 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     oauth2 = {},
   } = options;
   const cookieName = cookie.name ?? 'sess';
-  const publicClient = oauth2.clientSecret === null;
   const telemetry = options.telemetry !== undefined;
   const services = resolveServicesOptions(options.services, telemetry);
   return {
@@ -321,12 +315,15 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
             },
           } satisfies ResolvedIdpOption),
     oauth2: {
-      id: oauth2.clientId ?? DefaultOAuth2Client.id,
-      ...(publicClient
+      id: oauth2.clientId ?? 'visage',
+      ...(oauth2.clientSecret === null
         ? {}
-        : { secret: oauth2.clientSecret ?? DefaultOAuth2Client.secret }),
-      scopes: oauth2.scopes ?? DefaultOAuth2Client.scopes,
-      public: publicClient,
+        : { secret: oauth2.clientSecret ?? 'visage-secret' }),
+      scopes: oauth2.scopes ?? (['openid', 'offline_access'] as const),
+      public: oauth2.clientSecret === null,
+      postLogoutRedirectUri:
+        `https://${host}:${port}` +
+        ('issuer' in idp ? '/' : '/oauth2/start?rd=/'),
     } satisfies ResolvedOAuth2Client,
     services,
     upstreams: resolveUpstreamsOptions(services, options.upstreams),
@@ -569,9 +566,7 @@ export function resolveConfig(
                     end_session_endpoint +
                       (end_session_endpoint.includes('?') ? '&' : '?') +
                       'id_token_hint={id_token}&post_logout_redirect_uri=' +
-                      encodeURIComponent(
-                        `https://${options.host}:${options.port}/`,
-                      ),
+                      encodeURIComponent(options.oauth2.postLogoutRedirectUri),
                   ),
                 },
               } satisfies ResolvedProxyPolicy,
@@ -672,6 +667,7 @@ function resolveIdpConfig({
         authorization: `https://${host}:${port}/dex/auth`,
         token: 'http://127.0.0.1:5556/dex/token',
         jwks: 'http://127.0.0.1:5556/dex/keys',
+        end_session_endpoint: `https://${host}:${port}/dex/logout`,
       },
       upstream: {
         dex: {
@@ -682,7 +678,10 @@ function resolveIdpConfig({
             '/dex/': {
               auth: { enabled: false, forward: false },
               csrf: false,
-              headers: { ...DefaultProxyPolicy.headers },
+              headers: {
+                ...DefaultProxyPolicy.headers,
+                Cookie: 'dex_session=$cookie_dex_session',
+              },
               directives: { ...DefaultProxyPolicy.directives },
             } satisfies ResolvedProxyPolicy,
           },

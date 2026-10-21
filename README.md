@@ -86,17 +86,13 @@ visage({
 
 ### External IdPs
 
-External OIDC providers use issuer discovery by default:
+The default IdP, Dex, can be replaced with an external OIDC provider:
 
 ```ts
 visage({
-  idp: { issuer: 'https://idp.example.test/oauth2/default' },
+  idp: { issuer: 'https://idp.example.test' },
 });
 ```
-
-Configure `authorization`, `token`, or `jwks` only when the provider endpoints
-must be rendered explicitly instead of discovered from the issuer. Configure
-`end_session_endpoint` when the provider supports OIDC end-session redirects.
 
 See [`VisageOptions`](packages/visage/src/types.ts) for the full option surface.
 
@@ -109,7 +105,7 @@ flowchart LR
   upstreams([Upstreams])
 
   subgraph docker[Docker]
-    nginx([NGINX])
+    nginx[NGINX]
     services([Services])
     Oauth2-Proxy
     idp(["IdP (Dex)"])

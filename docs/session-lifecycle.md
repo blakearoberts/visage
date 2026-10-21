@@ -4,103 +4,213 @@
 
 ```mermaid
 sequenceDiagram
-  participant Main as Main window
+  participant Browser
   participant NGINX
   participant Proxy as OAuth2 Proxy
   participant IdP as OIDC provider
-  participant Frontend as Frontend upstream
+  participant Upstream
 
-  Main->>NGINX: GET protected frontend route
+  Browser->>NGINX: Fetch <URL>
   NGINX->>Proxy: auth_request GET /oauth2/auth
-  Proxy-->>NGINX: 401 no session
-  NGINX-->>Main: 302 /oauth2/start
-  Main->>NGINX: GET /oauth2/start
-  NGINX->>Proxy: proxy_pass GET /oauth2/start
+  Proxy-->>NGINX: 401 Unauthorized
+  NGINX-->>Browser: 302 /oauth2/start?rd=<URL>
+  Browser->>NGINX: GET /oauth2/start?rd=<URL>
+  NGINX->>Proxy: proxy_pass
   Proxy-->>NGINX: 302 authorization endpoint
-  NGINX-->>Main: 302 authorization endpoint
-  Main->>IdP: Authorization request
-  IdP-->>Main: 302 /oauth2/callback with code
-  Main->>NGINX: GET /oauth2/callback
-  NGINX->>Proxy: proxy_pass GET /oauth2/callback
-  Proxy->>IdP: Redeem authorization code
+  NGINX-->>Browser: pass
+  Browser->>IdP: Authorization request
+  IdP-->>Browser: 302 /oauth2/callback?code=...
+  Browser->>NGINX: GET /oauth2/callback?code=...
+  NGINX->>Proxy: proxy_pass
+  Proxy->>IdP: token redemption via authorization code grant
   IdP-->>Proxy: ID token, access token, refresh token
-  Proxy-->>NGINX: Set session cookie and 302 return route
-  NGINX-->>Main: Set session cookie and 302 return route
-  Main->>NGINX: GET protected frontend route
+  Proxy-->>NGINX: Set-Cookie <session>
+  NGINX-->>Browser: Set-Cookie <session>#59; 302 <URL>
+  Browser->>NGINX: Fetch <URL>
   NGINX->>Proxy: auth_request GET /oauth2/auth
-  Proxy-->>NGINX: 202 valid session
-  NGINX->>Frontend: Proxy frontend request
-  Frontend-->>NGINX: Frontend response
-  NGINX-->>Main: Frontend response
+  Proxy-->>NGINX: 202 Accepted
+  NGINX->>Upstream: proxy_pass Fetch <URL>
+  Upstream-->>NGINX: response
+  NGINX-->>Browser: pass
 ```
 
-## Session Renewal via Refresh Token
+## Session Refresh
 
 ```mermaid
 sequenceDiagram
-  participant Main as Main window
+  participant Browser
   participant NGINX
   participant Proxy as OAuth2 Proxy
   participant IdP as OIDC provider
-  participant API as Protected upstream
+  participant Upstream
 
-  Main->>NGINX: Fetch protected resource
+  Browser->>NGINX: Fetch <URL>
   NGINX->>Proxy: auth_request GET /oauth2/auth
-  Proxy->>IdP: Refresh token grant
-  IdP-->>Proxy: Refreshed tokens
-  Proxy-->>NGINX: 202 valid session with refreshed cookie
-  NGINX->>API: Proxy protected request
-  API-->>NGINX: 200 OK
-  NGINX-->>Main: 200 OK with refreshed cookie
+  Proxy->>IdP: token redemption via refresh token grant
+  IdP-->>Proxy: ID token, access token, refresh token
+  Proxy-->>NGINX: Set-Cookie <session>#59; 202 Accepted
+  NGINX->>Upstream: proxy_pass Fetch <URL>
+  Upstream-->>NGINX: response
+  NGINX-->>Browser: Set-Cookie <session>#59; response
 ```
 
 ## Reauthentication via ACF Popup
 
 ```mermaid
 sequenceDiagram
-  participant Main as Main window
+  participant Browser
   participant Popup as Reauth popup
   participant NGINX
   participant Proxy as OAuth2 Proxy
   participant IdP as OIDC provider
-  participant Frontend as Frontend upstream
-  participant API as Protected upstream
+  participant Upstream
 
-  Main->>NGINX: Fetch protected resource
+  Browser->>NGINX: Fetch <URL>
   NGINX->>Proxy: auth_request GET /oauth2/auth
-  Proxy-->>NGINX: 401 no valid session
-  NGINX-->>Main: 401 Unauthorized
-  Main-->>Main: Show lock screen and queue failed fetch keys
+  Proxy-->>NGINX: 401 Unauthorized
+  NGINX-->>Browser: 401 Unauthorized
+  Browser-->>Browser: Show lock screen and queue requests
 
-  Note over Main,API: ACF via Popup
-  Main->>Popup: Open reauth start URL
-  Popup->>NGINX: GET /oauth2/start
-  NGINX->>Proxy: proxy_pass GET /oauth2/start
+  Browser->>Popup: Open /oauth2/start?rd=/?reauth
+  Note over Popup,IdP: ACF via Popup
+  Popup->>NGINX: GET /oauth2/start?rd=/?reauth
+  NGINX->>Proxy: proxy_pass
   Proxy-->>NGINX: 302 authorization endpoint
-  NGINX-->>Popup: 302 authorization endpoint
+  NGINX-->>Popup: pass
   Popup->>IdP: Authorization request
-  IdP-->>Popup: 302 /oauth2/callback with code
-  Popup->>NGINX: GET /oauth2/callback
-  NGINX->>Proxy: proxy_pass GET /oauth2/callback
-  Proxy->>IdP: Redeem authorization code
+  IdP-->>Popup: 302 /oauth2/callback?code=...
+  Popup->>NGINX: GET /oauth2/callback?code=...
+  NGINX->>Proxy: proxy_pass
+  Proxy->>IdP: token redemption via authorization code grant
   IdP-->>Proxy: ID token, access token, refresh token
-  Proxy-->>NGINX: Set session cookie and 302 reauth route
-  NGINX-->>Popup: Set session cookie and 302 reauth route
-  Popup->>NGINX: GET reauth frontend route
+  Proxy-->>NGINX: Set-Cookie <session>#59; 302 /?reauth
+  NGINX-->>Popup: pass
+  Popup->>NGINX: GET /?reauth
   NGINX->>Proxy: auth_request GET /oauth2/auth
-  Proxy-->>NGINX: 202 valid session
-  NGINX->>Frontend: Proxy reauth frontend request
-  Frontend-->>NGINX: Frontend response
-  NGINX-->>Popup: Frontend response
-  Popup-->>Main: Broadcast session ready
-  Popup-->>Popup: Close itself
+  Proxy-->>NGINX: 202 Accepted
+  NGINX->>Upstream: proxy_pass GET /?reauth
+  Upstream-->>NGINX: response
+  NGINX-->>Popup: pass
+  Popup-->>Browser: Broadcast session ready
+  Popup-->>Popup: Close
 
-  Note over Main,API: Session resumes
-  Main-->>Main: Hide lock screen
-  Main->>NGINX: Revalidate queued requests
+  Note over Browser,Popup: Session resumes
+  Browser-->>Browser: Hide lock screen
+  Browser->>NGINX: Refetch <URL>
   NGINX->>Proxy: auth_request GET /oauth2/auth
-  Proxy-->>NGINX: 202 valid session
-  NGINX->>API: Proxy protected requests
-  API-->>NGINX: 200 OK
-  NGINX-->>Main: 200 OK
+  Proxy-->>NGINX: 202 Accepted
+  NGINX->>Upstream: proxy_pass Refetch <URL>
+  Upstream-->>NGINX: response
+  NGINX-->>Browser: pass
+```
+
+## Managed Dex Sign-out
+
+### Signout when the app session is accepted
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant NGINX
+  participant Proxy as OAuth2 Proxy
+  participant Dex
+
+  Browser->>NGINX: GET /oauth2/sign_out
+  NGINX->>Proxy: auth_request GET /oauth2/auth
+  opt refresh session
+    Proxy->>Dex: POST /dex/token
+    Dex-->>Proxy: 200 OK
+  end
+  Proxy-->>NGINX: 202 Accepted
+  NGINX->>Proxy: proxy_pass GET /oauth2/sign_out
+  Proxy-->>NGINX: 302 /dex/logout?id_token_hint=...&post_logout_redirect_uri=...
+  NGINX-->>Browser: pass
+  Browser->>NGINX: GET /dex/logout?id_token_hint=...&post_logout_redirect_uri=...
+  NGINX->>Dex: proxy_pass
+  Dex-->>NGINX: 302 /oauth2/start?rd=/
+  NGINX-->>Browser: pass
+  Browser->>NGINX: GET /oauth2/start?rd=/
+  NGINX->>Proxy: proxy_pass
+  Proxy-->>NGINX: 302 /dex/auth
+  NGINX-->>Browser: pass
+  Browser->>NGINX: GET /dex/auth
+  NGINX->>Dex: proxy_pass
+```
+
+### Signout when app session refresh is rejected
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant NGINX
+  participant Proxy as OAuth2 Proxy
+  participant Dex
+
+  Browser->>NGINX: GET /oauth2/sign_out
+  NGINX->>Proxy: auth_request GET /oauth2/auth
+  Proxy->>Dex: POST /dex/token
+  Dex-->>Proxy: 400 invalid_grant
+  Proxy-->>NGINX: 401 Unauthorized
+  alt Browser navigation
+    NGINX-->>Browser: 302 /oauth2/start?rd=/oauth2/sign_out
+    Browser->>NGINX: GET /oauth2/start?rd=/oauth2/sign_out
+    NGINX->>Proxy: pass
+    Proxy-->>NGINX: 302 /dex/auth
+    NGINX-->>Browser: pass
+    Browser->>NGINX: GET /dex/auth
+    NGINX->>Dex: pass
+  else Fetch or XHR
+    NGINX-->>Browser: 401 Unauthorized
+  end
+```
+
+### Signout without an app session
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant NGINX
+  participant Proxy as OAuth2 Proxy
+  participant Dex
+
+  Browser->>NGINX: GET /oauth2/sign_out
+  NGINX->>Proxy: auth_request GET /oauth2/auth
+  Proxy-->>NGINX: 401 Unauthorized
+  alt Browser navigation
+    NGINX-->>Browser: 302 /oauth2/start?rd=/oauth2/sign_out
+    Browser->>NGINX: GET /oauth2/start?rd=/oauth2/sign_out
+    NGINX->>Proxy: pass
+    Proxy-->>NGINX: 302 /dex/auth
+    NGINX-->>Browser: pass
+    Browser->>NGINX: GET /dex/auth
+    NGINX->>Dex: pass
+    opt Valid IdP session (ACF without credentials)
+      Dex-->>NGINX: 302 /oauth2/callback?code=...
+      NGINX-->>Browser: pass
+      Browser->>NGINX: GET /oauth2/callback?code=...
+      NGINX->>Proxy: pass
+      Proxy->>Dex: POST /dex/token
+      Dex-->>Proxy: 200 OK
+      Proxy-->>NGINX: 302 /oauth2/sign_out
+      NGINX-->>Browser: pass
+      Browser->>NGINX: GET /oauth2/sign_out
+      NGINX->>Proxy: auth_request GET /oauth2/auth
+      Proxy-->>NGINX: 202 Accepted
+      NGINX->>Proxy: proxy_pass GET /oauth2/sign_out
+      Proxy-->>NGINX: 302 /dex/logout?id_token_hint=...&post_logout_redirect_uri=...
+      NGINX-->>Browser: pass
+      Browser->>NGINX: GET /dex/logout?id_token_hint=...&post_logout_redirect_uri=...
+      NGINX->>Dex: pass
+      Dex-->>NGINX: 302 /oauth2/start?rd=/
+      NGINX-->>Browser: pass
+      Browser->>NGINX: GET /oauth2/start?rd=/
+      NGINX->>Proxy: pass
+      Proxy-->>NGINX: 302 /dex/auth
+      NGINX-->>Browser: pass
+      Browser->>NGINX: GET /dex/auth
+      NGINX->>Dex: pass
+    end
+  else Fetch or XHR
+    NGINX-->>Browser: 401 Unauthorized
+  end
 ```

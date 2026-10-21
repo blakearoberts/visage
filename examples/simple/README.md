@@ -1,5 +1,8 @@
 # Simple Example
 
+Run `npm run dev --workspace examples/simple` from the repository root and open
+`https://localhost:9001`. Sign in with `user@example.com` / `pass`.
+
 ## System Block Diagram
 
 ```mermaid

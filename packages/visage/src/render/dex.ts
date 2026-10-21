@@ -38,6 +38,8 @@ function renderDexConfig(config: VisageConfig): string {
           : {
               secret: `{{ file.Read "/run/secrets/${secrets.clientSecret}" }}`,
             }),
+        refreshTokenLifetime: 'session',
+        postLogoutRedirectURIs: [oauth2.postLogoutRedirectUri],
         redirectURIs: [`https://${host}:${port}/oauth2/callback`],
       },
     ],

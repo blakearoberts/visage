@@ -35,6 +35,10 @@ function renderComposeConfig(config: VisageConfig): string {
         ? {
             dex: {
               ...config.services.dex,
+              environment: {
+                ...config.services.dex.environment,
+                DEX_SESSIONS_ENABLED: 'true',
+              },
               volumes: [
                 `${config.files.dex[0]}:${config.files.dex[1]}:ro`,
                 ...(config.services.dex.volumes ?? []),

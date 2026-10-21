@@ -47,9 +47,8 @@ export type VisageOptions = {
 /**
  * Settings for the browser session cookie managed by OAuth2 Proxy.
  *
- * OAuth2 Proxy keeps OIDC session state behind this cookie. The cookie lifetime
- * caps the browser session, while the refresh interval controls when OAuth2
- * Proxy tries to renew token state with the provider.
+ * OAuth2 Proxy keeps OIDC session state behind this cookie. The cookie expires
+ * after its configured lifetime from login or the last successful refresh.
  */
 export type VisageCookiePolicy = {
   /**
@@ -61,16 +60,17 @@ export type VisageCookiePolicy = {
    */
   readonly name?: string;
   /**
-   * Maximum browser session lifetime. Rendered as OAuth2 Proxy `cookie_expire`
+   * Cookie lifetime from login or the last successful refresh, not an absolute
+   * deadline from the original login. Rendered as OAuth2 Proxy `cookie_expire`
    * using its duration syntax. Keep this aligned with the identity provider's
-   * refresh-token lifetime to avoid sessions that can no longer be renewed
+   * refresh-token lifetime to avoid sessions that can no longer be refreshed
    * silently.
    *
    * @defaultValue `'8h'`
    */
   readonly expire?: string;
   /**
-   * Session age after which OAuth2 Proxy attempts silent renewal using the
+   * Session age after which OAuth2 Proxy attempts silent refresh using the
    * stored refresh token, when one is available. Rendered as `cookie_refresh`
    * using OAuth2 Proxy duration syntax. If upstreams validate forwarded bearer
    * tokens, set this below the relevant token lifetime so OAuth2 Proxy refreshes

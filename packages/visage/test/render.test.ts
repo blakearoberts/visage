@@ -141,6 +141,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.equal(compose.services.dex.restart, 'always');
   assert.equal(compose.services.dex.network_mode, 'service:nginx');
+  assert.equal(compose.services.dex.environment.DEX_SESSIONS_ENABLED, 'true');
   assert.deepEqual(compose.services.dex.volumes, [
     './dex.yaml:/etc/dex/dex.yaml:ro',
   ]);
@@ -552,7 +553,7 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
   assert.doesNotMatch(disabled, /proxy_read_timeout 1h;/);
 });
 
-test('writeNginxAssets keeps required Dex and OAuth2 Proxy endpoints public', (t) => {
+test('writeNginxAssets keeps login endpoints public and protects sign-out', (t) => {
   const config = resolvedConfig(t);
 
   writeNginxAssets(config);
@@ -570,24 +571,41 @@ test('writeNginxAssets keeps required Dex and OAuth2 Proxy endpoints public', (t
   assert.match(dex, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(dex, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(dex, /csrf_/);
+  assert.match(
+    dex,
+    /proxy_set_header Cookie dex_session=\$cookie_dex_session;/,
+  );
   assert.doesNotMatch(oauth2Proxy, /auth_request/);
   assert.match(oauth2Proxy, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(oauth2Proxy, /proxy_set_header Authorization "";/);
-  assert.doesNotMatch(oauth2Proxy, /csrf_/);
+  assert.doesNotMatch(oauth2Proxy, /csrf_reject/);
   assert.match(oauth2Proxy, /proxy_set_header Cookie \$http_cookie;/);
   assert.match(oauth2Proxy, /proxy_buffer_size 8k;/);
   assert.doesNotMatch(oauth2Auth, /auth_request/);
   assert.match(oauth2Auth, /internal;/);
   assert.match(oauth2Auth, /proxy_pass_request_body off;/);
   assert.match(oauth2Auth, /proxy_set_header Content-Length "";/);
-  assert.match(oauth2Auth, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2Auth, /proxy_set_header Cookie \$app_cookie;/);
   assert.match(oauth2UserInfo, /return 404;/);
-  assert.doesNotMatch(oauth2SignOut, /auth_request/);
+  assert.match(oauth2SignOut, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(oauth2SignOut, /error_page\s+401 = \$auth_error_page;/);
+  assert.match(
+    nginx,
+    /map \$auth_set_cookie \$next_app_cookie \{\s+default \$app_cookie;/,
+  );
+  assert.match(
+    oauth2SignOut,
+    /auth_request_set\s+\$auth_set_cookie \$upstream_http_set_cookie;/,
+  );
+  assert.doesNotMatch(oauth2SignOut, /add_header\s+Set-Cookie/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(oauth2SignOut, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(oauth2SignOut, /csrf_/);
-  assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
-  assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
+  assert.match(oauth2SignOut, /proxy_set_header Cookie \$next_app_cookie;/);
+  assert.match(
+    oauth2SignOut,
+    /proxy_set_header X-Auth-Request-Redirect "https:\/\/app.local.test:9443\/dex\/logout\?id_token_hint=\{id_token\}&post_logout_redirect_uri=https%3A%2F%2Fapp.local.test%3A9443%2Foauth2%2Fstart%3Frd%3D%2F";/,
+  );
   assert.doesNotMatch(
     oauth2SignOut,
     /proxy_set_header X-Auth-Request-Redirect \$request_uri;/,
@@ -629,6 +647,26 @@ test('writeNginxAssets resolves Compose hostnames and keeps IP addresses static'
   assert.doesNotMatch(fixed, /zone|resolve/);
 });
 
+test('OAuth2 session maps match the configured cookie name literally', (t) => {
+  const config = resolvedConfig(t, { cookie: { name: 'app.session+$' } });
+  writeNginxAssets(config);
+
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  const [incoming, refreshed] = [
+    ...nginx.matchAll(/("(?:\\.|[^"\\])*") \$1;/g),
+  ];
+  assert.ok(incoming);
+  assert.ok(refreshed);
+  assert.equal(
+    JSON.parse(incoming[1]),
+    String.raw`~(?:^|;)[[:blank:]]*(__Host-app\.session\+\$=[^;]*)`,
+  );
+  assert.equal(
+    JSON.parse(refreshed[1]),
+    String.raw`~^(__Host-app\.session\+\$=[^;]*)`,
+  );
+});
+
 test('writeNginxAssets keeps OAuth2-only sign-out returning to root', (t) => {
   const config = resolvedConfig(t, {
     idp: {
@@ -640,7 +678,7 @@ test('writeNginxAssets keeps OAuth2-only sign-out returning to root', (t) => {
 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
-  assert.match(oauth2SignOut, /proxy_set_header Cookie \$http_cookie;/);
+  assert.match(oauth2SignOut, /proxy_set_header Cookie \$next_app_cookie;/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
   assert.doesNotMatch(oauth2SignOut, /id_token_hint/);
 });
@@ -676,7 +714,7 @@ test('writeNginxAssets preserves browser host for the built-in Vite upstream', (
   assert.match(root, /proxy_set_header Host \$host;/);
   assert.match(
     root,
-    /auth_request_set\s+\$auth_user \$upstream_http_x_auth_request_user;\n[^\S\r\n]+auth_request_set\s+\$auth_email "";\n[^\S\r\n]+auth_request_set\s+\$auth_cookie \$upstream_http_set_cookie;/,
+    /auth_request_set\s+\$auth_user \$upstream_http_x_auth_request_user;\n[^\S\r\n]+auth_request_set\s+\$auth_email "";\n[^\S\r\n]+auth_request_set\s+\$auth_set_cookie \$upstream_http_set_cookie;/,
   );
   assert.doesNotMatch(root, /proxy_set_header Host host\.docker\.internal;/);
   assert.match(root, /proxy_set_header X-Auth-Request-User \$auth_user;/);
@@ -934,6 +972,8 @@ test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) =>
       id: 'visage',
       name: 'visage',
       secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
+      refreshTokenLifetime: 'session',
+      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
       redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
     },
   ]);
@@ -960,6 +1000,8 @@ test('writeDexConfig renders configured OAuth2 public client', (t) => {
       id: 'local-app',
       name: 'local-app',
       public: true,
+      refreshTokenLifetime: 'session',
+      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
       redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
     },
   ]);

@@ -57,7 +57,7 @@ flowchart LR
   upstreams([Upstreams])
 
   subgraph docker[Docker]
-    nginx([NGINX])
+    nginx[NGINX]
     services([Services])
     Oauth2-Proxy
     idp(["IdP (Dex)"])
@@ -179,7 +179,7 @@ intentionally handles cross-site browser requests itself. See
 
 ### External IdPs
 
-External OIDC providers use issuer discovery by default:
+The default IdP, Dex, can be replaced with an external OIDC provider:
 
 ```ts
 visage({

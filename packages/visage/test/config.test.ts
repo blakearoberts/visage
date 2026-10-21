@@ -73,6 +73,7 @@ test('resolveOptions applies public defaults', () => {
     secret: 'visage-secret',
     scopes: ['openid', 'offline_access'],
     public: false,
+    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
   });
 });
 
@@ -197,6 +198,7 @@ test('resolveOptions applies OAuth2 client overrides', () => {
     secret: 'local-secret',
     scopes: ['openid', 'email'],
     public: false,
+    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
   });
 });
 
@@ -502,6 +504,7 @@ test('resolveOptions supports OAuth2 public PKCE clients', () => {
     id: 'local-app',
     scopes: ['openid', 'email', 'profile', 'offline_access'],
     public: true,
+    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
   });
 });
 
@@ -678,7 +681,10 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.host, 'app.local.test');
   assert.equal(config.port, 9443);
   assert.equal(config.cache, cache);
-  assert.equal(config.idp.oidc.end_session_endpoint, undefined);
+  assert.equal(
+    config.idp.oidc.end_session_endpoint,
+    'https://app.local.test:9443/dex/logout',
+  );
   assert.equal(config.upstreams.vite.scheme, 'http');
   assert.equal(config.upstreams.dex.port, 5556);
   assert.equal(config.upstreams.dex.scheme, 'http');

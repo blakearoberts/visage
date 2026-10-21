@@ -5,7 +5,6 @@ process.env.NODE_OPTIONS = '--use-system-ca --use-bundled-ca';
 function addExampleSpec(
   name: string,
   baseURL?: string,
-  dependencies: string[] = [],
 ): Project<unknown, unknown>[] {
   const setup = `${name}.setup`;
   const teardown = `${name}.teardown`;
@@ -14,7 +13,6 @@ function addExampleSpec(
       name: setup,
       testMatch: `${setup}.ts`,
       teardown,
-      dependencies,
     },
     {
       name: teardown,
@@ -40,8 +38,8 @@ export default defineConfig({
   expect: { toPass: { timeout: 10_000, intervals: [200] } },
   projects: [
     ...addExampleSpec('plugin', 'https://localhost:9001'),
-    ...addExampleSpec('server', 'https://localhost:9003'),
     ...addExampleSpec('external-idp', 'https://localhost:9002'),
+    ...addExampleSpec('server', 'https://localhost:9003'),
   ],
   use: {
     channel: process.env.CI === 'true' ? 'chrome' : undefined,

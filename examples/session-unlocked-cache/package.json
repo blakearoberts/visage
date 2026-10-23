@@ -12,8 +12,8 @@
   "dependencies": {
     "@blakearoberts/visage": "file:../../packages/visage",
     "connect": "^3.7.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "swr": "^2.5.1"
   },
   "devDependencies": {

@@ -75,14 +75,13 @@ export function startCompose(config: VisageConfig): () => void {
   down();
   validate();
   const result = up();
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
+  if (result.error || result.status !== 0) {
     down();
-    throw new Error('Failed to start Docker Compose');
+    throw result.error ?? new Error('Failed to start Docker Compose');
   }
-  const logs = follow();
+  const logs = config.telemetry ? undefined : follow();
   return () => {
     down();
-    logs.kill('SIGINT');
+    logs?.kill('SIGINT');
   };
 }

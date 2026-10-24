@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { stringify } from 'yaml';
 
-import { DockerImages, type VisageConfig } from '../config';
+import type { VisageConfig } from '../config';
 
 export function writeComposeConfig(config: VisageConfig): void {
   const file = join(config.cache, config.files.compose);
@@ -34,14 +34,10 @@ function renderComposeConfig(config: VisageConfig): string {
       ...('dex' in config.idp
         ? {
             dex: {
-              ...config.services.dex,
-              environment: {
-                ...config.services.dex.environment,
-                DEX_SESSIONS_ENABLED: 'true',
-              },
+              ...dex,
               volumes: [
                 `${config.files.dex[0]}:${config.files.dex[1]}:ro`,
-                ...(config.services.dex.volumes ?? []),
+                ...(dex.volumes ?? []),
               ],
               ...(config.oauth2.public
                 ? {}
@@ -49,27 +45,13 @@ function renderComposeConfig(config: VisageConfig): string {
             },
           }
         : {}),
-      ...('vite' in config.upstreams
-        ? {
-            vite_loopback: {
-              image: DockerImages.socat.image,
-              command:
-                `tcp-listen:${config.upstreams.vite.port},fork,bind=host.docker.internal ` +
-                `tcp-connect:127.0.0.1:${config.upstreams.vite.port}`,
-              extra_hosts: ['host.docker.internal:host-gateway'],
-              network_mode: 'host',
-              profiles: ['linux'],
-              restart: 'always',
-            },
-          }
-        : {}),
       nginx: {
-        ...config.services.nginx,
+        ...nginx,
         ...(config.telemetry
           ? {
               environment: {
                 OTEL_SERVICE_NAMESPACE: config.package,
-                ...config.services.nginx.environment,
+                ...nginx.environment,
               },
             }
           : {}),
@@ -77,14 +59,14 @@ function renderComposeConfig(config: VisageConfig): string {
         ports: [`127.0.0.1:${config.port}:${config.port}`],
         volumes: [
           `${config.nginx.mount[0]}:${config.nginx.mount[1]}`,
-          ...(config.services.nginx.volumes ?? []),
+          ...(nginx.volumes ?? []),
         ],
       },
       oauth2_proxy: {
-        ...config.services.oauth2_proxy,
+        ...oauth2_proxy,
         volumes: [
           `${config.files.oauth2Proxy[0]}:${config.files.oauth2Proxy[1]}:ro`,
-          ...(config.services.oauth2_proxy.volumes ?? []),
+          ...(oauth2_proxy.volumes ?? []),
         ],
         secrets: [
           config.secrets.cookieSecret,

@@ -117,7 +117,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       ['down', 'run', 'up', 'down', 'run', 'up'],
     );
     assert.deepEqual(
-      spawnCalls.map((call) => call.args.slice(-2)),
+      spawnCalls.map((call) => call.args.slice(call.args.indexOf('logs'))),
       [
         ['logs', '--follow'],
         ['logs', '--follow'],

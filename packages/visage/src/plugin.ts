@@ -55,13 +55,6 @@ export function visage(options: VisageOptions = {}): Plugin {
         createVisageUpgradeHandler(edgeKey),
       );
 
-      // Hide Vite's direct URL(s) because browser traffic must flow through the
-      // browser-facing NGINX managed by Visage.
-      let visageUrl: string | undefined;
-      vite.printUrls = () => {
-        vite.config.logger.info(visageUrl ?? 'Visage failed to start');
-      };
-
       // Monkey patch Vite's listen to get the server's auto-resolved port.
       const listen = vite.listen.bind(vite);
       vite.listen = async (port, isRestart) => {
@@ -83,8 +76,10 @@ export function visage(options: VisageOptions = {}): Plugin {
           cache: join(vite.config.cacheDir, 'visage'),
           edgeKey,
         });
-
-        visageUrl = formatVisageUrlLog(config.host, config.port);
+        vite.resolvedUrls = {
+          local: [`https://${config.host}:${config.port}/`],
+          network: [],
+        };
 
         stop = await startVisageServer(config);
         process.once('SIGINT', closeBundle);
@@ -98,11 +93,3 @@ export function visage(options: VisageOptions = {}): Plugin {
 }
 
 export default visage;
-
-function formatVisageUrlLog(host: string, port: number): string {
-  const AnsiGreen = '\x1b[32m';
-  const AnsiCyan = '\x1b[36m';
-  const AnsiBold = '\x1b[1m';
-  const AnsiReset = '\x1b[0m';
-  return `  ${AnsiGreen}➜${AnsiReset}  ${AnsiBold}Visage${AnsiReset}:  ${AnsiCyan}https://${host}:${AnsiBold}${port}${AnsiReset}${AnsiCyan}/${AnsiReset}`;
-}

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { resolveConfig } from 'vite';
 
-import { visage } from '../src/plugin.ts';
+import { visage } from '../src/plugin';
 
 test('visage configures WebSockets for the HTTPS edge by default', async () => {
   const config = await resolveConfig(

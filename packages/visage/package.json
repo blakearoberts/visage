@@ -47,7 +47,6 @@
   },
   "scripts": {
     "build": "rollup -c",
-    "check": "npm run typecheck",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc"
   },

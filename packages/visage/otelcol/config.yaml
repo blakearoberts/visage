@@ -1,17 +1,19 @@
 receivers:
+  fluentforward:
+    endpoint: 0.0.0.0:24224
   otlp:
     protocols:
       grpc:
-        endpoint: 127.0.0.1:4317
+        endpoint: 0.0.0.0:4317
       http:
-        endpoint: 127.0.0.1:4318
+        endpoint: 0.0.0.0:4318
   prometheus:
     config:
       scrape_configs:
         - job_name: oauth2-proxy
           scrape_interval: 10s
           static_configs:
-            - targets: [127.0.0.1:4181]
+            - targets: [nginx:4181]
 
 extensions:
   health_check:
@@ -19,6 +21,25 @@ extensions:
     path: /ready
 
 processors:
+  transform/redaction:
+    trace_statements:
+      - context: span
+        conditions:
+          - resource.attributes["service.name"] == "nginx"
+        statements:
+          - 'replace_pattern(span.attributes["http.target"], "(?i)\\b(code|state|id_token_hint|hmac|token|error|error_description)=[^&\\s\"<>]*", "$$1=****") where span.attributes["http.target"] != nil'
+    log_statements:
+      - context: log
+        conditions:
+          - log.attributes["fluent.tag"] == "nginx"
+        statements:
+          - 'replace_pattern(log.body, "(?i)\\b(code|state|id_token_hint|hmac|token|error|error_description)=[^&\\s\"<>]*", "$$1=****") where IsString(log.body)'
+      - context: log
+        conditions:
+          - log.attributes["fluent.tag"] == "oauth2_proxy"
+        statements:
+          - 'replace_pattern(log.body, "(?i)\\b(code|state|error|error_description)=[^&\\s\"<>]*", "$$1=****") where IsString(log.body)'
+          - 'replace_pattern(log.body, "Error while parsing OAuth2 callback:.*", "Error while parsing OAuth2 callback: ****") where IsString(log.body)'
   batch:
   transform/nginx_http_server_spans:
     trace_statements:
@@ -103,13 +124,14 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [transform/nginx_http_server_spans, batch]
+      processors:
+        [transform/redaction, transform/nginx_http_server_spans, batch]
       exporters: [otlp_grpc, span_metrics]
     metrics:
-      receivers: [prometheus, span_metrics]
+      receivers: [otlp, prometheus, span_metrics]
       processors: [batch]
       exporters: [otlp_grpc]
     logs:
-      receivers: [otlp]
-      processors: [batch]
+      receivers: [otlp, fluentforward]
+      processors: [transform/redaction, batch]
       exporters: [otlp_grpc]

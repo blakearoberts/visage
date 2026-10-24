@@ -134,6 +134,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
+  for (const name of ['nginx', 'oauth2_proxy', 'dex', 'api']) {
+    assert.equal(compose.services[name].logging, undefined);
+  }
   assert.deepEqual(compose.services.dex.command, [
     'dex',
     'serve',
@@ -234,13 +237,47 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
   });
 });
 
-test('writeComposeConfig isolates the managed OpenTelemetry Collector with NGINX', (t) => {
+test('writeComposeConfig preserves service logging overrides', (t) => {
+  for (const telemetry of [undefined, {}]) {
+    const logging = { driver: 'local', options: { 'max-size': '10m' } };
+    const config = resolvedConfig(t, {
+      telemetry,
+      services: {
+        nginx: { logging },
+        oauth2_proxy: { logging },
+        dex: { logging },
+        vite_loopback: { logging },
+        otelcol: { logging },
+        api: { image: 'example/api:test', logging },
+      },
+    });
+
+    writeComposeConfig(config);
+
+    const compose = parse(readGenerated(config, config.files.compose));
+    for (const name of [
+      'nginx',
+      'oauth2_proxy',
+      'dex',
+      'vite_loopback',
+      'otelcol',
+      'api',
+    ]) {
+      assert.deepEqual(config.services[name].logging, logging);
+      assert.deepEqual(compose.services[name].logging, logging);
+    }
+    assert.equal(config.upstreams.vite_loopback, undefined);
+  }
+});
+
+test('writeComposeConfig publishes only the collector logging port', (t) => {
   const config = resolvedConfig(t, {
     telemetry: {},
     services: {
       otelcol: {
         environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
       },
+      api: { image: 'example/api:test' },
     },
   });
 
@@ -248,17 +285,36 @@ test('writeComposeConfig isolates the managed OpenTelemetry Collector with NGINX
 
   const compose = parse(readGenerated(config, config.files.compose));
   assert.deepEqual(compose.services.nginx.environment, {
-    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4317',
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
     OTEL_SERVICE_NAME: 'nginx',
     OTEL_SERVICE_NAMESPACE: 'render-test',
   });
+  for (const name of [
+    'nginx',
+    'oauth2_proxy',
+    'dex',
+    'vite_loopback',
+    'api',
+    'otelcol',
+  ]) {
+    assert.equal(compose.services[name].logging.driver, 'fluentd');
+    assert.equal(compose.services[name].logging.options.tag, name);
+    assert.equal(
+      compose.services[name].logging.options['cache-disabled'],
+      'true',
+    );
+    assert.equal(
+      compose.services[name].logging.options['fluentd-address'],
+      '127.0.0.1:24224',
+    );
+  }
   assert.equal(compose.services.otelcol.image, DockerImages.otelcol.image);
   assert.equal(compose.services.otelcol.depends_on, undefined);
-  assert.equal(compose.services.otelcol.network_mode, 'service:nginx');
+  assert.equal(compose.services.otelcol.network_mode, undefined);
   assert.deepEqual(compose.services.otelcol.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317',
   });
-  assert.equal(compose.services.otelcol.ports, undefined);
+  assert.deepEqual(compose.services.otelcol.ports, ['127.0.0.1:24224:24224']);
   assert.equal(compose.services.otelcol.networks, undefined);
   assert.equal(compose.services.otelcol.restart, 'always');
   assert.equal(compose.services.otelcol.volumes.length, 1);
@@ -778,39 +834,6 @@ export default function value() {
   );
 });
 
-test('writeNginxAssets renders explicit Vite edge key overrides after the managed edge key', (t) => {
-  const config = resolvedConfig(
-    t,
-    {
-      upstreams: {
-        vite: {
-          port: 6173,
-          locations: {
-            '/': {
-              headers: {
-                [VisageEdgeKeyHeader]: 'overridden',
-              },
-            },
-          },
-        },
-      },
-    },
-    'edge-key',
-  );
-
-  writeNginxAssets(config);
-
-  const root = locationBlock(readGeneratedNginx(config, 'nginx.conf'), '/');
-  assert.match(
-    root,
-    new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} overridden;`),
-  );
-  assert.match(
-    root,
-    new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} \\$edge_key;`),
-  );
-});
-
 test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate verification', (t) => {
   const config = resolvedConfig(t, {
     upstreams: {
@@ -842,6 +865,38 @@ test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate
   assert.match(api, /proxy_ssl_verify\s+on;/);
   assert.match(api, /proxy_ssl_verify_depth\s+3;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
+});
+
+test('writeNginxAssets preserves HTTPS for a Vite upstream with an explicit port', (t) => {
+  const config = resolvedConfig(t, {
+    upstreams: {
+      vite: {
+        host: 'app.example.test',
+        scheme: 'https',
+        port: 6174,
+        locations: { '/': { auth: { forward: true } } },
+      },
+    },
+  });
+
+  writeNginxAssets(config);
+
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  const root = locationBlock(nginx, '/');
+  assert.match(nginx, /listen 9443 ssl;/);
+  assert.match(
+    upstreamBlock(nginx, 'vite'),
+    /server app\.example\.test:6174 resolve;/,
+  );
+  assert.match(root, /proxy_pass https:\/\/vite;/);
+  assert.match(root, /proxy_ssl_server_name on;/);
+  assert.match(root, /proxy_ssl_name\s+app\.example\.test;/);
+  assert.match(root, /proxy_ssl_verify\s+on;/);
+  assert.match(root, /proxy_set_header Authorization \$authorization;/);
+  assert.equal(
+    config.services.vite_loopback.command,
+    'tcp-listen:6174,fork,bind=host.docker.internal tcp-connect:127.0.0.1:6174',
+  );
 });
 
 test('writeNginxAssets does not verify local HTTPS service upstreams by default', (t) => {
@@ -1115,7 +1170,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   writeOauth2ProxyConfig(config);
 });
 
-test('writeOauth2ProxyConfig binds telemetry metrics to NGINX loopback', (t) => {
+test('writeOauth2ProxyConfig exposes telemetry metrics to the collector', (t) => {
   const config = resolvedConfig(t, { telemetry: {} });
 
   writeOauth2ProxyConfig(config);
@@ -1123,7 +1178,7 @@ test('writeOauth2ProxyConfig binds telemetry metrics to NGINX loopback', (t) => 
   const oauth2Proxy = parseKeyValueConfig(
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
-  assert.equal(oauth2Proxy.metrics_address, '127.0.0.1:4181');
+  assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
 });
 
 test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {

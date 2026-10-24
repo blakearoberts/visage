@@ -10,8 +10,7 @@
     }
   },
   "scripts": {
-    "build": "true",
-    "test": "true"
+    "typecheck": "tsc"
   },
   "peerDependencies": {
     "react": "^19.3.1",

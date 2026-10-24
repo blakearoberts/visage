@@ -16,6 +16,7 @@ type SpawnCall = {
   readonly command: string;
   readonly args: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
+  readonly stdio?: SpawnSyncOptions['stdio'];
 };
 
 test('startCompose restarts Compose with in-memory edge and cookie secrets', async (t) => {
@@ -53,7 +54,12 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     args?: readonly string[],
     options?: SpawnSyncOptions,
   ) => {
-    spawnSyncCalls.push({ command, args: args ?? [], env: options?.env });
+    spawnSyncCalls.push({
+      command,
+      args: args ?? [],
+      env: options?.env,
+      stdio: options?.stdio,
+    });
     return {
       pid: 0,
       output: [],
@@ -128,13 +134,16 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       [
         'compose.log',
         'compose.log',
+        'compose.log',
         'container.log',
+        'compose.log',
         'compose.log',
         'compose.log',
         'container.log',
       ],
     );
-    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-9), [
+    assert.deepEqual(spawnSyncCalls[1]?.stdio, ['ignore', 2, 2]);
+    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-8), [
       'run',
       '--build',
       '--quiet-build',
@@ -143,7 +152,6 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       'nginx',
       'nginx',
       '-t',
-      '-q',
     ]);
     assert.deepEqual(spawnSyncCalls[2]?.args.slice(-4), [
       'up',

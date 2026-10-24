@@ -32,6 +32,11 @@ function addExampleSpec(
 }
 
 export default defineConfig({
+  quiet: true,
+  reporter: [
+    ['list'],
+    ['./tests/log-reporter.ts', { outputFile: 'test-results/logs.jsonl' }],
+  ],
   testDir: 'tests',
   fullyParallel: true,
   workers: process.env.CI === 'true' ? '100%' : undefined,

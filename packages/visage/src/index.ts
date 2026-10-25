@@ -2,6 +2,7 @@ export type {
   VisageCookiePolicy,
   VisageDexExpiry,
   VisageDexOptions,
+  VisageDexSessions,
   VisageDexUser,
   VisageExternalIdpOptions,
   VisageOAuth2Client,

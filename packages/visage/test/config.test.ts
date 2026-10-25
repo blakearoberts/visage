@@ -52,16 +52,25 @@ test('resolveOptions applies public defaults', () => {
   assert.equal(options.upstreams.otelcol, undefined);
   assert.deepEqual(options.cookie, {
     cookie_name: '__Host-sess',
-    cookie_expire: '8h',
-    cookie_refresh: '15m',
+    cookie_expire: '720h',
+    cookie_refresh: '30s',
     cookie_path: '/',
   });
   assert.deepEqual(options.idp, {
     dex: {
+      expiry: {
+        idTokens: '1m',
+        refreshTokens: {
+          reuseInterval: '1s',
+          validIfNotUsedFor: '720h',
+          absoluteLifetime: '720h',
+        },
+      },
+      sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
       users: [
         {
           email: 'user@example.com',
-          password: 'pass',
+          password: 'visage-password',
           username: 'user',
           userID: 'user@example.com',
         },
@@ -74,6 +83,29 @@ test('resolveOptions applies public defaults', () => {
     scopes: ['openid', 'offline_access'],
     public: false,
     postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
+  });
+});
+
+test('resolveOptions preserves Dex defaults with partial overrides', () => {
+  const options = resolveOptions({
+    idp: {
+      expiry: { refreshTokens: { reuseInterval: '2s' } },
+      sessions: { absoluteLifetime: '1440h' },
+    },
+  });
+
+  assert.ok('dex' in options.idp);
+  assert.deepEqual(options.idp.dex.expiry, {
+    idTokens: '1m',
+    refreshTokens: {
+      reuseInterval: '2s',
+      validIfNotUsedFor: '720h',
+      absoluteLifetime: '720h',
+    },
+  });
+  assert.deepEqual(options.idp.dex.sessions, {
+    absoluteLifetime: '1440h',
+    validIfNotUsedFor: '720h',
   });
 });
 
@@ -109,6 +141,9 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   });
   assert.deepEqual(config.upstreams.otelcol.locations['/t/'].directives, {
     proxy_buffer_size: ['8k'],
+    proxy_connect_timeout: ['5s'],
+    proxy_read_timeout: ['5s'],
+    proxy_send_timeout: ['5s'],
     rewrite: ['^/t/(.*)$ /$1 break'],
   });
 });
@@ -182,6 +217,7 @@ test('resolveOptions applies cookie overrides', () => {
 test('resolveOptions applies Dex overrides', () => {
   const options = resolveOptions({
     idp: {
+      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
       expiry: {
         idTokens: '10m',
         authRequests: '2m',
@@ -208,6 +244,7 @@ test('resolveOptions applies Dex overrides', () => {
 
   assert.deepEqual(options.idp, {
     dex: {
+      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
       expiry: {
         idTokens: '10m',
         authRequests: '2m',
@@ -500,9 +537,9 @@ test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) 
     config.upstreams.api.locations['/plain/'].directives.proxy_http_version,
     undefined,
   );
-  assert.equal(
+  assert.deepEqual(
     config.upstreams.api.locations['/plain/'].directives.proxy_read_timeout,
-    undefined,
+    ['5s'],
   );
   assert.equal(
     config.upstreams.api.locations['/disabled/'].headers.Connection,
@@ -516,9 +553,9 @@ test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) 
     config.upstreams.api.locations['/disabled/'].directives.proxy_http_version,
     undefined,
   );
-  assert.equal(
+  assert.deepEqual(
     config.upstreams.api.locations['/disabled/'].directives.proxy_read_timeout,
-    undefined,
+    ['5s'],
   );
 
   assert.equal(
@@ -753,6 +790,9 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   });
   assert.deepEqual(config.upstreams.api.locations['/api/'].directives, {
     proxy_buffer_size: ['16k'],
+    proxy_connect_timeout: ['5s'],
+    proxy_read_timeout: ['5s'],
+    proxy_send_timeout: ['5s'],
     proxy_hide_header: ['X-A', 'X-B'],
   });
   assert.equal(config.upstreams.metrics.host, 'metrics');
@@ -763,6 +803,9 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.upstreams.metrics.locations['/metrics/'].csrf, true);
   assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
     proxy_buffer_size: ['8k'],
+    proxy_connect_timeout: ['5s'],
+    proxy_read_timeout: ['5s'],
+    proxy_send_timeout: ['5s'],
   });
   assert.equal(
     config.upstreams.metrics.locations['/metrics/'].headers?.Host,

@@ -33,6 +33,9 @@ function addExampleSpec(
 
 export default defineConfig({
   quiet: true,
+  metadata: {
+    user: { email: 'user@example.com', password: 'visage-password' },
+  },
   reporter: [
     ['list'],
     ['./tests/log-reporter.ts', { outputFile: 'test-results/logs.jsonl' }],

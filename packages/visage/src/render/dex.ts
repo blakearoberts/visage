@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { hashSync } from 'bcryptjs';
+import { hashSync, truncates } from 'bcryptjs';
 import { stringify } from 'yaml';
 
 import type { VisageConfig } from '../config';
@@ -19,7 +19,7 @@ function renderDexConfig(config: VisageConfig): string {
     oauth2,
     secrets,
     idp: {
-      dex: { expiry, users },
+      dex: { expiry, sessions, users },
       oidc,
       upstream,
     },
@@ -45,9 +45,16 @@ function renderDexConfig(config: VisageConfig): string {
     ],
     enablePasswordDB: true,
     ...(expiry === undefined ? {} : { expiry }),
-    staticPasswords: users.map(({ password, ...user }) => ({
-      ...user,
-      hash: hashSync(password),
-    })),
+    ...(sessions === undefined ? {} : { sessions }),
+    staticPasswords: users.map(({ password, ...user }) => {
+      const length = [...password].length; // Unicode length
+      if (length < 15 || length > 64) {
+        throw new Error('Password must be between 15 and 64 characters');
+      }
+      if (truncates(password)) {
+        throw new Error('Password must not exceed 72 UTF-8 bytes');
+      }
+      return { ...user, hash: hashSync(password) };
+    }),
   });
 }

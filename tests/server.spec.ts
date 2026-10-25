@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-const user = { email: 'user@example.com', password: 'pass' };
-
 test.describe('server', () => {
   test('login', async ({ page }) => {
+    const { user } = test.info().project.metadata;
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     const emailInput = page.locator('input[name="login"]');

@@ -94,6 +94,9 @@ http {
     }
 
     <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
+    <%_ if (upstream.http) { %>
+    <%~ it.indentHttp(upstream.http).trimStart() %>
+    <%_ } %>
 
     upstream <%~ name %> {
         <%_ if (upstream.resolve) { %>
@@ -226,10 +229,22 @@ export function writeNginxAssets(config: VisageConfig): void {
   writeFileSync(otelFile, otelTemplate, 'utf-8');
 }
 
+function indentHttp(http: string): string {
+  const lines = http.split('\n');
+  const indent = Math.min(
+    ...lines.filter((line) => line.trim()).map((line) => line.search(/\S/)),
+  );
+  return lines
+    .map((line) => (line.trim() ? '    ' + line.slice(indent) : ''))
+    .join('\n')
+    .replace(/^\n+|\n+$/g, '');
+}
+
 function renderNginxConfig(config: VisageConfig): string {
   const origin = `https://${config.host}:${config.port}`;
   const referer = `~^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([/?#]|$)`;
   const data = {
+    indentHttp,
     host: config.host,
     port: config.port,
     telemetry: config.telemetry,

@@ -49,7 +49,7 @@
                       "spec": {
                         "direction": "backward",
                         "editorMode": "code",
-                        "expr": "{service_name=~\".+\"} | container_name != \"\"",
+                        "expr": "{ service_name=~\".+\" }",
                         "queryType": "range"
                       },
                       "version": "v0"
@@ -65,7 +65,7 @@
           "description": "",
           "id": 14,
           "links": [],
-          "title": "Container Logs",
+          "title": "",
           "vizConfig": {
             "group": "logs",
             "kind": "VizConfig",
@@ -78,8 +78,10 @@
                 "allowDownload": true,
                 "dedupStrategy": "none",
                 "detailsMode": "sidebar",
-                "enableInfiniteScrolling": false,
+                "displayedFields": [],
+                "enableInfiniteScrolling": true,
                 "enableLogDetails": true,
+                "fontSize": "default",
                 "prettifyLogMessage": false,
                 "showCommonLabels": false,
                 "showControls": true,
@@ -88,8 +90,9 @@
                 "showLevel": false,
                 "showTime": false,
                 "sortOrder": "Descending",
+                "syntaxHighlighting": true,
                 "timestampResolution": "ms",
-                "unwrappedColumns": false,
+                "unwrappedColumns": true,
                 "wrapLogMessage": false
               }
             },
@@ -151,7 +154,7 @@
           "description": "",
           "id": 19,
           "links": [],
-          "title": "Traces",
+          "title": "",
           "vizConfig": {
             "group": "table",
             "kind": "VizConfig",

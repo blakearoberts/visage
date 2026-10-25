@@ -592,6 +592,8 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
   assert.match(live, /proxy_set_header Upgrade \$http_upgrade;/);
   assert.match(live, /proxy_http_version 1\.1;/);
   assert.match(live, /proxy_read_timeout 1h;/);
+  assert.match(live, /proxy_connect_timeout 5s;/);
+  assert.match(live, /proxy_send_timeout 5s;/);
 
   const plain = locationBlock(nginx, '/plain/');
   assert.doesNotMatch(
@@ -601,6 +603,7 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
   assert.doesNotMatch(plain, /proxy_set_header Upgrade \$http_upgrade;/);
   assert.doesNotMatch(plain, /proxy_http_version 1\.1;/);
   assert.doesNotMatch(plain, /proxy_read_timeout 1h;/);
+  assert.match(plain, /proxy_read_timeout 5s;/);
 
   const disabled = locationBlock(nginx, '/disabled/');
   assert.doesNotMatch(
@@ -627,6 +630,23 @@ test('writeNginxAssets keeps login endpoints public and protects sign-out', (t) 
 
   assert.match(oauth2ProxyUpstream, /server 127\.0\.0\.1:4180;/);
   assert.doesNotMatch(dex, /auth_request/);
+  assert.match(
+    nginx,
+    /limit_req_zone \$dex_password_limit_key zone=dex_password:1m rate=1r\/s;/,
+  );
+  assert.ok(
+    nginx.includes(`
+    map "$request_method:$uri" $dex_password_limit_key {
+        default "";
+        ~^POST:/dex/auth/[^/]+/login$ $binary_remote_addr;
+    }
+    limit_req_zone $dex_password_limit_key zone=dex_password:1m rate=1r/s;
+
+    upstream dex {`),
+  );
+  assert.match(dex, /limit_req zone=dex_password burst=5 nodelay;/);
+  assert.match(dex, /limit_req_status 429;/);
+  assert.doesNotMatch(oauth2Auth, /limit_req/);
   assert.match(dex, /proxy_set_header X-Auth-Request-User "";/);
   assert.match(dex, /proxy_set_header Authorization "";/);
   assert.doesNotMatch(dex, /csrf_/);
@@ -1014,6 +1034,7 @@ test('writeNginxAssets does not render external IdP upstream locations', (t) => 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.equal(locationCount(nginx, '/idp'), 0);
   assert.doesNotMatch(nginx, /proxy_pass https:\/\/idp;/);
+  assert.doesNotMatch(nginx, /dex_password|limit_req/);
 });
 
 test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) => {
@@ -1023,6 +1044,18 @@ test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) =>
 
   const dex = parse(readGenerated(config, config.files.dex[0]));
   assert.equal(dex.issuer, 'https://app.local.test:9443/dex');
+  assert.deepEqual(dex.expiry, {
+    idTokens: '1m',
+    refreshTokens: {
+      reuseInterval: '1s',
+      validIfNotUsedFor: '720h',
+      absoluteLifetime: '720h',
+    },
+  });
+  assert.deepEqual(dex.sessions, {
+    absoluteLifetime: '720h',
+    validIfNotUsedFor: '720h',
+  });
   assert.deepEqual(dex.storage, { type: 'memory' });
   assert.deepEqual(dex.web, { http: '127.0.0.1:5556' });
   assert.deepEqual(dex.staticClients, [
@@ -1038,7 +1071,44 @@ test('writeDexConfig renders OIDC endpoints and verifiable static users', (t) =>
   assert.equal(dex.staticPasswords[0].email, 'user@example.com');
   assert.equal(dex.staticPasswords[0].username, 'user');
   assert.equal(dex.staticPasswords[0].userID, 'user@example.com');
-  assert.equal(compareSync('pass', dex.staticPasswords[0].hash), true);
+  assert.equal(
+    compareSync('visage-password', dex.staticPasswords[0].hash),
+    true,
+  );
+});
+
+test('writeDexConfig enforces password length without truncation', (t) => {
+  for (const password of [
+    'a'.repeat(15),
+    'a'.repeat(64),
+    'é'.repeat(36),
+    '😀'.repeat(18),
+  ]) {
+    const config = resolvedConfig(t, {
+      idp: { users: [{ email: 'user@example.com', password }] },
+    });
+    writeDexConfig(config);
+    const dex = parse(readGenerated(config, config.files.dex[0]));
+    assert.equal(compareSync(password, dex.staticPasswords[0].hash), true);
+  }
+
+  for (const password of ['', 'a'.repeat(14), 'a'.repeat(65), '😀'.repeat(8)]) {
+    const config = resolvedConfig(t, {
+      idp: { users: [{ email: 'user@example.com', password }] },
+    });
+    assert.throws(() => writeDexConfig(config), {
+      message: 'Password must be between 15 and 64 characters',
+    });
+  }
+
+  for (const password of ['é'.repeat(37), '😀'.repeat(19)]) {
+    const config = resolvedConfig(t, {
+      idp: { users: [{ email: 'user@example.com', password }] },
+    });
+    assert.throws(() => writeDexConfig(config), {
+      message: 'Password must not exceed 72 UTF-8 bytes',
+    });
+  }
 });
 
 test('writeDexConfig renders configured OAuth2 public client', (t) => {
@@ -1065,9 +1135,10 @@ test('writeDexConfig renders configured OAuth2 public client', (t) => {
   ]);
 });
 
-test('writeDexConfig renders configured expiry and users', (t) => {
+test('writeDexConfig renders configured expiry, sessions, and users', (t) => {
   const config = resolvedConfig(t, {
     idp: {
+      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
       expiry: {
         idTokens: '10m',
         signingKeys: '6h',
@@ -1080,7 +1151,7 @@ test('writeDexConfig renders configured expiry and users', (t) => {
       users: [
         {
           email: 'admin@example.com',
-          password: 'secret',
+          password: 'admin-password1',
         },
         {
           email: 'reader@example.com',
@@ -1095,6 +1166,10 @@ test('writeDexConfig renders configured expiry and users', (t) => {
   writeDexConfig(config);
 
   const dex = parse(readGenerated(config, config.files.dex[0]));
+  assert.deepEqual(dex.sessions, {
+    absoluteLifetime: '8760h',
+    validIfNotUsedFor: '8760h',
+  });
   assert.deepEqual(dex.expiry, {
     idTokens: '10m',
     signingKeys: '6h',
@@ -1107,8 +1182,11 @@ test('writeDexConfig renders configured expiry and users', (t) => {
   assert.equal(dex.staticPasswords[0].email, 'admin@example.com');
   assert.equal(dex.staticPasswords[0].username, 'admin');
   assert.equal(dex.staticPasswords[0].userID, 'admin@example.com');
-  assert.notEqual(dex.staticPasswords[0].hash, 'secret');
-  assert.equal(compareSync('secret', dex.staticPasswords[0].hash), true);
+  assert.notEqual(dex.staticPasswords[0].hash, 'admin-password1');
+  assert.equal(
+    compareSync('admin-password1', dex.staticPasswords[0].hash),
+    true,
+  );
   assert.equal(dex.staticPasswords[1].email, 'reader@example.com');
   assert.equal(dex.staticPasswords[1].username, 'reader');
   assert.equal(dex.staticPasswords[1].userID, 'reader-1');
@@ -1149,8 +1227,8 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
     '/run/secrets/OAUTH2_PROXY_COOKIE_SECRET',
   );
   assert.equal(oauth2Proxy.cookie_name, '__Host-sess');
-  assert.equal(oauth2Proxy.cookie_expire, '8h');
-  assert.equal(oauth2Proxy.cookie_refresh, '15m');
+  assert.equal(oauth2Proxy.cookie_expire, '720h');
+  assert.equal(oauth2Proxy.cookie_refresh, '30s');
   assert.equal(oauth2Proxy.cookie_httponly, true);
   assert.equal(oauth2Proxy.cookie_secure, true);
   assert.equal(oauth2Proxy.cookie_samesite, 'lax');

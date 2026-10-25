@@ -15,7 +15,7 @@ export default defineConfig({
           environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
         },
         grafana: {
-          image: 'grafana/otel-lgtm',
+          build: resolve(import.meta.dirname, 'otel-lgtm'),
           environment: {
             GF_AUTH_ANONYMOUS_ENABLED: 'false',
             GF_AUTH_PROXY_ENABLED: 'true',
@@ -25,11 +25,13 @@ export default defineConfig({
             GF_SERVER_SERVE_FROM_SUB_PATH: 'true',
             GF_USERS_AUTO_ASSIGN_ORG_ROLE: 'Editor',
             GF_PATHS_PROVISIONING: '/otel-lgtm/visage/provisioning',
+            GF_PATHS_PERMITTED_PROVISIONING_PATHS:
+              '/otel-lgtm/visage/dashboards',
             TEMPO_EXTRA_ARGS:
               '--config.file=/otel-lgtm/visage/tempo-config.yaml',
           },
           volumes: [
-            `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage:ro`,
+            `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage`,
           ],
           upstream: {
             port: 3000,

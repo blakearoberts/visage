@@ -298,7 +298,10 @@ test('writeComposeConfig publishes only the collector logging port', (t) => {
     'otelcol',
   ]) {
     assert.equal(compose.services[name].logging.driver, 'fluentd');
-    assert.equal(compose.services[name].logging.options.tag, name);
+    assert.equal(
+      compose.services[name].logging.options.tag,
+      `render-test/${name}|{{.ImageName}}`,
+    );
     assert.equal(
       compose.services[name].logging.options['cache-disabled'],
       'true',

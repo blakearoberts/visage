@@ -1,0 +1,14 @@
+apiVersion: provisioning.grafana.app/v0alpha1
+kind: Repository
+metadata:
+  name: repo
+spec:
+  title: Visage
+  type: local
+  local:
+    path: /otel-lgtm/visage/dashboards
+  sync:
+    enabled: true
+    intervalSeconds: 10
+    target: folder
+  workflows: [write]

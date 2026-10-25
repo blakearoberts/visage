@@ -8,7 +8,7 @@ const LogReqURI =
   '{{printf "%.*s" (len (slice .RequestURI 2)) (slice .RequestURI 1)}}';
 const LogFormats = {
   standard_logging_format: `${LogTS} | [{{.File}}] {{.Message}}`,
-  request_logging_format: `${LogTS} | {{.StatusCode}} | {{.RequestMethod}} ${LogReqURI} | {{.Username}} | {{.Upstream}}`,
+  request_logging_format: `${LogTS} | {{.StatusCode}} | {{.Username}} | {{.RequestMethod}} ${LogReqURI}`,
   auth_logging_format: `${LogTS} | {{.Status}} | {{.Username}} | {{.Message}}`,
 };
 

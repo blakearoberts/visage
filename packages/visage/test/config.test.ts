@@ -88,7 +88,7 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
         'fluentd-address': '127.0.0.1:24224',
         'fluentd-async': 'true',
         'cache-disabled': 'true',
-        tag: name,
+        tag: `test-app/${name}|{{.ImageName}}`,
       },
     });
   }

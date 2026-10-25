@@ -9,12 +9,12 @@ distributor:
         http:
           endpoint: '127.0.0.1:4418'
 
-ingester:
-  trace_idle_period: 1s
+live_store:
+  max_trace_idle: 1s
   max_block_duration: 1s
   flush_check_period: 1s
-  lifecycler:
-    min_ready_duration: 1s
+  wal:
+    path: /data/tempo/wal
 
 memberlist:
   bind_addr: [127.0.0.1]
@@ -27,8 +27,6 @@ querier:
 storage:
   trace:
     backend: local
-    wal:
-      path: /data/tempo/wal
     local:
       path: /data/tempo/blocks
 
@@ -41,4 +39,4 @@ metrics_generator:
 overrides:
   defaults:
     metrics_generator:
-      processors: [local-blocks, service-graphs]
+      processors: [service-graphs]

@@ -581,6 +581,7 @@ export function resolveConfig(
     readonly edgeKey: string;
   },
 ): VisageConfig {
+  const packageName = resolvePackage(options.root);
   const idp = resolveIdpConfig(options);
   const services = resolveServicesConfig(options);
   const end_session_endpoint = idp.oidc.end_session_endpoint;
@@ -614,7 +615,7 @@ export function resolveConfig(
   return {
     host: options.host,
     port: options.port,
-    package: resolvePackage(options.root),
+    package: packageName,
     telemetry: options.telemetry,
     cookie: options.cookie,
     edgeKey: options.edgeKey,
@@ -654,7 +655,7 @@ export function resolveConfig(
                       'fluentd-address': '127.0.0.1:24224',
                       'fluentd-async': 'true',
                       'cache-disabled': 'true',
-                      tag: name,
+                      tag: `${packageName}/${name}|{{.ImageName}}`,
                     },
                   },
                 }

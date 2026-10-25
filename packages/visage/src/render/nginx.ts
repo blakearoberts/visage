@@ -40,7 +40,7 @@ http {
         "~^[0-9]{4}-[0-9]{2}-[0-9]{2}T([0-9]{2}:[0-9]{2}:[0-9]{2})" $1;
         default $time_iso8601;
     }
-    log_format access_log_format '$access_log_time | $status | $request_method $request_uri | $auth_user | $proxy_host';
+    log_format access_log_format '$access_log_time | $status | $auth_user | $request_method $request_uri';
 
     # Allow WebSockets (Vite HMR).
     map $http_upgrade $connection_upgrade {

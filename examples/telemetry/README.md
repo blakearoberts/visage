@@ -1,10 +1,14 @@
 # Telemetry Example
 
-This example enables Visage's managed OpenTelemetry Collector.
+Run `npm run dev --workspace examples/telemetry` from the repository root and
+open `https://localhost:9001`. Sign in with `user@example.com` / `pass`.
+
+This example enables Visage's managed OpenTelemetry Collector and configures a
+Grafana service available at `https://localhost:9001/grafana`.
 
 The Collector:
 
-- receives NGINX traces and protected OTLP HTTP JSON browser logs;
+- receives NGINX traces, container logs, and browser logs;
 - scrapes OAuth2 Proxy metrics;
 - derives request metrics from NGINX spans;
 - and exports each signal over OTLP to LGTM.

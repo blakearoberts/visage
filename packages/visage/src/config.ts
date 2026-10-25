@@ -46,13 +46,6 @@ type ResolvedProxyPolicy = {
   readonly directives: Readonly<Record<string, readonly string[]>>;
 };
 
-type ResolvedUpstream = {
-  readonly scheme: 'http' | 'https';
-  readonly host: string;
-  readonly port: number;
-  readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
-};
-
 type ResolvedVisageOptions = {
   readonly host: string;
   readonly port: number;
@@ -61,7 +54,14 @@ type ResolvedVisageOptions = {
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
   readonly services: Readonly<Record<string, VisageService>>;
-  readonly upstreams: Record<string, ResolvedUpstream>;
+  readonly upstreams: Record<string, VisageUpstream>;
+};
+
+type ResolvedUpstream = {
+  readonly scheme: 'http' | 'https';
+  readonly host: string;
+  readonly port: number;
+  readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
 };
 
 type OIDCEndpointConfig = {
@@ -143,6 +143,7 @@ export const DockerImages = parse(
 const BaseServiceDex = {
   image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yaml'],
+  environment: { DEX_SESSIONS_ENABLED: 'true' },
   network_mode: 'service:nginx',
   restart: 'always',
 } as const satisfies ResolvedService;
@@ -166,15 +167,14 @@ const OTelCollectorConfig = fileURLToPath(
 
 const BaseServiceOTelCollector = {
   image: DockerImages.otelcol.image,
+  ports: ['127.0.0.1:24224:24224'],
   environment: {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
   },
-  network_mode: 'service:nginx',
+  extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
   volumes: [`${OTelCollectorConfig}:/etc/otelcol-contrib:ro`],
   upstream: {
-    host: '127.0.0.1',
-    scheme: 'http',
     port: 4318,
     locations: {
       '/t/': {
@@ -278,7 +278,6 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   } = options;
   const cookieName = cookie.name ?? 'sess';
   const telemetry = options.telemetry !== undefined;
-  const services = resolveServicesOptions(options.services, telemetry);
   return {
     host,
     port,
@@ -325,24 +324,55 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         `https://${host}:${port}` +
         ('issuer' in idp ? '/' : '/oauth2/start?rd=/'),
     } satisfies ResolvedOAuth2Client,
-    services,
-    upstreams: resolveUpstreamsOptions(services, options.upstreams),
+    services: options.services ?? {},
+    upstreams: options.upstreams ?? {},
   } satisfies ResolvedVisageOptions;
 }
 
-function resolveServicesOptions(
-  services: Record<string, VisageService> | undefined = {},
-  telemetry: boolean,
-): Record<string, VisageService> {
+function resolveServicesConfig({
+  services,
+  telemetry,
+  idp,
+  upstreams,
+}: ResolvedVisageOptions): Record<string, VisageService> {
+  const vite = upstreams.vite;
+  const vitePort = vite?.port ?? (vite?.scheme === 'https' ? 443 : 80);
   return {
     ...services,
+    ...('dex' in idp
+      ? {
+          dex: {
+            ...BaseServiceDex,
+            ...services.dex,
+            environment: {
+              ...BaseServiceDex.environment,
+              ...services.dex?.environment,
+            },
+          },
+        }
+      : {}),
+    ...(vite
+      ? {
+          vite_loopback: {
+            image: DockerImages.socat.image,
+            command:
+              `tcp-listen:${vitePort},fork,bind=host.docker.internal ` +
+              `tcp-connect:127.0.0.1:${vitePort}`,
+            extra_hosts: ['host.docker.internal:host-gateway'],
+            network_mode: 'host',
+            profiles: ['linux'],
+            restart: 'always',
+            ...services.vite_loopback,
+          },
+        }
+      : {}),
     nginx: {
       ...BaseServiceNginx,
       ...(services.nginx ?? {}),
       environment: {
         ...(telemetry
           ? {
-              OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4317',
+              OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
               OTEL_SERVICE_NAME: 'nginx',
             }
           : {}),
@@ -372,7 +402,7 @@ function resolveServicesOptions(
   };
 }
 
-function resolveUpstreamsOptions(
+function resolveUpstreamsConfig(
   services: Record<string, VisageService>,
   upstreams: Record<string, VisageUpstream> = {},
 ): Record<string, ResolvedUpstream> {
@@ -382,24 +412,23 @@ function resolveUpstreamsOptions(
         .filter(
           ([name]) =>
             // Exclude base services handled separately.
-            name !== 'dex' && name !== 'nginx' && name !== 'oauth2_proxy',
+            name !== 'dex' &&
+            name !== 'nginx' &&
+            name !== 'oauth2_proxy' &&
+            name !== 'vite_loopback',
         )
         .map(([name, service]) => [
           name,
-          resolveUpstreamOptions(name, service.upstream, false),
+          resolveUpstreamConfig(name, service.upstream, false),
         ]),
     ),
     ...Object.fromEntries(
-      Object.entries(upstreams).map(([name, upstream]) => {
-        if (name === 'vite') {
-          const vite = resolveViteUpstreamOptions(upstream);
-          return [name, resolveUpstreamOptions('vite', vite, true)];
-        }
-        return [
-          name,
-          resolveUpstreamOptions(name, upstream, services[name] === undefined),
-        ];
-      }),
+      Object.entries(upstreams).map(([name, upstream]) => [
+        name,
+        name === 'vite'
+          ? resolveViteUpstreamConfig(upstream)
+          : resolveUpstreamConfig(name, upstream, services[name] === undefined),
+      ]),
     ),
   };
 }
@@ -412,39 +441,44 @@ const BaseViteUpstreamRootLocation: VisageProxyPolicy = {
     Host: '$host',
     'X-Auth-Request-User': '$auth_user',
     'X-Auth-Request-Email': '$auth_email',
+    [VisageEdgeKeyHeader]: '$edge_key',
   },
 };
 
-function resolveViteUpstreamOptions(upstream: VisageUpstream): VisageUpstream {
+function resolveViteUpstreamConfig(upstream: VisageUpstream): ResolvedUpstream {
   const base = BaseViteUpstreamRootLocation;
   const root = upstream.locations?.['/'];
-  return {
-    host: 'host.docker.internal',
-    scheme: 'http',
-    ...upstream,
-    locations: {
-      ...(upstream.locations ?? {}),
-      '/':
-        root === undefined
-          ? { ...base }
-          : {
-              auth: { ...base.auth, ...root.auth },
-              csrf: root.csrf ?? base.csrf,
-              ws: root.ws ?? base.ws,
-              headers: {
-                ...base.headers,
-                ...root.headers,
+  return resolveUpstreamConfig(
+    'vite',
+    {
+      host: 'host.docker.internal',
+      scheme: 'http',
+      ...upstream,
+      locations: {
+        ...(upstream.locations ?? {}),
+        '/':
+          root === undefined
+            ? { ...base }
+            : {
+                auth: { ...base.auth, ...root.auth },
+                csrf: root.csrf ?? base.csrf,
+                ws: root.ws ?? base.ws,
+                headers: {
+                  ...root.headers,
+                  ...base.headers,
+                },
+                directives: {
+                  ...base.directives,
+                  ...root.directives,
+                },
               },
-              directives: {
-                ...base.directives,
-                ...root.directives,
-              },
-            },
+      },
     },
-  } satisfies VisageUpstream;
+    true,
+  );
 }
 
-function resolveUpstreamOptions(
+function resolveUpstreamConfig(
   name: string,
   upstream: VisageUpstream = {},
   external: boolean,
@@ -461,7 +495,7 @@ function resolveUpstreamOptions(
         Object.entries(upstream.locations ?? { [`/${name}/`]: {} }).map(
           ([path, policy]) => [
             path,
-            resolveUpstreamLocationOptions(
+            resolveUpstreamLocationConfig(
               name,
               host,
               {
@@ -477,7 +511,7 @@ function resolveUpstreamOptions(
   };
 }
 
-function resolveUpstreamLocationOptions(
+function resolveUpstreamLocationConfig(
   name: string,
   host: string,
   location: VisageProxyPolicy,
@@ -547,7 +581,9 @@ export function resolveConfig(
     readonly edgeKey: string;
   },
 ): VisageConfig {
+  const packageName = resolvePackage(options.root);
   const idp = resolveIdpConfig(options);
+  const services = resolveServicesConfig(options);
   const end_session_endpoint = idp.oidc.end_session_endpoint;
   const upstreams: Record<string, ResolvedUpstream> = {
     ...(end_session_endpoint === undefined
@@ -574,12 +610,12 @@ export function resolveConfig(
           },
         }),
     ...idp.upstream,
-    ...options.upstreams,
+    ...resolveUpstreamsConfig(services, options.upstreams),
   };
   return {
     host: options.host,
     port: options.port,
-    package: resolvePackage(options.root),
+    package: packageName,
     telemetry: options.telemetry,
     cookie: options.cookie,
     edgeKey: options.edgeKey,
@@ -605,28 +641,34 @@ export function resolveConfig(
           : []),
       ],
     },
-    services: {
-      ...('dex' in idp
-        ? {
-            dex: BaseServiceDex,
-            nginx: BaseServiceNginx,
-            oauth2_proxy: BaseServiceOAuth2Proxy,
-          }
-        : { nginx: BaseServiceNginx, oauth2_proxy: BaseServiceOAuth2Proxy }),
-      ...Object.fromEntries(
-        Object.entries(options.services).map(
-          ([name, { upstream: _upstream, ...service }]) => [
-            name,
-            { restart: 'on-failure', ...service },
-          ],
-        ),
+    services: Object.fromEntries(
+      Object.entries(services).map(
+        ([name, { upstream: _upstream, ...service }]) => [
+          name,
+          {
+            restart: 'on-failure',
+            ...(options.telemetry
+              ? {
+                  logging: {
+                    driver: 'fluentd',
+                    options: {
+                      'fluentd-address': '127.0.0.1:24224',
+                      'fluentd-async': 'true',
+                      'cache-disabled': 'true',
+                      tag: `${packageName}/${name}|{{.ImageName}}`,
+                    },
+                  },
+                }
+              : {}),
+            ...service,
+          },
+        ],
       ),
-    },
+    ),
     upstreams: Object.fromEntries(
       Object.entries(upstreams).map(([name, upstream]) => {
         const external =
-          options.upstreams[name] !== undefined &&
-          options.services[name] === undefined;
+          options.upstreams[name] !== undefined && services[name] === undefined;
         return [
           name,
           { ...upstream, external } satisfies ResolvedConfigUpstream,

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { Eta } from 'eta';
 
-import { VisageEdgeKeyHeader, type VisageConfig } from '../config';
+import type { VisageConfig } from '../config';
 
 const template = `
 <%_ for (const module of it.modules) { %>
@@ -14,7 +14,7 @@ load_module <%~ module %>;
 events {}
 
 http {
-    js_import edge_key from <%~ it.edgeKey.script %>;
+    js_import edge_key from <%~ it.edgeKeyScript %>;
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 
@@ -40,7 +40,7 @@ http {
         "~^[0-9]{4}-[0-9]{2}-[0-9]{2}T([0-9]{2}:[0-9]{2}:[0-9]{2})" $1;
         default $time_iso8601;
     }
-    log_format access_log_format '$access_log_time | $status | $request_method $request_uri | $auth_user | $proxy_host';
+    log_format access_log_format '$access_log_time | $status | $auth_user | $request_method $request_uri';
 
     # Allow WebSockets (Vite HMR).
     map $http_upgrade $connection_upgrade {
@@ -146,10 +146,7 @@ http {
             <%_ } %>
             error_page        401 = $auth_error_page;
             <%_ } %>
-            <%_ if (name === 'vite') { %>
-            proxy_set_header <%~ it.edgeKey.header %> $edge_key;
-            <%_ } %>
-            <%_ for (const [header, value] of Object.entries(location.headers ?? {})) { %>
+            <%_ for (const [header, value] of Object.entries(location.headers)) { %>
             proxy_set_header <%~ header %> <%~ value %>;
             <%_ } %>
             <%_ for (const [directive, values] of Object.entries(location.directives ?? {})) { %>
@@ -246,10 +243,7 @@ function renderNginxConfig(config: VisageConfig): string {
       cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),
       key: join(config.nginx.mount[1], 'certs', 'tls.key'),
     },
-    edgeKey: {
-      header: VisageEdgeKeyHeader,
-      script: join(config.nginx.mount[1], 'edge-key.js'),
-    },
+    edgeKeyScript: join(config.nginx.mount[1], 'edge-key.js'),
     upstreams: Object.fromEntries(
       Object.entries(config.upstreams).map(([name, upstream]) => [
         name,

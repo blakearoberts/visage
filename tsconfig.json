@@ -1,18 +1,13 @@
 {
-  "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "noEmit": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ES2022",
-    "types": ["node"]
-  },
-  "include": ["tests/**/*.ts", "*.ts"]
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.node.json" },
+    { "path": "./packages/visage/tsconfig.json" },
+    { "path": "./packages/visage-react/tsconfig.json" },
+    { "path": "./examples/external-idp/tsconfig.json" },
+    { "path": "./examples/session-unlocked-cache/tsconfig.json" },
+    { "path": "./examples/simple/tsconfig.json" },
+    { "path": "./examples/ssr/tsconfig.json" },
+    { "path": "./examples/telemetry/tsconfig.json" }
+  ]
 }

@@ -8,7 +8,7 @@ const LogReqURI =
   '{{printf "%.*s" (len (slice .RequestURI 2)) (slice .RequestURI 1)}}';
 const LogFormats = {
   standard_logging_format: `${LogTS} | [{{.File}}] {{.Message}}`,
-  request_logging_format: `${LogTS} | {{.StatusCode}} | {{.RequestMethod}} ${LogReqURI} | {{.Username}} | {{.Upstream}}`,
+  request_logging_format: `${LogTS} | {{.StatusCode}} | {{.Username}} | {{.RequestMethod}} ${LogReqURI}`,
   auth_logging_format: `${LogTS} | {{.Status}} | {{.Username}} | {{.Message}}`,
 };
 
@@ -21,7 +21,7 @@ export function writeOauth2ProxyConfig(config: VisageConfig): void {
 function renderOauth2ProxyConfig(config: VisageConfig): string {
   const data = {
     http_address: `127.0.0.1:${config.upstreams.oauth2_proxy.port}`,
-    ...(config.telemetry ? { metrics_address: '127.0.0.1:4181' } : {}),
+    ...(config.telemetry ? { metrics_address: '0.0.0.0:4181' } : {}),
     provider: 'oidc',
     oidc_issuer_url: config.idp.oidc.issuer,
     ...(config.idp.oidc.algs === undefined

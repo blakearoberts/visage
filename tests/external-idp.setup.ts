@@ -15,7 +15,7 @@ setup('start external idp example', async () => {
   const child = spawn(
     'npm',
     ['run', 'dev', '--workspace', 'examples/external-idp'],
-    { detached: true },
+    { detached: true, stdio: ['ignore', 'inherit', 'inherit'] },
   );
   child.unref();
   process.env.EXTERNAL_IDP_PID = String(child.pid);

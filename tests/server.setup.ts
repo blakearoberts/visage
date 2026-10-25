@@ -5,6 +5,7 @@ import { expect, request, test as setup } from '@playwright/test';
 setup('start server example', async () => {
   const child = spawn('npm', ['run', 'dev', '--workspace', 'examples/ssr'], {
     detached: true,
+    stdio: ['ignore', 'inherit', 'inherit'],
   });
   child.unref();
   process.env.SERVER_PID = String(child.pid);

@@ -38,30 +38,27 @@ resource attributes:
 
 ## Metrics
 
-When telemetry is enabled, Visage configures:
+When telemetry is enabled:
 
-- OAuth2 Proxy to serve Prometheus metrics at `127.0.0.1:4181` which the
-  OpenTelemetry Collector scrapes and exports.
+- OAuth2 Proxy serves Prometheus metrics at `nginx:4181`.
 - The Collector scrapes OAuth2 Proxy's Prometheus metrics.
 - The Collector converts NGINX spans to explicit bucket histograms.
 
 ## Logs
 
-Current state:
+Compose lifecycle output is written to `logs/compose.log`. With telemetry
+disabled, container output is followed into `logs/container.log` without
+redaction. Logs live under `<Vite cacheDir>/visage` in plugin mode or
+`<cwd>/.visage` in server mode.
 
-- Compose lifecycle output is written to `logs/compose.log`; joined container
-  output is followed into `logs/container.log`.
-- Plugin mode places these under `<Vite cacheDir>/visage`, while server mode
-  uses `<cwd>/.visage`.
-- NGINX access logs and OAuth2 Proxy request logs use hard-coded, aligned
-  formats for skimming the joined file.
-- Request URLs are persisted without redacting sensitive query values such as
-  OIDC authorization codes. Logs are not exported through OpenTelemetry.
+When telemetry is enabled:
 
-Desired state:
-
-- Log location, format, and collection are explicit and consistent across plugin
-  and server modes.
-- Sensitive values are redacted before persistence, with structured,
-  collector-friendly output available for application-owned pipelines.
-- Visage supports exporting container logs of Visage managed services.
+- Services send logs through Docker's Fluentd driver to the Collector while
+  disabling `docker logs` to avoid writing sensitive values to disk.
+- The Collector performs redaction of known sensitive values from NGINX and
+  OAuth2 Proxy.
+- The Collector exports telemetry via OTLP gRPC to `host.docker.internal:4317`.
+- Services can export telemetry via OTLP gRPC and HTTP to `otelcol:4317` and
+  `otelcol:4318`, respectively.
+- Browsers may export telemetry via session cookie protected OTLP ingest
+  endpoints under `/t/`.

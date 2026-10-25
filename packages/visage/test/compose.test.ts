@@ -10,12 +10,13 @@ import { syncBuiltinESMExports } from 'node:module';
 import { basename } from 'node:path';
 import { test } from 'node:test';
 
-import { resolveConfig, resolveOptions } from '../src/config.ts';
+import { resolveConfig, resolveOptions } from '../src/config';
 
 type SpawnCall = {
   readonly command: string;
   readonly args: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
+  readonly stdio?: SpawnSyncOptions['stdio'];
 };
 
 test('startCompose restarts Compose with in-memory edge and cookie secrets', async (t) => {
@@ -53,7 +54,12 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     args?: readonly string[],
     options?: SpawnSyncOptions,
   ) => {
-    spawnSyncCalls.push({ command, args: args ?? [], env: options?.env });
+    spawnSyncCalls.push({
+      command,
+      args: args ?? [],
+      env: options?.env,
+      stdio: options?.stdio,
+    });
     return {
       pid: 0,
       output: [],
@@ -80,9 +86,9 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
   }) as typeof childProcess.spawn);
   syncBuiltinESMExports();
 
-  const { startCompose } = await import('../src/compose.ts');
+  const { startCompose } = await import('../src/compose');
   const openSyncCalls: string[] = [];
-  const openSyncMock = t.mock.method(fs, 'openSync', (path) => {
+  const openSyncMock = t.mock.method(fs, 'openSync', (path: fs.PathLike) => {
     openSyncCalls.push(String(path));
     return 2;
   });
@@ -117,7 +123,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       ['down', 'run', 'up', 'down', 'run', 'up'],
     );
     assert.deepEqual(
-      spawnCalls.map((call) => call.args.slice(-2)),
+      spawnCalls.map((call) => call.args.slice(call.args.indexOf('logs'))),
       [
         ['logs', '--follow'],
         ['logs', '--follow'],
@@ -128,13 +134,16 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       [
         'compose.log',
         'compose.log',
+        'compose.log',
         'container.log',
+        'compose.log',
         'compose.log',
         'compose.log',
         'container.log',
       ],
     );
-    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-9), [
+    assert.deepEqual(spawnSyncCalls[1]?.stdio, ['ignore', 2, 2]);
+    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-8), [
       'run',
       '--build',
       '--quiet-build',
@@ -143,7 +152,6 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       'nginx',
       'nginx',
       '-t',
-      '-q',
     ]);
     assert.deepEqual(spawnSyncCalls[2]?.args.slice(-4), [
       'up',
@@ -215,7 +223,7 @@ test('startCompose cleans up failed detached startup', async (t) => {
   }) as typeof childProcess.spawn);
   syncBuiltinESMExports();
 
-  const { startCompose } = await import('../src/compose.ts');
+  const { startCompose } = await import('../src/compose');
   const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
   syncBuiltinESMExports();
   try {
@@ -277,7 +285,7 @@ test('startCompose surfaces NGINX validation errors before startup', async (t) =
   }) as typeof childProcess.spawn);
   syncBuiltinESMExports();
 
-  const { startCompose } = await import('../src/compose.ts');
+  const { startCompose } = await import('../src/compose');
   const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
   syncBuiltinESMExports();
   try {

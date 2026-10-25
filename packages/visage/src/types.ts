@@ -29,7 +29,7 @@ export type VisageOptions = {
    */
   readonly oauth2?: VisageOAuth2Client;
   /**
-   * Enables Visage-managed collection of NGINX traces, OAuth2 Proxy metrics,
+   * Enables collection of container logs, NGINX traces, OAuth2 Proxy metrics,
    * and OTLP signals sent through the protected `/t/` route.
    */
   readonly telemetry?: Readonly<Record<string, never>>;
@@ -275,7 +275,7 @@ export type VisageService = {
   /**
    * Optional command override rendered into the Compose service.
    */
-  readonly command?: readonly string[];
+  readonly command?: string | readonly string[];
   /**
    * Environment variables rendered into the Compose service.
    */
@@ -285,9 +285,24 @@ export type VisageService = {
    */
   readonly depends_on?: readonly string[];
   /**
+   * Compose logging configuration. Replaces the telemetry logging defaults.
+   */
+  readonly logging?: {
+    readonly driver?: string;
+    readonly options?: { readonly [name: string]: string | number | boolean };
+  };
+  /**
    * Docker network mode rendered into the Compose service.
    */
   readonly network_mode?: string;
+  /**
+   * Published ports in Compose short syntax.
+   */
+  readonly ports?: readonly string[];
+  /**
+   * Compose profiles in which the service is enabled.
+   */
+  readonly profiles?: readonly string[];
   /**
    * Compose image pull policy.
    * @defaultValue `'missing'`

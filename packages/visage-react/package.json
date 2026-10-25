@@ -10,11 +10,10 @@
     }
   },
   "scripts": {
-    "build": "true",
-    "test": "true"
+    "typecheck": "tsc"
   },
   "peerDependencies": {
-    "react": "^19.3.0",
+    "react": "^19.3.1",
     "swr": "^2.5.1"
   }
 }

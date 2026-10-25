@@ -9,8 +9,8 @@ import {
   resolveOptions,
   VisageEdgeKeyHeader,
   type VisageConfig,
-} from '../src/config.ts';
-import type { VisageOptions } from '../src/types.ts';
+} from '../src/config';
+import type { VisageOptions } from '../src/types';
 
 function tempCache(t: TestContext) {
   const cache = mkdtempSync(join(tmpdir(), 'visage-config-test-'));
@@ -77,29 +77,80 @@ test('resolveOptions applies public defaults', () => {
   });
 });
 
-test('resolveOptions enables the managed OpenTelemetry Collector', () => {
-  const options = resolveOptions({ telemetry: {} });
+test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
+  const { config } = resolveForTest(t, { telemetry: {} });
 
-  assert.equal(options.telemetry, true);
-  assert.equal(options.services.otelcol.depends_on, undefined);
-  assert.equal(options.services.otelcol.network_mode, 'service:nginx');
-  assert.deepEqual(options.services.otelcol.environment, {
+  assert.equal(config.telemetry, true);
+  for (const name of ['nginx', 'oauth2_proxy', 'dex', 'otelcol']) {
+    assert.deepEqual(config.services[name].logging, {
+      driver: 'fluentd',
+      options: {
+        'fluentd-address': '127.0.0.1:24224',
+        'fluentd-async': 'true',
+        'cache-disabled': 'true',
+        tag: `test-app/${name}|{{.ImageName}}`,
+      },
+    });
+  }
+  assert.equal(config.services.otelcol.depends_on, undefined);
+  assert.equal(config.services.otelcol.network_mode, undefined);
+  assert.deepEqual(config.services.otelcol.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
   });
-  assert.deepEqual(options.services.nginx.environment, {
-    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4317',
+  assert.deepEqual(config.services.nginx.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
     OTEL_SERVICE_NAME: 'nginx',
   });
-  assert.equal(options.upstreams.otelcol.host, '127.0.0.1');
-  assert.equal(options.upstreams.otelcol.port, 4318);
-  assert.deepEqual(options.upstreams.otelcol.locations['/t/'].auth, {
+  assert.equal(config.upstreams.otelcol.host, 'otelcol');
+  assert.equal(config.upstreams.otelcol.port, 4318);
+  assert.deepEqual(config.upstreams.otelcol.locations['/t/'].auth, {
     enabled: true,
     forward: false,
   });
-  assert.deepEqual(options.upstreams.otelcol.locations['/t/'].directives, {
+  assert.deepEqual(config.upstreams.otelcol.locations['/t/'].directives, {
     proxy_buffer_size: ['8k'],
     rewrite: ['^/t/(.*)$ /$1 break'],
   });
+});
+
+test('resolveConfig resolves the complete Vite loopback service', (t) => {
+  for (const [vite, port] of [
+    [{}, 80],
+    [{ scheme: 'https' }, 443],
+    [{ port: 6173 }, 6173],
+    [{ scheme: 'https', port: 6174 }, 6174],
+  ] as const) {
+    const { config } = resolveForTest(t, { upstreams: { vite } });
+    assert.equal(
+      config.services.vite_loopback.command,
+      `tcp-listen:${port},fork,bind=host.docker.internal ` +
+        `tcp-connect:127.0.0.1:${port}`,
+    );
+    assert.equal(config.upstreams.vite.port, port);
+    assert.deepEqual(config.services.vite_loopback.profiles, ['linux']);
+    assert.equal(config.services.vite_loopback.restart, 'always');
+  }
+
+  const service = { image: 'custom/socat', command: ['custom'], profiles: [] };
+  const { config } = resolveForTest(t, {
+    upstreams: { vite: { port: 6173 } },
+    services: { vite_loopback: service },
+  });
+  assert.equal(config.services.vite_loopback.image, service.image);
+  assert.deepEqual(config.services.vite_loopback.command, service.command);
+  assert.deepEqual(config.services.vite_loopback.profiles, service.profiles);
+  for (const services of [undefined, { vite_loopback: service }]) {
+    const standalone = resolveConfig({
+      ...resolveOptions({ services }),
+      root: 'test-app',
+      cache: tempCache(t),
+      edgeKey: 'edge-key',
+    });
+    assert.deepEqual(
+      standalone.services.vite_loopback,
+      services ? { restart: 'on-failure', ...service } : undefined,
+    );
+  }
 });
 
 test('resolveOptions prefixes host-only cookie names', () => {
@@ -216,8 +267,8 @@ test('resolveOptions applies IdP overrides', () => {
   });
 });
 
-test('resolveOptions applies upstream defaults', () => {
-  const options = resolveOptions({
+test('resolveConfig applies upstream defaults', (t) => {
+  const { config } = resolveForTest(t, {
     upstreams: {
       api: {},
       secure: {
@@ -226,16 +277,16 @@ test('resolveOptions applies upstream defaults', () => {
     },
   });
 
-  assert.equal(options.upstreams.api.host, 'api');
-  assert.equal(options.upstreams.api.scheme, 'https');
-  assert.equal(options.upstreams.api.port, 443);
-  assert.equal(options.upstreams.secure.host, 'secure');
-  assert.equal(options.upstreams.secure.scheme, 'https');
-  assert.equal(options.upstreams.secure.port, 443);
+  assert.equal(config.upstreams.api.host, 'api');
+  assert.equal(config.upstreams.api.scheme, 'https');
+  assert.equal(config.upstreams.api.port, 443);
+  assert.equal(config.upstreams.secure.host, 'secure');
+  assert.equal(config.upstreams.secure.scheme, 'https');
+  assert.equal(config.upstreams.secure.port, 443);
 });
 
-test('resolveOptions applies upstream headers to every location', () => {
-  const options = resolveOptions({
+test('resolveConfig applies upstream headers to every location', (t) => {
+  const { config } = resolveForTest(t, {
     upstreams: {
       api: {
         headers: {
@@ -256,29 +307,29 @@ test('resolveOptions applies upstream headers to every location', () => {
   });
 
   assert.equal(
-    options.upstreams.api.locations['/api/'].headers.Host,
+    config.upstreams.api.locations['/api/'].headers.Host,
     'api.internal',
   );
   assert.equal(
-    options.upstreams.api.locations['/api/'].headers['X-Service'],
+    config.upstreams.api.locations['/api/'].headers['X-Service'],
     'api',
   );
   assert.equal(
-    options.upstreams.api.locations['/api/'].headers['X-Scope'],
+    config.upstreams.api.locations['/api/'].headers['X-Scope'],
     'upstream',
   );
   assert.equal(
-    options.upstreams.api.locations['/admin/'].headers['X-Service'],
+    config.upstreams.api.locations['/admin/'].headers['X-Service'],
     'api',
   );
   assert.equal(
-    options.upstreams.api.locations['/admin/'].headers['X-Scope'],
+    config.upstreams.api.locations['/admin/'].headers['X-Scope'],
     'admin',
   );
 });
 
-test('resolveOptions derives upstreams from services', () => {
-  const options = resolveOptions({
+test('resolveConfig derives upstreams from services', (t) => {
+  const { config } = resolveForTest(t, {
     services: {
       api: {
         image: 'example/api:test',
@@ -309,32 +360,29 @@ test('resolveOptions derives upstreams from services', () => {
     },
   });
 
-  assert.deepEqual(options.services.api, {
+  assert.deepEqual(config.services.api, {
     image: 'example/api:test',
-    upstream: {
-      port: 8080,
-      locations: { '/api/': { auth: { forward: 'access' } } },
-    },
+    restart: 'on-failure',
   });
-  assert.equal(options.upstreams.api.host, 'api.local.test');
-  assert.equal(options.upstreams.api.scheme, 'http');
-  assert.equal(options.upstreams.api.port, 9000);
-  assert.equal(options.upstreams.whoami.host, 'whoami');
-  assert.equal(options.upstreams.whoami.scheme, 'http');
-  assert.equal(options.upstreams.whoami.port, 80);
-  assert.equal(options.upstreams.secure.host, 'secure');
-  assert.equal(options.upstreams.secure.scheme, 'https');
-  assert.equal(options.upstreams.secure.port, 443);
-  assert.equal(options.upstreams.external.host, 'external');
-  assert.equal(options.upstreams.external.scheme, 'https');
-  assert.equal(options.upstreams.external.port, 443);
-  assert.equal(options.upstreams.externalHttp.host, 'externalHttp');
-  assert.equal(options.upstreams.externalHttp.scheme, 'http');
-  assert.equal(options.upstreams.externalHttp.port, 80);
+  assert.equal(config.upstreams.api.host, 'api.local.test');
+  assert.equal(config.upstreams.api.scheme, 'http');
+  assert.equal(config.upstreams.api.port, 9000);
+  assert.equal(config.upstreams.whoami.host, 'whoami');
+  assert.equal(config.upstreams.whoami.scheme, 'http');
+  assert.equal(config.upstreams.whoami.port, 80);
+  assert.equal(config.upstreams.secure.host, 'secure');
+  assert.equal(config.upstreams.secure.scheme, 'https');
+  assert.equal(config.upstreams.secure.port, 443);
+  assert.equal(config.upstreams.external.host, 'external');
+  assert.equal(config.upstreams.external.scheme, 'https');
+  assert.equal(config.upstreams.external.port, 443);
+  assert.equal(config.upstreams.externalHttp.host, 'externalHttp');
+  assert.equal(config.upstreams.externalHttp.scheme, 'http');
+  assert.equal(config.upstreams.externalHttp.port, 80);
 });
 
-test('resolveOptions applies Vite upstream defaults and merges the root location', () => {
-  const options = resolveOptions({
+test('resolveConfig applies Vite upstream defaults and merges the root location', (t) => {
+  const { config } = resolveForTest(t, {
     upstreams: {
       vite: {
         port: 6173,
@@ -359,42 +407,42 @@ test('resolveOptions applies Vite upstream defaults and merges the root location
     },
   });
 
-  assert.equal(options.upstreams.vite.host, 'host.docker.internal');
-  assert.equal(options.upstreams.vite.scheme, 'http');
-  assert.equal(options.upstreams.vite.port, 6173);
-  assert.deepEqual(options.upstreams.vite.locations['/'].auth, {
+  assert.equal(config.upstreams.vite.host, 'host.docker.internal');
+  assert.equal(config.upstreams.vite.scheme, 'http');
+  assert.equal(config.upstreams.vite.port, 6173);
+  assert.deepEqual(config.upstreams.vite.locations['/'].auth, {
     enabled: true,
     forward: 'id',
   });
-  assert.equal(options.upstreams.vite.locations['/'].csrf, true);
-  assert.equal(options.upstreams.vite.locations['/'].headers.Host, '$host');
+  assert.equal(config.upstreams.vite.locations['/'].csrf, true);
+  assert.equal(config.upstreams.vite.locations['/'].headers.Host, '$host');
   assert.equal(
-    options.upstreams.vite.locations['/'].headers.Upgrade,
+    config.upstreams.vite.locations['/'].headers.Upgrade,
     '$http_upgrade',
   );
   assert.equal(
-    options.upstreams.vite.locations['/'].headers.Connection,
+    config.upstreams.vite.locations['/'].headers.Connection,
     '$connection_upgrade',
   );
   assert.deepEqual(
-    options.upstreams.vite.locations['/'].directives.proxy_http_version,
+    config.upstreams.vite.locations['/'].directives.proxy_http_version,
     ['1.1'],
   );
   assert.deepEqual(
-    options.upstreams.vite.locations['/'].directives.proxy_read_timeout,
+    config.upstreams.vite.locations['/'].directives.proxy_read_timeout,
     ['1h'],
   );
   assert.equal(
-    options.upstreams.vite.locations['/'].headers['X-Shared'],
+    config.upstreams.vite.locations['/'].headers['X-Shared'],
     'vite',
   );
-  assert.equal(options.upstreams.vite.locations['/'].headers['X-App'], 'root');
+  assert.equal(config.upstreams.vite.locations['/'].headers['X-App'], 'root');
   assert.equal(
-    options.upstreams.vite.locations['/app/'].headers['X-Shared'],
+    config.upstreams.vite.locations['/app/'].headers['X-Shared'],
     'vite',
   );
   assert.equal(
-    options.upstreams.vite.locations['/app/'].headers['X-App'],
+    config.upstreams.vite.locations['/app/'].headers['X-App'],
     'nested',
   );
 });
@@ -539,9 +587,6 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.equal(config.idp.oidc.issuer, 'http://idp.localhost:5557/idp');
   assert.equal(config.idp.oidc.algs, undefined);
   assert.equal(config.idp.oidc.end_session_endpoint, undefined);
-  assert.equal('authorization' in config.idp, false);
-  assert.equal('token' in config.idp, false);
-  assert.equal('jwks' in config.idp, false);
 });
 
 test('resolveConfig supports external IdP end-session endpoints', (t) => {
@@ -576,9 +621,6 @@ test('resolveConfig uses issuer scheme for external IdP upstream defaults', (t) 
   assert.equal(config.upstreams.idp.scheme, 'https');
   assert.equal(config.upstreams.idp.port, 443);
   assert.deepEqual(config.upstreams.idp.locations, {});
-  assert.equal('authorization' in config.idp, false);
-  assert.equal('token' in config.idp, false);
-  assert.equal('jwks' in config.idp, false);
 });
 
 test('resolveConfig omits external IdP upstream locations for root issuer paths', (t) => {
@@ -649,7 +691,7 @@ test('resolveConfig preserves managed service defaults for partial service overr
   assert.equal(config.services.oauth2_proxy.depends_on, undefined);
   assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
-  assert.equal(config.services.otelcol.network_mode, 'service:nginx');
+  assert.equal(config.services.otelcol.network_mode, undefined);
   assert.equal(config.services.otelcol.depends_on, undefined);
   assert.equal(config.telemetry, true);
 });
@@ -756,12 +798,13 @@ test('resolveConfig resolves scoped package names', (t) => {
   assert.equal(config.package, '@blakearoberts/visage');
 });
 
-test('resolveConfig preserves the edge key without mutating Vite headers', (t) => {
+test('resolveConfig adds the managed edge key to the Vite root location and preserves other headers', (t) => {
   const cache = tempCache(t);
   const config = resolveConfig({
     ...resolveOptions({
       upstreams: {
         vite: {
+          port: 6173,
           locations: {
             '/': {
               headers: {
@@ -786,7 +829,7 @@ test('resolveConfig preserves the edge key without mutating Vite headers', (t) =
   assert.equal(config.secrets.edgeKey, 'VISAGE_EDGE_KEY');
   assert.equal(
     config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
-    undefined,
+    '$edge_key',
   );
   assert.equal(
     config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
@@ -799,12 +842,13 @@ test('resolveConfig preserves the edge key without mutating Vite headers', (t) =
   );
 });
 
-test('resolveConfig preserves explicit Vite edge key overrides', (t) => {
+test('resolveConfig gives the managed edge key precedence in the Vite root location', (t) => {
   const cache = tempCache(t);
   const config = resolveConfig({
     ...resolveOptions({
       upstreams: {
         vite: {
+          port: 6173,
           locations: {
             '/': {
               headers: {
@@ -827,7 +871,7 @@ test('resolveConfig preserves explicit Vite edge key overrides', (t) => {
 
   assert.equal(
     config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
-    'overridden',
+    '$edge_key',
   );
   assert.equal(
     config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
@@ -850,6 +894,7 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
         locations: { '/external/': { auth: { forward: true } } },
       },
       vite: {
+        port: 6173,
         locations: { '/': { auth: { forward: true } } },
       },
     },

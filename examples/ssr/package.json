@@ -3,8 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "npm run check:type",
-    "check:type": "npm run typecheck",
     "dev": "node --import tsx server.ts",
     "build": "vite build --outDir dist/server --ssr src/entry-server.tsx",
     "typecheck": "tsc"
@@ -12,8 +10,8 @@
   "dependencies": {
     "@blakearoberts/visage": "file:../../packages/visage",
     "connect": "^3.7.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "swr": "^2.5.1"
   },
   "devDependencies": {

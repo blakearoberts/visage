@@ -4,8 +4,6 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "check": "npm run check:type",
-    "check:type": "npm run typecheck",
     "dev": "vite",
     "start:idp": "docker compose -p external-idp -f compose.idp.yaml up -d",
     "stop:idp": "docker compose -p external-idp down",
@@ -13,8 +11,8 @@
   },
   "dependencies": {
     "@blakearoberts/visage": "file:../../packages/visage",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

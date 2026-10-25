@@ -7,14 +7,14 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace packages",
+    "build": "npm run build --workspace packages --if-present",
     "check": "npm run check:format && npm run check:type",
     "check:format": "prettier --check .",
-    "check:type": "npm run check:type --workspaces --if-present",
+    "check:type": "tsc -p tsconfig.node.json && npm run typecheck --workspaces",
     "format": "prettier --write .",
     "pretest:e2e": "npm run build",
-    "precheck:type": "npm run build --workspace packages",
-    "test": "npm run test --workspace packages",
+    "precheck:type": "npm run build",
+    "test": "npm run test --workspace packages --if-present",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

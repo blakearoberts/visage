@@ -29,6 +29,7 @@ export function startCompose(config: VisageConfig): () => void {
   const opts = { cwd: config.cache, env };
 
   function validate() {
+    const out = openSync(join(dir, 'compose.log'), 'a');
     const args = [
       ...compose,
       'run',
@@ -39,11 +40,10 @@ export function startCompose(config: VisageConfig): () => void {
       'nginx',
       'nginx',
       '-t',
-      '-q',
     ];
     const result = spawnSync('docker', args, {
       ...opts,
-      stdio: ['ignore', 'ignore', 'inherit'],
+      stdio: ['ignore', out, out],
     });
     if (result.error) throw result.error;
     if (result.status !== 0) {
@@ -51,7 +51,7 @@ export function startCompose(config: VisageConfig): () => void {
     }
   }
   function up() {
-    const out = openSync(join(dir, 'compose.log'), 'w');
+    const out = openSync(join(dir, 'compose.log'), 'a');
     const args = [
       ...compose,
       'up',
@@ -75,14 +75,13 @@ export function startCompose(config: VisageConfig): () => void {
   down();
   validate();
   const result = up();
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
+  if (result.error || result.status !== 0) {
     down();
-    throw new Error('Failed to start Docker Compose');
+    throw result.error ?? new Error('Failed to start Docker Compose');
   }
-  const logs = follow();
+  const logs = config.telemetry ? undefined : follow();
   return () => {
     down();
-    logs.kill('SIGINT');
+    logs?.kill('SIGINT');
   };
 }

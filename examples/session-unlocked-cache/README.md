@@ -12,7 +12,7 @@ npm run dev
 
 Open `https://localhost:9004`.
 
-The default username and password are `user@example.com` and `pass`.
+The default username and password are `user@example.com` and `visage-password`.
 
 ## What It Shows
 

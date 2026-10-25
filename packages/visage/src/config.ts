@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 import type {
   VisageDexExpiry,
   VisageDexOptions,
+  VisageDexSessions,
   VisageDexUser,
   VisageExternalIdpOptions,
   VisageOptions,
@@ -62,6 +63,7 @@ type ResolvedUpstream = {
   readonly host: string;
   readonly port: number;
   readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
+  readonly http?: string;
 };
 
 type OIDCEndpointConfig = {
@@ -82,6 +84,7 @@ type ManualOIDCEndpointConfig = OIDCEndpointConfig & {
 type ResolvedDexIdpConfig = {
   readonly dex: {
     readonly expiry?: VisageDexExpiry;
+    readonly sessions?: VisageDexSessions;
     readonly users: readonly VisageDexUser[];
   };
   readonly oidc: ManualOIDCEndpointConfig;
@@ -205,8 +208,10 @@ const DefaultProxyPolicy = {
     'X-Forwarded-Proto': '$scheme',
   },
   directives: {
-    // Cookies make you fat.
     proxy_buffer_size: ['8k'],
+    proxy_connect_timeout: ['5s'],
+    proxy_read_timeout: ['5s'],
+    proxy_send_timeout: ['5s'],
   },
 } as const satisfies ResolvedProxyPolicy;
 
@@ -259,13 +264,27 @@ const BaseUpstreamOauth2Proxy = {
 } as const satisfies ResolvedUpstream;
 
 const DefaultCookiePolicy = {
-  cookie_expire: '8h',
-  cookie_refresh: '15m',
+  cookie_expire: '720h',
+  cookie_refresh: '30s',
   cookie_path: '/',
 } as const satisfies Omit<ResolvedCookiePolicy, 'cookie_name'>;
 
+const DefaultDexExpiry = {
+  idTokens: '1m',
+  refreshTokens: {
+    reuseInterval: '1s',
+    validIfNotUsedFor: '720h',
+    absoluteLifetime: '720h',
+  },
+} as const satisfies VisageDexExpiry;
+
+const DefaultDexSessions = {
+  absoluteLifetime: '720h',
+  validIfNotUsedFor: '720h',
+} as const satisfies VisageDexSessions;
+
 const DefaultDexUsers: readonly VisageDexUser[] = [
-  { email: 'user@example.com', password: 'pass' },
+  { email: 'user@example.com', password: 'visage-password' },
 ];
 
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
@@ -304,7 +323,15 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         ? idp
         : ({
             dex: {
-              ...(idp.expiry ? { expiry: idp.expiry } : {}),
+              expiry: {
+                ...DefaultDexExpiry,
+                ...idp.expiry,
+                refreshTokens: {
+                  ...DefaultDexExpiry.refreshTokens,
+                  ...idp.expiry?.refreshTokens,
+                },
+              },
+              sessions: { ...DefaultDexSessions, ...idp.sessions },
               users: (idp.users ?? DefaultDexUsers).map((user) => ({
                 email: user.email,
                 password: user.password,
@@ -697,6 +724,7 @@ function resolveIdpConfig({
     return {
       dex: {
         expiry: idp.dex.expiry,
+        sessions: idp.dex.sessions,
         users: (idp.dex?.users ?? DefaultDexUsers).map((user) => ({
           email: user.email,
           password: user.password,
@@ -716,6 +744,13 @@ function resolveIdpConfig({
           host: '127.0.0.1',
           scheme: 'http',
           port: 5556,
+          http: `
+            map "$request_method:$uri" $dex_password_limit_key {
+                default "";
+                ~^POST:/dex/auth/[^/]+/login$ $binary_remote_addr;
+            }
+            limit_req_zone $dex_password_limit_key zone=dex_password:1m rate=1r/s;
+          `,
           locations: {
             '/dex/': {
               auth: { enabled: false, forward: false },
@@ -724,7 +759,11 @@ function resolveIdpConfig({
                 ...DefaultProxyPolicy.headers,
                 Cookie: 'dex_session=$cookie_dex_session',
               },
-              directives: { ...DefaultProxyPolicy.directives },
+              directives: {
+                ...DefaultProxyPolicy.directives,
+                limit_req: ['zone=dex_password burst=5 nodelay'],
+                limit_req_status: ['429'],
+              },
             } satisfies ResolvedProxyPolicy,
           },
         },

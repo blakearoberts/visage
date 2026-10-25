@@ -1,8 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const user = { email: 'user@example.com', password: 'pass' };
-
 async function login(page: Page) {
+  const { user } = test.info().project.metadata;
   await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   await page.locator('input[name="login"]').fill(user.email);
@@ -55,6 +54,7 @@ test('session recovery requires credentials without an IdP session', async ({
   await page.getByRole('button', { name: 'Sign back in' }).click();
   const popup = await popupPromise;
   await expect(popup.locator('input[name="login"]')).toBeVisible();
+  const { user } = test.info().project.metadata;
   await popup.locator('input[name="login"]').fill(user.email);
   await popup.locator('input[name="password"]').fill(user.password);
   await popup.locator('button[type="submit"]').click();

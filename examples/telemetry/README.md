@@ -1,7 +1,8 @@
 # Telemetry Example
 
 Run `npm run dev --workspace examples/telemetry` from the repository root and
-open `https://localhost:9001`. Sign in with `user@example.com` / `pass`.
+open `https://localhost:9001`. Sign in with `user@example.com` /
+`visage-password`.
 
 This example enables Visage's managed OpenTelemetry Collector and configures a
 Grafana service available at `https://localhost:9001/grafana`.

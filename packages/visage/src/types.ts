@@ -66,7 +66,7 @@ export type VisageCookiePolicy = {
    * refresh-token lifetime to avoid sessions that can no longer be refreshed
    * silently.
    *
-   * @defaultValue `'8h'`
+   * @defaultValue `'720h'`
    */
   readonly expire?: string;
   /**
@@ -76,7 +76,7 @@ export type VisageCookiePolicy = {
    * tokens, set this below the relevant token lifetime so OAuth2 Proxy refreshes
    * before forwarding expired token material.
    *
-   * @defaultValue `'15m'`
+   * @defaultValue `'30s'`
    */
   readonly refresh?: string;
   /**
@@ -105,9 +105,13 @@ export type VisageDexOptions = {
    */
   readonly expiry?: VisageDexExpiry;
   /**
+   * Authentication session lifetimes rendered into the Dex config.
+   */
+  readonly sessions?: VisageDexSessions;
+  /**
    * Static username/password users rendered into the Dex config.
    *
-   * @defaultValue `[{ email: 'user@example.com', password: 'pass' }]`
+   * @defaultValue `[{ email: 'user@example.com', password: 'visage-password' }]`
    */
   readonly users?: readonly VisageDexUser[];
 };
@@ -119,7 +123,9 @@ export type VisageDexOptions = {
  */
 export type VisageDexExpiry = {
   /**
-   * Lifetime for ID tokens issued by Dex.
+   * Lifetime for access and ID tokens issued by Dex.
+   *
+   * @defaultValue `'1m'`
    */
   readonly idTokens?: string;
   /**
@@ -140,10 +146,14 @@ export type VisageDexExpiry = {
   readonly refreshTokens?: {
     /**
      * Maximum time a refresh token may go unused before it expires.
+     *
+     * @defaultValue `'720h'`
      */
     readonly validIfNotUsedFor?: string;
     /**
      * Absolute lifetime for refresh tokens, regardless of use.
+     *
+     * @defaultValue `'720h'`
      */
     readonly absoluteLifetime?: string;
     /**
@@ -152,9 +162,29 @@ export type VisageDexExpiry = {
     readonly disableRotation?: boolean;
     /**
      * Grace period during which a rotated refresh token may be reused.
+     *
+     * @defaultValue `'1s'`
      */
     readonly reuseInterval?: string;
   };
+};
+
+/**
+ * Dex authentication session lifetimes.
+ */
+export type VisageDexSessions = {
+  /**
+   * Maximum session lifetime from creation.
+   *
+   * @defaultValue `'720h'`
+   */
+  readonly absoluteLifetime?: string;
+  /**
+   * Session idle timeout. Token refresh does not extend this deadline.
+   *
+   * @defaultValue `'720h'`
+   */
+  readonly validIfNotUsedFor?: string;
 };
 
 /**
@@ -171,7 +201,7 @@ export type VisageDexUser = {
    * Plain-text development password. Visage hashes this before rendering the
    * Dex config.
    *
-   * @defaultValue `'pass'`
+   * @defaultValue `'visage-password'`
    */
   readonly password: string;
   /**

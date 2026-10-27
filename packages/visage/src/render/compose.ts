@@ -47,14 +47,12 @@ function renderComposeConfig(config: VisageConfig): string {
         : {}),
       nginx: {
         ...nginx,
-        ...(config.telemetry
-          ? {
-              environment: {
-                OTEL_SERVICE_NAMESPACE: config.package,
-                ...nginx.environment,
-              },
-            }
-          : {}),
+        environment: {
+          OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
+          OTEL_SERVICE_NAME: 'nginx',
+          OTEL_SERVICE_NAMESPACE: config.package,
+          ...nginx.environment,
+        },
         secrets: [config.secrets.edgeKey],
         ports: [`127.0.0.1:${config.port}:${config.port}`],
         volumes: [

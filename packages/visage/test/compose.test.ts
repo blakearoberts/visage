@@ -48,7 +48,6 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
   const spawnSyncCalls: SpawnCall[] = [];
   const spawnCalls: SpawnCall[] = [];
-  const stoppedLogs: unknown[] = [];
   const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
     command: string,
     args?: readonly string[],
@@ -75,14 +74,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     options?: SpawnOptions,
   ) => {
     spawnCalls.push({ command, args: args ?? [], env: options?.env });
-    return {
-      exitCode: null,
-      signalCode: null,
-      kill(signal?: NodeJS.Signals | number) {
-        stoppedLogs.push(signal);
-        return true;
-      },
-    } as ReturnType<typeof childProcess.spawn>;
+    return {} as ReturnType<typeof childProcess.spawn>;
   }) as typeof childProcess.spawn);
   syncBuiltinESMExports();
 
@@ -122,24 +114,16 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       ),
       ['down', 'run', 'up', 'down', 'run', 'up'],
     );
-    assert.deepEqual(
-      spawnCalls.map((call) => call.args.slice(call.args.indexOf('logs'))),
-      [
-        ['logs', '--follow'],
-        ['logs', '--follow'],
-      ],
-    );
+    assert.equal(spawnCalls.length, 0);
     assert.deepEqual(
       openSyncCalls.map((file) => basename(file)),
       [
         'compose.log',
         'compose.log',
         'compose.log',
-        'container.log',
         'compose.log',
         'compose.log',
         'compose.log',
-        'container.log',
       ],
     );
     assert.deepEqual(spawnSyncCalls[1]?.stdio, ['ignore', 2, 2]);
@@ -173,7 +157,6 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
     stop();
     stop = undefined;
-    assert.deepEqual(stoppedLogs, ['SIGINT']);
     assert.equal(spawnSyncCalls.length, 7);
     assert.deepEqual(spawnSyncCalls[6]?.args.slice(-2), [
       'down',

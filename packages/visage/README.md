@@ -202,19 +202,18 @@ See [`VisageOptions`](src/types.ts) for the full option surface.
 
 ### Telemetry
 
-Add `telemetry: {}` to run Visage's managed OpenTelemetry Collector.
+Set `telemetry` to enable collection, redaction, and export of telemetry signals
+via OTLP/gRPC.
 
-- Visage configures:
+- When enabled, Visage configures:
   - NGINX to export access spans to the Collector;
-  - OAuth2 Proxy to expose a Prometheus metrics listener for the Collector;
+  - OAuth2 Proxy Prometheus metrics listener to be scraped by the Collector;
+  - Service containers to send stdout/stderr to the Collector;
   - The Collector to accept authenticated OTLP/HTTP signals at `/t/`.
 
-- The Collector shares NGINX's network namespace and binds its receivers to
-  loopback, so its endpoints are not exposed directly.
-
 - The Collector exports OTLP to `host.docker.internal:4317` by default; the
-  [telemetry example](../../examples/telemetry) targets a Visage managed service
-  (Grafana) instead.
+  [telemetry example](../../examples/telemetry) demonstrates how to configure
+  Grafana as a Visage managed service to receive and view the telemetry.
 
 ## Required Tools
 

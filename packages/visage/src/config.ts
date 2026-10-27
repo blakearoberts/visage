@@ -47,10 +47,14 @@ type ResolvedProxyPolicy = {
   readonly directives: Readonly<Record<string, readonly string[]>>;
 };
 
+type ResolvedTelemetry = {
+  readonly fluentd?: string;
+};
+
 type ResolvedVisageOptions = {
   readonly host: string;
   readonly port: number;
-  readonly telemetry: boolean;
+  readonly telemetry: ResolvedTelemetry | false;
   readonly cookie: ResolvedCookiePolicy;
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
@@ -96,9 +100,7 @@ type ResolvedExternalIdpConfig = {
 };
 type ResolvedIdpConfig = ResolvedDexIdpConfig | ResolvedExternalIdpConfig;
 
-type ResolvedService = Omit<VisageService, 'upstream'> & {
-  readonly restart: NonNullable<VisageService['restart']>;
-};
+type ResolvedService = Omit<VisageService, 'upstream'>;
 
 type ResolvedConfigUpstream = ResolvedUpstream & {
   readonly external: boolean;
@@ -108,7 +110,7 @@ export type VisageConfig = {
   readonly host: string;
   readonly port: number;
   readonly package: string;
-  readonly telemetry: boolean;
+  readonly telemetry: ResolvedTelemetry | false;
   readonly cookie: ResolvedCookiePolicy;
   readonly edgeKey: string;
   readonly idp: ResolvedIdpConfig;
@@ -170,7 +172,6 @@ const OTelCollectorConfig = fileURLToPath(
 
 const BaseServiceOTelCollector = {
   image: DockerImages.otelcol.image,
-  ports: ['127.0.0.1:24224:24224'],
   environment: {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
   },
@@ -296,11 +297,13 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     oauth2 = {},
   } = options;
   const cookieName = cookie.name ?? 'sess';
-  const telemetry = options.telemetry !== undefined;
+  const telemetry = options.telemetry === true ? {} : options.telemetry;
   return {
     host,
     port,
-    telemetry,
+    telemetry: telemetry
+      ? { fluentd: telemetry.fluentd ?? '127.0.0.1:24224' }
+      : false,
     cookie: {
       ...DefaultCookiePolicy,
       cookie_name:
@@ -396,15 +399,6 @@ function resolveServicesConfig({
     nginx: {
       ...BaseServiceNginx,
       ...(services.nginx ?? {}),
-      environment: {
-        ...(telemetry
-          ? {
-              OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
-              OTEL_SERVICE_NAME: 'nginx',
-            }
-          : {}),
-        ...(services.nginx?.environment ?? {}),
-      },
       extra_hosts: [
         ...BaseServiceNginx.extra_hosts,
         ...(services.nginx?.extra_hosts ?? []),
@@ -418,6 +412,10 @@ function resolveServicesConfig({
       ? {
           otelcol: {
             ...BaseServiceOTelCollector,
+            ports:
+              telemetry.fluentd === undefined
+                ? []
+                : [`${telemetry.fluentd}:24224`],
             ...(services.otelcol ?? {}),
             environment: {
               ...BaseServiceOTelCollector.environment,
@@ -674,12 +672,12 @@ export function resolveConfig(
           name,
           {
             restart: 'on-failure',
-            ...(options.telemetry
+            ...(options.telemetry && options.telemetry.fluentd !== undefined
               ? {
                   logging: {
                     driver: 'fluentd',
                     options: {
-                      'fluentd-address': '127.0.0.1:24224',
+                      'fluentd-address': options.telemetry.fluentd,
                       'fluentd-async': 'true',
                       'cache-disabled': 'true',
                       tag: `${packageName}/${name}|{{.ImageName}}`,

@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { openSync } from 'node:fs';
 import { join } from 'node:path';
@@ -66,11 +66,6 @@ export function startCompose(config: VisageConfig): () => void {
     const args = [...compose, 'down', '--remove-orphans'];
     return spawnSync('docker', args, { ...opts, stdio: ['ignore', out, out] });
   }
-  function follow() {
-    const out = openSync(join(dir, 'container.log'), 'w');
-    const args = [...compose, 'logs', '--follow'];
-    return spawn('docker', args, { ...opts, stdio: ['ignore', out, out] });
-  }
 
   down();
   validate();
@@ -79,9 +74,5 @@ export function startCompose(config: VisageConfig): () => void {
     down();
     throw result.error ?? new Error('Failed to start Docker Compose');
   }
-  const logs = config.telemetry ? undefined : follow();
-  return () => {
-    down();
-    logs?.kill('SIGINT');
-  };
+  return down;
 }

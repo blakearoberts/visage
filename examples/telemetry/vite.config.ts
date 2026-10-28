@@ -10,6 +10,7 @@ export default defineConfig({
     visage({
       oauth2: { scopes: ['openid', 'email', 'offline_access'] },
       telemetry: {},
+      volumes: { 'lgtm-data': {} },
       services: {
         otelcol: {
           environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
@@ -29,9 +30,13 @@ export default defineConfig({
               '/otel-lgtm/visage/dashboards',
             TEMPO_EXTRA_ARGS:
               '--config.file=/otel-lgtm/visage/tempo-config.yaml',
+            PROMETHEUS_EXTRA_ARGS: '--storage.tsdb.retention.time=24h',
+            LOKI_EXTRA_ARGS:
+              '-store.retention=24h -compactor.retention-enabled=true -compactor.delete-request-store=filesystem',
           },
           volumes: [
             `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage`,
+            'lgtm-data:/data',
           ],
           upstream: {
             port: 3000,

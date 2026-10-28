@@ -10,6 +10,7 @@ export type {
   VisageProxyPolicy,
   VisageService,
   VisageUpstream,
+  VisageVolume,
 } from './types';
 
 export { default, visage } from './plugin';

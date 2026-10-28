@@ -7,6 +7,10 @@ open `https://localhost:9001`. Sign in with `user@example.com` /
 This example enables Visage's managed OpenTelemetry Collector and configures a
 Grafana service available at `https://localhost:9001/grafana`.
 
+Traces, metrics, and logs use 24-hour retention and persist across container
+recreation in the `lgtm-data` named Docker volume. Dashboard files remain bind
+mounted from `otel-lgtm/dashboards` so dashboard edits can be saved to the host.
+
 The Collector:
 
 - receives NGINX traces, container logs, and browser logs;

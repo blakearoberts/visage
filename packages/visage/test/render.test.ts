@@ -102,6 +102,27 @@ function parseKeyValueConfig(contents: string) {
   );
 }
 
+test('writeComposeConfig renders named volume declarations and mounts', (t) => {
+  const config = resolvedConfig(t, {
+    volumes: {
+      data: {},
+      shared: { name: 'shared-data', external: true },
+    },
+    services: {
+      storage: { image: 'example/storage:test', volumes: ['data:/data'] },
+    },
+  });
+
+  writeComposeConfig(config);
+
+  const compose = parse(readGenerated(config, config.files.compose));
+  assert.deepEqual(compose.volumes, {
+    data: {},
+    shared: { name: 'shared-data', external: true },
+  });
+  assert.deepEqual(compose.services.storage.volumes, ['data:/data']);
+});
+
 test('writeComposeConfig renders base services and custom services', (t) => {
   const config = resolvedConfig(
     t,

@@ -14,6 +14,7 @@ import type {
   VisageProxyPolicy,
   VisageService,
   VisageUpstream,
+  VisageVolume,
 } from './types';
 
 type Volume = readonly [from: string, to: string];
@@ -59,6 +60,7 @@ type ResolvedVisageOptions = {
   readonly idp: ResolvedIdpOption;
   readonly oauth2: ResolvedOAuth2Client;
   readonly services: Readonly<Record<string, VisageService>>;
+  readonly volumes: Readonly<Record<string, VisageVolume>>;
   readonly upstreams: Record<string, VisageUpstream>;
 };
 
@@ -133,6 +135,7 @@ export type VisageConfig = {
   };
 
   readonly services: Readonly<Record<string, ResolvedService>>;
+  readonly volumes: Readonly<Record<string, VisageVolume>>;
   readonly upstreams: Readonly<Record<string, ResolvedConfigUpstream>>;
 };
 
@@ -355,6 +358,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         ('issuer' in idp ? '/' : '/oauth2/start?rd=/'),
     } satisfies ResolvedOAuth2Client,
     services: options.services ?? {},
+    volumes: options.volumes ?? {},
     upstreams: options.upstreams ?? {},
   } satisfies ResolvedVisageOptions;
 }
@@ -647,6 +651,7 @@ export function resolveConfig(
     idp,
     oauth2: options.oauth2,
     cache: options.cache,
+    volumes: options.volumes,
     files: {
       compose: './compose.yaml',
       dex: ['./dex.yaml', '/etc/dex/dex.yaml'],

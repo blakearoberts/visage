@@ -472,7 +472,8 @@ otel_span_name "$request_method";
     /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
   );
   assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
-  assert.match(nginx, /log_format access_log_format '.*\$auth_user.*';/);
+  assert.match(nginx, /log_format access_log_format escape=json/);
+  assert.ok(nginx.includes('"user.name":"$auth_user"'));
   assert.match(nginx, /map \$request_method \$csrf_method/);
   assert.match(nginx, /GET\s+safe;/);
   assert.match(nginx, /HEAD\s+safe;/);
@@ -1255,6 +1256,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
   assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
+  assert.equal(oauth2Proxy.logging_local_time, false);
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
   assert.equal(oauth2Proxy.login_url, 'https://app.local.test:9443/dex/auth');

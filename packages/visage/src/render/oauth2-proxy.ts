@@ -3,14 +3,11 @@ import { join } from 'node:path';
 
 import type { VisageConfig } from '../config';
 
-const LogTS = '{{slice .Timestamp 11 19}}';
-const LogReqURI =
-  '{{printf "%.*s" (len (slice .RequestURI 2)) (slice .RequestURI 1)}}';
-const LogFormats = {
-  standard_logging_format: `${LogTS} | [{{.File}}] {{.Message}}`,
-  request_logging_format: `${LogTS} | {{.StatusCode}} | {{.Username}} | {{.RequestMethod}} ${LogReqURI}`,
-  auth_logging_format: `${LogTS} | {{.Status}} | {{.Username}} | {{.Message}}`,
-};
+const LogTimestamp =
+  'timestamp="{{slice .Timestamp 0 4}}-{{slice .Timestamp 5 7}}-{{slice .Timestamp 8 10}}T{{slice .Timestamp 11}}Z"';
+const LogRequestFields =
+  'client.address={{printf "%q" .Client}} server.address={{printf "%q" .Host}} network.protocol.version={{printf "%q" (slice .Protocol 5)}} request.id={{printf "%q" .RequestID}} http.request.method={{printf "%q" .RequestMethod}} user_agent.original={{.UserAgent}} user.name={{printf "%q" .Username}}';
+const LogMessage = 'message={{printf "%q" .Message}}';
 
 export function writeOauth2ProxyConfig(config: VisageConfig): void {
   const file = join(config.cache, config.files.oauth2Proxy[0]);
@@ -67,7 +64,10 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     pass_access_token: true,
     skip_provider_button: true,
     approval_prompt: 'auto',
-    ...LogFormats,
+    logging_local_time: false,
+    standard_logging_format: `${LogTimestamp} file={{printf "%q" .File}} ${LogMessage}`,
+    auth_logging_format: `${LogTimestamp} ${LogRequestFields} event.name={{printf "%q" .Status}} ${LogMessage}`,
+    request_logging_format: `${LogTimestamp} ${LogRequestFields} duration={{.RequestDuration}} url.original={{.RequestURI}} http.response.body.size={{.ResponseSize}} http.response.status_code={{.StatusCode}} upstream.address={{printf "%q" .Upstream}}`,
   };
   return `${Object.entries(data)
     .map(([key, value]) => {

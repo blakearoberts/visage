@@ -151,6 +151,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
+    OTEL_SERVICE_NAME: 'nginx',
+    OTEL_SERVICE_NAMESPACE: 'render-test',
     CUSTOM_NGINX_SETTING: 'value',
   });
   assert.deepEqual(compose.services.nginx.secrets, ['VISAGE_EDGE_KEY']);
@@ -218,7 +221,11 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
-  assert.deepEqual(compose.services.nginx.environment, {});
+  assert.deepEqual(compose.services.nginx.environment, {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
+    OTEL_SERVICE_NAME: 'nginx',
+    OTEL_SERVICE_NAMESPACE: 'render-test',
+  });
   assert.equal(compose.services.otelcol, undefined);
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
@@ -238,7 +245,7 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
 });
 
 test('writeComposeConfig preserves service logging overrides', (t) => {
-  for (const telemetry of [undefined, {}]) {
+  for (const telemetry of [undefined, false, true, {}]) {
     const logging = { driver: 'local', options: { 'max-size': '10m' } };
     const config = resolvedConfig(t, {
       telemetry,
@@ -267,6 +274,48 @@ test('writeComposeConfig preserves service logging overrides', (t) => {
       assert.deepEqual(compose.services[name].logging, logging);
     }
     assert.equal(config.upstreams.vite_loopback, undefined);
+  }
+});
+
+test('telemetry booleans enable and disable the Collector, logging, and instrumentation', (t) => {
+  for (const [telemetry, enabled] of [
+    [undefined, false],
+    [false, false],
+    [true, true],
+    [{}, true],
+  ] as const) {
+    const config = resolvedConfig(t, { telemetry });
+    writeComposeConfig(config);
+    writeNginxAssets(config);
+    const compose = parse(readGenerated(config, config.files.compose));
+    assert.deepEqual(
+      config.telemetry,
+      enabled ? { fluentd: '127.0.0.1:24224' } : false,
+    );
+    assert.equal(compose.services.otelcol !== undefined, enabled);
+    for (const name of Object.keys(compose.services)) {
+      assert.equal(
+        compose.services[name].logging?.driver,
+        enabled ? 'fluentd' : undefined,
+      );
+    }
+    const nginx = readGeneratedNginx(config, 'nginx.conf');
+    assert.equal(nginx.includes('ngx_otel_module.so'), enabled);
+  }
+});
+
+test('writeComposeConfig uses the configured Fluent address for logs and port publishing', (t) => {
+  const config = resolvedConfig(t, {
+    telemetry: { fluentd: '127.0.0.1:24225' },
+  });
+  writeComposeConfig(config);
+  const compose = parse(readGenerated(config, config.files.compose));
+  assert.deepEqual(compose.services.otelcol.ports, ['127.0.0.1:24225:24224']);
+  for (const name of Object.keys(compose.services)) {
+    assert.equal(
+      compose.services[name].logging.options['fluentd-address'],
+      '127.0.0.1:24225',
+    );
   }
 });
 
@@ -423,7 +472,8 @@ otel_span_name "$request_method";
     /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
   );
   assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
-  assert.match(nginx, /log_format access_log_format '.*\$auth_user.*';/);
+  assert.match(nginx, /log_format access_log_format escape=json/);
+  assert.ok(nginx.includes('"user.name":"$auth_user"'));
   assert.match(nginx, /map \$request_method \$csrf_method/);
   assert.match(nginx, /GET\s+safe;/);
   assert.match(nginx, /HEAD\s+safe;/);
@@ -1205,7 +1255,8 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
-  assert.equal(oauth2Proxy.metrics_address, undefined);
+  assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
+  assert.equal(oauth2Proxy.logging_local_time, false);
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
   assert.equal(oauth2Proxy.login_url, 'https://app.local.test:9443/dex/auth');

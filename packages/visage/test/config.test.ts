@@ -112,7 +112,9 @@ test('resolveOptions preserves Dex defaults with partial overrides', () => {
 test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   const { config } = resolveForTest(t, { telemetry: {} });
 
-  assert.equal(config.telemetry, true);
+  assert.deepEqual(config.telemetry, {
+    fluentd: '127.0.0.1:24224',
+  });
   for (const name of ['nginx', 'oauth2_proxy', 'dex', 'otelcol']) {
     assert.deepEqual(config.services[name].logging, {
       driver: 'fluentd',
@@ -129,10 +131,7 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   assert.deepEqual(config.services.otelcol.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
   });
-  assert.deepEqual(config.services.nginx.environment, {
-    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
-    OTEL_SERVICE_NAME: 'nginx',
-  });
+  assert.equal(config.services.nginx.environment, undefined);
   assert.equal(config.upstreams.otelcol.host, 'otelcol');
   assert.equal(config.upstreams.otelcol.port, 4318);
   assert.deepEqual(config.upstreams.otelcol.locations['/t/'].auth, {
@@ -183,7 +182,12 @@ test('resolveConfig resolves the complete Vite loopback service', (t) => {
     });
     assert.deepEqual(
       standalone.services.vite_loopback,
-      services ? { restart: 'on-failure', ...service } : undefined,
+      services
+        ? {
+            restart: 'on-failure',
+            ...service,
+          }
+        : undefined,
     );
   }
 });
@@ -709,7 +713,6 @@ test('resolveConfig preserves managed service defaults for partial service overr
   ]);
   assert.deepEqual(config.services.nginx.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
-    OTEL_SERVICE_NAME: 'nginx',
   });
   assert.equal(config.package, 'test-app');
   assert.equal(
@@ -730,7 +733,9 @@ test('resolveConfig preserves managed service defaults for partial service overr
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
   assert.equal(config.services.otelcol.network_mode, undefined);
   assert.equal(config.services.otelcol.depends_on, undefined);
-  assert.equal(config.telemetry, true);
+  assert.deepEqual(config.telemetry, {
+    fluentd: '127.0.0.1:24224',
+  });
 });
 
 test('resolveConfig applies defaults and normalizes upstream locations', (t) => {

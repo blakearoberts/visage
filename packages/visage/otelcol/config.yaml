@@ -1,5 +1,5 @@
 receivers:
-  fluentforward:
+  fluent_forward:
     endpoint: 0.0.0.0:24224
   otlp:
     protocols:
@@ -21,6 +21,48 @@ extensions:
     path: /ready
 
 processors:
+  transform/logs:
+    log_statements:
+      - context: log
+        statements:
+          # Parse structured bodies; leave unparseable text intact.
+          - merge_maps(log.cache, log.body, "upsert") where IsMap(log.body)
+          - merge_maps(log.cache, ParseJSON(log.body), "upsert") where IsString(log.body) and IsMatch(log.body, "^\\s*\\{")
+          - merge_maps(log.cache, ParseKeyValue(log.body), "upsert") where IsString(log.body) and IsMatch(log.body, "^[A-Za-z0-9_.-]+=")
+          - merge_maps(log.attributes, log.cache, "insert")
+
+          # Consume the message and keep the remaining fields as attributes.
+          - set(log.body, "") where Len(log.cache) > 0
+          - set(log.body, log.cache["msg"]) where log.cache["msg"] != nil
+          - set(log.body, log.cache["message"]) where log.cache["message"] != nil
+          - set(log.body, Concat([log.attributes["http.request.method"], Split(log.attributes["url.original"], "?")[0]], " ")) where log.body == "" and log.attributes["http.request.method"] != nil and log.attributes["url.original"] != nil
+          - delete_matching_keys(log.attributes, "^(msg|message)$")
+          - set(log.attributes["http.response.status_code"], Int(log.attributes["http.response.status_code"])) where IsString(log.attributes["http.response.status_code"])
+          - set(log.attributes["http.response.body.size"], Int(log.attributes["http.response.body.size"])) where IsString(log.attributes["http.response.body.size"])
+          - set(log.attributes["duration"], Double(log.attributes["duration"])) where IsString(log.attributes["duration"])
+
+          # Normalize RFC 3339 timestamps.
+          - set(log.cache["timestamp"], log.cache["time"]) where log.cache["timestamp"] == nil and log.cache["time"] != nil
+          - set(log.cache["timestamp"], log.cache["ts"]) where log.cache["timestamp"] == nil and log.cache["ts"] != nil
+          - set(log.cache["timestamp"], log.cache["t"]) where log.cache["timestamp"] == nil and log.cache["t"] != nil
+          - replace_pattern(log.cache["timestamp"], "Z$", "+00:00") where IsString(log.cache["timestamp"])
+          - set(log.time, Time(log.cache["timestamp"], "%Y-%m-%dT%H:%M:%S%j")) where IsString(log.cache["timestamp"])
+
+          # Normalize common severity fields, preserving existing OTLP severity.
+          - set(log.cache["level"], log.cache["severity"]) where log.cache["level"] == nil and log.cache["severity"] != nil
+          - set(log.cache["level"], log.cache["severity_text"]) where log.cache["level"] == nil and log.cache["severity_text"] != nil
+          - set(log.severity_number, SEVERITY_NUMBER_ERROR) where log.severity_number == SEVERITY_NUMBER_UNSPECIFIED and log.cache["level"] == nil and log.attributes["source"] == "stderr" and Len(log.cache) > 0
+          - set(log.severity_number, SEVERITY_NUMBER_INFO) where log.severity_number == SEVERITY_NUMBER_UNSPECIFIED and log.cache["level"] == nil and Len(log.cache) > 0
+          - set(log.severity_text, "INFO") where log.severity_text == "" and log.severity_number == SEVERITY_NUMBER_INFO
+          - set(log.severity_text, "ERROR") where log.severity_text == "" and log.severity_number == SEVERITY_NUMBER_ERROR
+          - set(log.severity_text, ToUpperCase(log.cache["level"])) where IsString(log.cache["level"])
+          - set(log.severity_number, SEVERITY_NUMBER_TRACE) where IsMatch(log.severity_text, "^TRACE$")
+          - set(log.severity_number, SEVERITY_NUMBER_DEBUG) where IsMatch(log.severity_text, "^DEBUG$")
+          - set(log.severity_number, SEVERITY_NUMBER_INFO) where IsMatch(log.severity_text, "^(INFO|NOTICE)$")
+          - set(log.severity_number, SEVERITY_NUMBER_WARN) where IsMatch(log.severity_text, "^(WARN|WARNING)$")
+          - set(log.severity_number, SEVERITY_NUMBER_ERROR) where IsMatch(log.severity_text, "^ERROR$")
+          - set(log.severity_number, SEVERITY_NUMBER_FATAL) where IsMatch(log.severity_text, "^(FATAL|CRITICAL|CRIT|ALERT|EMERG|PANIC)$")
+          - delete_matching_keys(log.attributes, "^(level|severity|severity_text)$")
   transform/redaction:
     trace_statements:
       - context: span
@@ -34,11 +76,13 @@ processors:
           - log.attributes["fluent.tag"] != nil and IsMatch(log.attributes["fluent.tag"], "/nginx[|]")
         statements:
           - 'replace_pattern(log.body, "(?i)\\b(code|state|id_token_hint|hmac|token|error|error_description)=[^&\\s\"<>]*", "$$1=****") where IsString(log.body)'
+          - 'replace_all_patterns(log.attributes, "value", "(?i)\\b(code|state|id_token_hint|hmac|token|error|error_description)=[^&\\s\"<>]*", "$$1=****")'
       - context: log
         conditions:
           - log.attributes["fluent.tag"] != nil and IsMatch(log.attributes["fluent.tag"], "/oauth2_proxy[|]")
         statements:
           - 'replace_pattern(log.body, "(?i)\\b(code|state|error|error_description)=[^&\\s\"<>]*", "$$1=****") where IsString(log.body)'
+          - 'replace_all_patterns(log.attributes, "value", "(?i)\\b(code|state|error|error_description)=[^&\\s\"<>]*", "$$1=****")'
           - 'replace_pattern(log.body, "Error while parsing OAuth2 callback:.*", "Error while parsing OAuth2 callback: ****") where IsString(log.body)'
   transform/container_logs:
     log_statements:
@@ -146,6 +190,9 @@ exporters:
       insecure: true
 
 service:
+  telemetry:
+    logs:
+      encoding: json
   extensions: [health_check]
   pipelines:
     traces:
@@ -158,8 +205,9 @@ service:
       processors: [batch]
       exporters: [otlp_grpc]
     logs:
-      receivers: [otlp, fluentforward]
+      receivers: [otlp, fluent_forward]
       processors:
+        - transform/logs
         - transform/redaction
         - transform/container_logs
         - groupbyattrs/container_logs

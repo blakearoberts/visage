@@ -36,11 +36,10 @@ http {
     resolver 127.0.0.11 ipv6=off;
 
     # Configure access log format.
-    map $time_iso8601 $access_log_time {
-        "~^[0-9]{4}-[0-9]{2}-[0-9]{2}T([0-9]{2}:[0-9]{2}:[0-9]{2})" $1;
-        default $time_iso8601;
-    }
-    log_format access_log_format '$access_log_time | $status | $auth_user | $request_method $request_uri';
+    log_format access_log_format escape=json
+        '{"timestamp":"$time_iso8601","http.response.status_code":$status,'
+        '"user.name":"$auth_user","http.request.method":"$request_method",'
+        '"url.original":"$request_uri"}';
 
     # Allow WebSockets (Vite HMR).
     map $http_upgrade $connection_upgrade {

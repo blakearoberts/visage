@@ -28,11 +28,17 @@ export type VisageOptions = {
    * OAuth2 client settings shared by Dex or an external IdP and OAuth2 Proxy.
    */
   readonly oauth2?: VisageOAuth2Client;
-  /**
-   * Enables collection of container logs, NGINX traces, OAuth2 Proxy metrics,
-   * and OTLP signals sent through the protected `/t/` route.
-   */
-  readonly telemetry?: Readonly<Record<string, never>>;
+  /** @defaultValue `false` */
+  readonly telemetry?:
+    | boolean
+    | {
+        /**
+         * Host IP and port for Docker's Fluentd logging destination and the
+         * Collector's published Fluent Forward port.
+         * @defaultValue `'127.0.0.1:24224'`
+         */
+        readonly fluentd?: string;
+      };
   /**
    * Additional or replacement Docker Compose services managed with the Vite
    * dev-server lifecycle.
@@ -306,6 +312,10 @@ export type VisageService = {
    * Optional command override rendered into the Compose service.
    */
   readonly command?: string | readonly string[];
+  /**
+   * User or UID Docker runs the container as.
+   */
+  readonly user?: string;
   /**
    * Environment variables rendered into the Compose service.
    */

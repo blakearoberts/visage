@@ -331,7 +331,8 @@
                       "renameByName": {
                         "Duration": "",
                         "http.request.method": "Method",
-                        "http.response.status_code": "Status"
+                        "http.response.status_code": "Status",
+                        "url.path": "Path"
                       }
                     }
                   }
@@ -443,7 +444,7 @@
               },
               "options": {
                 "cellHeight": "sm",
-                "enablePagination": true,
+                "enablePagination": false,
                 "showHeader": true,
                 "sortBy": [
                   {

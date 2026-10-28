@@ -45,9 +45,25 @@ export type VisageOptions = {
    */
   readonly services?: Record<string, VisageService>;
   /**
+   * Named volumes rendered into the top-level Docker Compose volumes map.
+   * Mount these by name in a service's volumes list.
+   */
+  readonly volumes?: Record<string, VisageVolume>;
+  /**
    * Upstream targets that NGINX can route to by path.
    */
   readonly upstreams?: Record<string, VisageUpstream>;
+};
+
+/**
+ * Docker Compose named volume declaration. Use an empty object for defaults.
+ */
+export type VisageVolume = {
+  readonly name?: string;
+  readonly external?: boolean;
+  readonly driver?: string;
+  readonly driver_opts?: Readonly<Record<string, string>>;
+  readonly labels?: Readonly<Record<string, string>> | readonly string[];
 };
 
 /**

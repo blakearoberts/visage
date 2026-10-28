@@ -15,6 +15,7 @@ function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = config.services;
 
   return stringify({
+    volumes: config.volumes,
     secrets: {
       [config.secrets.cookieSecret]: {
         environment: config.secrets.cookieSecret,

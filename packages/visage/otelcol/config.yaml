@@ -181,6 +181,7 @@ connectors:
       - name: network.protocol.version
       - name: server.address
       - name: server.port
+      - name: service.peer.name
     exclude_dimensions: [span.name, span.kind, status.code]
 
 exporters:

@@ -123,7 +123,12 @@ http {
         <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
         location <%~ path %> {
             <%_ if (it.telemetry) { %>
+            <%_ if (location.ws) { %>
+            otel_trace off;
+            <%_ } else { %>
             otel_span_name "$request_method <%~ location.target %>";
+            otel_span_attr service.peer.name "<%~ name %>";
+            <%_ } %>
 
             <%_ } %>
 

@@ -49,10 +49,10 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "histogram_quantile(0.5, sum(rate(http_server_request_duration_seconds_bucket[$__rate_interval])) by (le,server_address,server_port))",
+                        "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_peer_name=~\"$service\"}[$__rate_interval])) by (le,service_peer_name))",
                         "format": "time_series",
                         "instant": false,
-                        "legendFormat": "{{server_address}}:{{server_port}}",
+                        "legendFormat": "{{service_peer_name}}",
                         "range": true
                       },
                       "version": "v0"
@@ -68,7 +68,7 @@
           "description": "",
           "id": 22,
           "links": [],
-          "title": "Latency by Server",
+          "title": "Latency by Service (95%)",
           "vizConfig": {
             "group": "heatmap",
             "kind": "VizConfig",
@@ -106,7 +106,7 @@
                 "color": {
                   "exponent": 0.5,
                   "fill": "dark-orange",
-                  "max": 0.3,
+                  "max": 0.5,
                   "min": 0,
                   "mode": "scheme",
                   "reverse": false,
@@ -161,10 +161,10 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum(rate(http_server_request_duration_seconds_count[$__rate_interval])) by (server_address,server_port)",
+                        "expr": "sum(rate(http_server_request_duration_seconds_count{service_peer_name=~\"$service\"}[$__rate_interval])) by (service_peer_name)",
                         "format": "time_series",
                         "instant": false,
-                        "legendFormat": "{{server_address}}:{{server_port}}",
+                        "legendFormat": "{{service_peer_name}}",
                         "range": true
                       },
                       "version": "v0"
@@ -180,7 +180,7 @@
           "description": "",
           "id": 23,
           "links": [],
-          "title": "Throughput by Server",
+          "title": "Throughput by Service",
           "vizConfig": {
             "group": "heatmap",
             "kind": "VizConfig",
@@ -219,7 +219,7 @@
                 "color": {
                   "exponent": 0.5,
                   "fill": "dark-orange",
-                  "max": 100,
+                  "max": 10,
                   "min": 0,
                   "mode": "scheme",
                   "reverse": false,
@@ -284,13 +284,15 @@
                             "operator": "=",
                             "scope": "resource",
                             "tag": "service.name",
-                            "value": ["nginx"],
+                            "value": [
+                              "nginx"
+                            ],
                             "valueType": "string"
                           }
                         ],
                         "limit": 100,
                         "metricsQueryType": "instant",
-                        "query": "{resource.service.name=\"nginx\"} | select(span.http.request.method, span.http.response.status_code, span.url.path)",
+                        "query": "{resource.service.name=\"nginx\" \u0026\u0026 span.service.peer.name=~\"$service\"} | select(span.http.request.method, span.http.response.status_code, span.service.peer.name, span.url.path)",
                         "queryType": "traceql",
                         "serviceMapUseNativeHistograms": false,
                         "tableType": "spans"
@@ -316,22 +318,25 @@
                       },
                       "includeByName": {},
                       "indexByName": {
-                        "Duration": 6,
-                        "Name": 9,
-                        "Span ID": 3,
-                        "Start time": 4,
+                        "Duration": 9,
+                        "Name": 3,
+                        "Span ID": 5,
+                        "Start time": 6,
                         "Trace Name": 2,
                         "Trace Service": 1,
-                        "http.request.method": 7,
-                        "http.response.status_code": 5,
-                        "service.name": 10,
+                        "http.request.method": 10,
+                        "http.response.status_code": 8,
+                        "service.name": 4,
+                        "service.peer.name": 7,
                         "traceIdHidden": 0,
-                        "url.path": 8
+                        "url.path": 11
                       },
+                      "orderByMode": "manual",
                       "renameByName": {
                         "Duration": "",
                         "http.request.method": "Method",
                         "http.response.status_code": "Status",
+                        "service.peer.name": "Service",
                         "url.path": "Path"
                       }
                     }
@@ -439,6 +444,19 @@
                         "value": 85
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Service",
+                      "scope": "series"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 84
+                      }
+                    ]
                   }
                 ]
               },
@@ -446,12 +464,7 @@
                 "cellHeight": "sm",
                 "enablePagination": false,
                 "showHeader": true,
-                "sortBy": [
-                  {
-                    "desc": false,
-                    "displayName": "Name"
-                  }
-                ]
+                "sortBy": []
               }
             },
             "version": "13.2.4"
@@ -528,6 +541,231 @@
                 "timestampResolution": "ms",
                 "unwrappedColumns": true,
                 "wrapLogMessage": false
+              }
+            },
+            "version": "13.2.4"
+          }
+        }
+      },
+      "panel-29": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "sum(increase(http_server_request_duration_seconds_count{service_peer_name=~\"$service\"}[$__rate_interval])) by (http_response_status_code)",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{http_response_status_code}}",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 29,
+          "links": [],
+          "title": "Throughput by Status",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 1,
+                    "drawStyle": "bars",
+                    "fillOpacity": 100,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 0,
+                    "pointSize": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "normal"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "none"
+                }
+              }
+            },
+            "version": "13.2.4"
+          }
+        }
+      },
+      "panel-31": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "prometheus"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "histogram_quantile(0.5, sum(rate(http_server_request_duration_seconds_bucket{service_peer_name=~\"$service\"}[$__rate_interval])) by (le,service_peer_name))",
+                        "format": "time_series",
+                        "instant": false,
+                        "legendFormat": "{{service_peer_name}}",
+                        "range": true
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 31,
+          "links": [],
+          "title": "Latency by Service (50%)",
+          "vizConfig": {
+            "group": "heatmap",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "scaleDistribution": {
+                      "type": "linear"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "calculate": false,
+                "calculation": {
+                  "xBuckets": {
+                    "mode": "size",
+                    "value": ""
+                  },
+                  "yBuckets": {
+                    "value": ""
+                  }
+                },
+                "cellGap": 0,
+                "cellValues": {
+                  "unit": "dtdurations"
+                },
+                "color": {
+                  "exponent": 0.5,
+                  "fill": "dark-orange",
+                  "max": 0.1,
+                  "min": 0,
+                  "mode": "scheme",
+                  "reverse": false,
+                  "scale": "exponential",
+                  "scheme": "Turbo",
+                  "steps": 128
+                },
+                "exemplars": {
+                  "color": "rgba(255,0,255,0.7)"
+                },
+                "filterValues": {
+                  "le": 0
+                },
+                "legend": {
+                  "placement": "bottom",
+                  "show": true
+                },
+                "rowsFrame": {
+                  "layout": "auto"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "yHistogram": false
+                },
+                "yAxis": {
+                  "axisPlacement": "left",
+                  "reverse": false
+                }
               }
             },
             "version": "13.2.4"
@@ -671,7 +909,11 @@
                   "multiLane": false
                 },
                 "legend": {
-                  "calcs": ["median", "max", "last"],
+                  "calcs": [
+                    "median",
+                    "max",
+                    "last"
+                  ],
                   "displayMode": "table",
                   "enableFacetedFilter": true,
                   "placement": "bottom",
@@ -706,7 +948,7 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "editorMode": "builder",
+                        "editorMode": "code",
                         "exemplar": false,
                         "expr": "floor(sum by(le) (increase(oauth2_proxy_response_duration_seconds_bucket[$__range])))",
                         "format": "heatmap",
@@ -764,7 +1006,7 @@
                 "overrides": []
               },
               "options": {
-                "combine": true,
+                "combine": false,
                 "legend": {
                   "calcs": [],
                   "displayMode": "list",
@@ -800,8 +1042,8 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "editorMode": "builder",
-                        "expr": "sum by(code) (rate(oauth2_proxy_requests_total[$__rate_interval])) * 60",
+                        "editorMode": "code",
+                        "expr": "sum by(code) (rate(oauth2_proxy_requests_total[$__rate_interval]))",
                         "legendFormat": "__auto",
                         "range": true
                       },
@@ -835,7 +1077,7 @@
                     "axisLabel": "",
                     "axisPlacement": "auto",
                     "barAlignment": 0,
-                    "barWidthFactor": 0.6,
+                    "barWidthFactor": 1,
                     "drawStyle": "bars",
                     "fillOpacity": 100,
                     "gradientMode": "hue",
@@ -846,12 +1088,12 @@
                     },
                     "insertNulls": false,
                     "lineInterpolation": "linear",
-                    "lineWidth": 1,
+                    "lineWidth": 0,
                     "pointSize": 5,
                     "scaleDistribution": {
                       "type": "linear"
                     },
-                    "showPoints": "auto",
+                    "showPoints": "never",
                     "showValues": false,
                     "spanNulls": false,
                     "stacking": {
@@ -875,7 +1117,7 @@
                       }
                     ]
                   },
-                  "unit": "reqpm"
+                  "unit": "reqps"
                 },
                 "overrides": []
               },
@@ -885,7 +1127,11 @@
                   "multiLane": false
                 },
                 "legend": {
-                  "calcs": ["median", "max", "last"],
+                  "calcs": [
+                    "median",
+                    "max",
+                    "last"
+                  ],
                   "displayMode": "table",
                   "placement": "bottom",
                   "showLegend": true
@@ -1007,16 +1253,25 @@
                 ]
               },
               "options": {
-                "displayLabels": ["percent", "name", "value"],
+                "displayLabels": [
+                  "percent",
+                  "name",
+                  "value"
+                ],
                 "legend": {
                   "displayMode": "table",
                   "placement": "right",
                   "showLegend": true,
-                  "values": ["percent", "value"]
+                  "values": [
+                    "percent",
+                    "value"
+                  ]
                 },
                 "pieType": "pie",
                 "reduceOptions": {
-                  "calcs": ["lastNotNull"],
+                  "calcs": [
+                    "lastNotNull"
+                  ],
                   "fields": "",
                   "values": false
                 },
@@ -1049,9 +1304,9 @@
                       "spec": {
                         "element": {
                           "kind": "ElementReference",
-                          "name": "panel-25"
+                          "name": "panel-31"
                         },
-                        "height": 20,
+                        "height": 10,
                         "width": 12,
                         "x": 0,
                         "y": 0
@@ -1075,12 +1330,38 @@
                       "spec": {
                         "element": {
                           "kind": "ElementReference",
+                          "name": "panel-29"
+                        },
+                        "height": 10,
+                        "width": 12,
+                        "x": 0,
+                        "y": 10
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
                           "name": "panel-23"
                         },
                         "height": 10,
                         "width": 12,
                         "x": 12,
                         "y": 10
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-25"
+                        },
+                        "height": 10,
+                        "width": 24,
+                        "x": 0,
+                        "y": 20
                       }
                     }
                   ]
@@ -1104,7 +1385,7 @@
                           "name": "panel-6"
                         },
                         "height": 10,
-                        "width": 10,
+                        "width": 8,
                         "x": 0,
                         "y": 0
                       }
@@ -1117,8 +1398,8 @@
                           "name": "panel-5"
                         },
                         "height": 10,
-                        "width": 14,
-                        "x": 10,
+                        "width": 16,
+                        "x": 8,
                         "y": 0
                       }
                     },
@@ -1130,7 +1411,7 @@
                           "name": "panel-8"
                         },
                         "height": 10,
-                        "width": 10,
+                        "width": 8,
                         "x": 0,
                         "y": 10
                       }
@@ -1143,8 +1424,8 @@
                           "name": "panel-7"
                         },
                         "height": 10,
-                        "width": 14,
-                        "x": 10,
+                        "width": 16,
+                        "x": 8,
                         "y": 10
                       }
                     },
@@ -1176,7 +1457,11 @@
     "tags": [],
     "timeSettings": {
       "autoRefresh": "auto",
-      "autoRefreshIntervals": ["10s", "1m", "10m"],
+      "autoRefreshIntervals": [
+        "10s",
+        "1m",
+        "10m"
+      ],
       "fiscalYearStartMonth": 0,
       "from": "now-30m",
       "hideTimepicker": false,
@@ -1184,6 +1469,50 @@
       "to": "now"
     },
     "title": "Visage",
-    "variables": []
+    "variables": [
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "allValue": ".*",
+          "allowCustomValue": false,
+          "current": {
+            "text": [
+              "grafana",
+              "otelcol",
+              "vite"
+            ],
+            "value": [
+              "grafana",
+              "otelcol",
+              "vite"
+            ]
+          },
+          "definition": "label_values(http_server_request_calls_total,service_peer_name)",
+          "hide": "dontHide",
+          "includeAll": false,
+          "multi": true,
+          "name": "service",
+          "options": [],
+          "query": {
+            "datasource": {
+              "name": "prometheus"
+            },
+            "group": "prometheus",
+            "kind": "DataQuery",
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(http_server_request_calls_total,service_peer_name)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "version": "v0"
+          },
+          "refresh": "onTimeRangeChanged",
+          "regex": "",
+          "regexApplyTo": "value",
+          "skipUrlSync": false,
+          "sort": "alphabeticalAsc"
+        }
+      }
+    ]
   }
 }

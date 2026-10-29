@@ -40,15 +40,14 @@ export default defineConfig({
           ],
           upstream: {
             port: 3000,
-            headers: {
-              'X-Auth-Request-Email': '$auth_email',
-            },
+            headers: { 'X-Auth-Request-Email': '$auth_email' },
             locations: {
               '/grafana/api/live/': { ws: true },
               '/grafana/': {},
             },
           },
         },
+        whoami: { image: 'traefik/whoami' },
       },
     }),
   ],

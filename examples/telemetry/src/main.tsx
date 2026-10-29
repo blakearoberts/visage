@@ -4,6 +4,7 @@ import { SessionLockProvider } from '@blakearoberts/visage-react';
 
 import { App } from './App';
 import { createConsoleInstrumentation } from './telemetry/instrumentation/console';
+import { createHTTPInstrumentation } from './telemetry/instrumentation/http';
 import { createWebVitalsInstrumentation } from './telemetry/instrumentation/web-vitals';
 import {
   BatchLogRecordProcessor,
@@ -24,6 +25,7 @@ setGlobalLoggerProvider(
   ),
 );
 createConsoleInstrumentation();
+createHTTPInstrumentation();
 createWebVitalsInstrumentation();
 
 createRoot(document.getElementById('root')!).render(

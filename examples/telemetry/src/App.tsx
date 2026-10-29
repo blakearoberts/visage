@@ -1,4 +1,17 @@
+import { useState } from 'react';
+
 export function App() {
+  const [whoami, setWhoami] = useState<string>();
+
+  async function fetchWhoami() {
+    try {
+      const response = await fetch('/whoami/');
+      setWhoami(await response.text());
+    } catch (error) {
+      setWhoami(String(error));
+    }
+  }
+
   function signOut() {
     window.location.assign('/oauth2/sign_out');
   }
@@ -19,7 +32,7 @@ export function App() {
           Sign out
         </button>
       </div>
-      <div style={{ display: 'flex', gap: '2rem' }}>
+      <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center' }}>
         <div>
           Visage dashboard
           <ul>
@@ -49,6 +62,11 @@ export function App() {
           </ul>
         </div>
       </div>
+      <hr />
+      <button onClick={fetchWhoami}>Who am I?</button>
+      {whoami !== undefined && (
+        <pre style={{ overflowX: 'scroll' }}>{whoami}</pre>
+      )}
     </main>
   );
 }

@@ -756,9 +756,9 @@
                   "showLegend": true
                 },
                 "tooltip": {
-                  "hideZeros": false,
+                  "hideZeros": true,
                   "mode": "multi",
-                  "sort": "none"
+                  "sort": "asc"
                 }
               }
             },
@@ -2111,7 +2111,53 @@
                   },
                   "unit": "reqps"
                 },
-                "overrides": []
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "202"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "green",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "302"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "blue",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "401"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "fixedColor": "yellow",
+                          "mode": "fixed"
+                        }
+                      }
+                    ]
+                  }
+                ]
               },
               "options": {
                 "annotations": {

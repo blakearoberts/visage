@@ -4,6 +4,7 @@ import { SessionLockProvider } from '@blakearoberts/visage-react';
 
 import { App } from './App';
 import { createConsoleInstrumentation } from './telemetry/instrumentation/console';
+import { createWebVitalsInstrumentation } from './telemetry/instrumentation/web-vitals';
 import {
   BatchLogRecordProcessor,
   createLoggerProvider,
@@ -13,11 +14,17 @@ import {
 
 setGlobalLoggerProvider(
   createLoggerProvider(
-    { attributes: { 'service.name': 'visage-example-telemetry' } },
+    {
+      attributes: {
+        'service.name': 'browser',
+        'service.namespace': 'visage-example-telemetry',
+      },
+    },
     new BatchLogRecordProcessor(new OTLPHTTPJSONExporter('/t/v1/logs')),
   ),
 );
 createConsoleInstrumentation();
+createWebVitalsInstrumentation();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

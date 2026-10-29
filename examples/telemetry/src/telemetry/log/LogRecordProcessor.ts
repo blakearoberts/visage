@@ -42,6 +42,12 @@ export interface BatchLogRecordProcessorOptions {
    * @defaultValue `512`
    */
   readonly maxExportBatchSize?: number;
+  /**
+   * Flush queued records when the document becomes hidden.
+   *
+   * @defaultValue `true`
+   */
+  readonly flushOnHidden?: boolean;
 }
 
 /**
@@ -56,6 +62,7 @@ export class BatchLogRecordProcessor implements LogRecordProcessor {
   readonly #exportTimeoutMillis: number;
   readonly #maxExportBatchSize: number;
   #flushTask: Promise<boolean> | undefined;
+  readonly #visibilityChangeListener?: () => void;
 
   constructor(
     private readonly exporter: LogRecordExporter,
@@ -71,6 +78,17 @@ export class BatchLogRecordProcessor implements LogRecordProcessor {
       () => void this.#synchronizedFlush(),
       options.scheduledDelayMillis ?? 1000,
     );
+    if (options.flushOnHidden ?? true) {
+      this.#visibilityChangeListener = () => {
+        if (document.visibilityState === 'hidden') {
+          void this.forceFlush();
+        }
+      };
+      document.addEventListener(
+        'visibilitychange',
+        this.#visibilityChangeListener,
+      );
+    }
   }
 
   onEmit(logRecord: ReadWriteLogRecord): void {
@@ -80,6 +98,12 @@ export class BatchLogRecordProcessor implements LogRecordProcessor {
 
   async shutdown(): Promise<void> {
     window.clearInterval(this.#flushInterval);
+    if (this.#visibilityChangeListener) {
+      document.removeEventListener(
+        'visibilitychange',
+        this.#visibilityChangeListener,
+      );
+    }
     await this.forceFlush();
   }
 

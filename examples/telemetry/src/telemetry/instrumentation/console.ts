@@ -18,13 +18,13 @@ export function createConsoleInstrumentation(): Instrumentation {
 
   const restores = (
     [
-      ['debug', 5],
-      ['error', 17],
-      ['info', 9],
-      ['log', 9],
-      ['warn', 13],
+      [5, 'DEBUG', 'debug'],
+      [9, 'INFO', 'info'],
+      [9, 'INFO', 'log'],
+      [13, 'WARN', 'warn'],
+      [17, 'ERROR', 'error'],
     ] as const
-  ).map(([method, severityNumber]) => {
+  ).map(([severityNumber, severityText, method]) => {
     const original = console[method];
     const write = original.bind(console);
     console[method] = (...args) => {
@@ -32,7 +32,7 @@ export function createConsoleInstrumentation(): Instrumentation {
       logger.emit({
         timestamp: performance.timeOrigin + performance.now(),
         severityNumber,
-        severityText: method,
+        severityText,
         eventName: 'browser.console',
         body: toString(args),
         attributes: { 'browser.console.method': method },

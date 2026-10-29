@@ -1,4 +1,5 @@
 import type {
+  Attributes,
   InstrumentationScope,
   ReadWriteLogRecord,
   Resource,
@@ -87,10 +88,13 @@ function toOTLPLogRecord(record: ReadableLogRecord) {
   } as const;
 }
 
-function toAttributes(attributes: Readonly<Record<string, string>>) {
-  return Object.entries(attributes).map(([key, stringValue]) => ({
+function toAttributes(attributes: Attributes) {
+  return Object.entries(attributes).map(([key, value]) => ({
     key,
-    value: { stringValue },
+    value:
+      typeof value === 'number'
+        ? { doubleValue: value }
+        : { stringValue: value },
   }));
 }
 

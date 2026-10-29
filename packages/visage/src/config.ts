@@ -39,6 +39,7 @@ type ResolvedOAuth2Client = {
 };
 
 type ResolvedProxyPolicy = {
+  readonly ws: boolean;
   readonly auth: {
     readonly enabled: boolean;
     readonly forward: false | 'id' | 'access';
@@ -193,6 +194,7 @@ const BaseServiceOTelCollector = {
 } as const satisfies VisageService;
 
 const DefaultProxyPolicy = {
+  ws: false,
   auth: { enabled: true, forward: false },
   csrf: true,
   headers: {
@@ -225,6 +227,7 @@ const BaseUpstreamOauth2Proxy = {
   port: 4180,
   locations: {
     '/oauth2/': {
+      ws: false,
       auth: { enabled: false, forward: false },
       csrf: false,
       headers: {
@@ -235,6 +238,7 @@ const BaseUpstreamOauth2Proxy = {
       directives: { ...DefaultProxyPolicy.directives },
     } satisfies ResolvedProxyPolicy,
     '= /oauth2/auth': {
+      ws: false,
       auth: { enabled: false, forward: false },
       csrf: false,
       headers: {
@@ -249,12 +253,14 @@ const BaseUpstreamOauth2Proxy = {
       },
     } satisfies ResolvedProxyPolicy,
     '= /oauth2/userinfo': {
+      ws: false,
       auth: { enabled: false, forward: false },
       csrf: false,
       headers: {},
       directives: { return: ['404'] },
     } satisfies ResolvedProxyPolicy,
     '/oauth2/sign_out': {
+      ws: false,
       auth: { enabled: true, forward: false },
       csrf: false,
       headers: {
@@ -547,10 +553,11 @@ function resolveUpstreamLocationConfig(
   external: boolean,
 ): ResolvedProxyPolicy {
   const auth = resolveAuthPolicy(location.auth, external && name !== 'vite');
-  const { ws, ...policy } = location;
+  const { ws = false } = location;
   return {
     ...DefaultProxyPolicy,
-    ...policy,
+    ...location,
+    ws,
     auth,
     csrf: location.csrf ?? auth.enabled,
     headers: {
@@ -756,6 +763,7 @@ function resolveIdpConfig({
           `,
           locations: {
             '/dex/': {
+              ws: false,
               auth: { enabled: false, forward: false },
               csrf: false,
               headers: {

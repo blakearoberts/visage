@@ -1,5 +1,6 @@
 .visage
 .vscode
 dist
+examples/telemetry/otel-lgtm/dashboards
 node_modules
 test-results

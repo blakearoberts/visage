@@ -512,6 +512,9 @@ test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) 
     },
   });
 
+  assert.equal(config.upstreams.api.locations['/live/'].ws, true);
+  assert.equal(config.upstreams.api.locations['/plain/'].ws, false);
+  assert.equal(config.upstreams.api.locations['/disabled/'].ws, false);
   assert.equal(
     config.upstreams.api.locations['/live/'].headers.Connection,
     '$connection_upgrade',

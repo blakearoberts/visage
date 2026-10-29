@@ -543,6 +543,12 @@ otel_span_name "$request_method";
   );
 
   const api = locationBlock(nginx, '/api/');
+  assert.match(api, /otel_span_attr service\.peer\.name "api";/);
+  assert.match(locationBlock(nginx, '/'), /otel_trace off;/);
+  assert.match(
+    locationBlock(nginx, '= /oauth2/auth'),
+    /otel_span_attr service\.peer\.name "oauth2_proxy";/,
+  );
   assert.match(
     api,
     /add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest, Origin, Referer" always;/,
@@ -586,6 +592,7 @@ otel_span_name "$request_method";
   assert.match(api, /proxy_pass https:\/\/api;/);
 
   const publicLocation = locationBlock(nginx, '/public/');
+  assert.match(publicLocation, /otel_span_attr service\.peer\.name "api";/);
   assert.doesNotMatch(publicLocation, /csrf_/);
   assert.doesNotMatch(publicLocation, /add_header Vary/);
   assert.doesNotMatch(publicLocation, /auth_request/);
@@ -605,6 +612,8 @@ test('writeNginxAssets omits OpenTelemetry config when telemetry is disabled', (
   assert.doesNotMatch(nginx, /ngx_otel_module/);
   assert.doesNotMatch(nginx, /include \/etc\/nginx\/http\.d\/otel\.conf;/);
   assert.doesNotMatch(nginx, /otel_span_name/);
+  assert.doesNotMatch(nginx, /otel_span_attr/);
+  assert.doesNotMatch(nginx, /otel_trace/);
   assert.match(
     readGeneratedNginx(config, 'templates/otel.conf.template'),
     /otel_trace on;/,
@@ -644,6 +653,7 @@ test('writeNginxAssets redirects only document navigation auth failures', (t) =>
 
 test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) => {
   const config = resolvedConfig(t, {
+    telemetry: {},
     upstreams: {
       api: {
         locations: {
@@ -659,6 +669,8 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   const live = locationBlock(nginx, '/live/');
+  assert.match(live, /otel_trace off;/);
+  assert.doesNotMatch(live, /otel_span_name|otel_span_attr/);
   assert.match(live, /proxy_set_header Connection \$connection_upgrade;/);
   assert.match(live, /proxy_set_header Upgrade \$http_upgrade;/);
   assert.match(live, /proxy_http_version 1\.1;/);
@@ -667,6 +679,8 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
   assert.match(live, /proxy_send_timeout 5s;/);
 
   const plain = locationBlock(nginx, '/plain/');
+  assert.doesNotMatch(plain, /otel_trace off;/);
+  assert.match(plain, /otel_span_name/);
   assert.doesNotMatch(
     plain,
     /proxy_set_header Connection \$connection_upgrade;/,
@@ -677,6 +691,8 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
   assert.match(plain, /proxy_read_timeout 5s;/);
 
   const disabled = locationBlock(nginx, '/disabled/');
+  assert.doesNotMatch(disabled, /otel_trace off;/);
+  assert.match(disabled, /otel_span_name/);
   assert.doesNotMatch(
     disabled,
     /proxy_set_header Connection \$connection_upgrade;/,

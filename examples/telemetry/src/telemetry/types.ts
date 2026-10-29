@@ -3,7 +3,7 @@
  *
  * @see {@link https://opentelemetry.io/docs/specs/otel/common/#attribute-collections | Attribute Collections}
  */
-export type Attributes = Readonly<Record<string, string>>;
+export type Attributes = Readonly<Record<string, string | number>>;
 
 /**
  * A mutable log record processed during emission.

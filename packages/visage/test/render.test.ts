@@ -33,14 +33,11 @@ function resolvedConfig(
       host: 'app.local.test',
       port: 9443,
       ...options,
-      upstreams: {
-        vite: { port: 6173 },
-        ...options.upstreams,
-      },
     }),
     root: 'render-test',
     cache,
     edgeKey,
+    appPort: 6173,
   });
   mkdirSync(config.cache, { recursive: true });
   return config;
@@ -219,6 +216,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     restart: 'on-failure',
     volumes: ['./api.yml:/etc/api/api.yml:ro'],
   });
+  for (const name of Object.keys(compose.services)) {
+    assert.equal(compose.services[name].upstream, undefined);
+  }
   assert.equal(compose.services.otelcol, undefined);
   assert.equal(compose.networks, undefined);
   assert.deepEqual(compose.secrets, {
@@ -294,7 +294,10 @@ test('writeComposeConfig preserves service logging overrides', (t) => {
       assert.deepEqual(config.services[name].logging, logging);
       assert.deepEqual(compose.services[name].logging, logging);
     }
-    assert.equal(config.upstreams.vite_loopback, undefined);
+    assert.equal(
+      Object.hasOwn(config.services.vite_loopback, 'upstream'),
+      false,
+    );
   }
 });
 
@@ -309,10 +312,7 @@ test('telemetry booleans enable and disable the Collector, logging, and instrume
     writeComposeConfig(config);
     writeNginxAssets(config);
     const compose = parse(readGenerated(config, config.files.compose));
-    assert.deepEqual(
-      config.telemetry,
-      enabled ? { fluentd: '127.0.0.1:24224' } : false,
-    );
+    assert.equal(config.telemetry, enabled);
     assert.equal(compose.services.otelcol !== undefined, enabled);
     for (const name of Object.keys(compose.services)) {
       assert.equal(
@@ -422,7 +422,7 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
   const config = resolvedConfig(t, {
     telemetry: {},
     oauth2: { scopes: ['openid', 'email', 'offline_access'] },
-    upstreams: {
+    remotes: {
       api: {
         port: 8080,
         locations: {
@@ -622,7 +622,7 @@ test('writeNginxAssets omits OpenTelemetry config when telemetry is disabled', (
 
 test('writeNginxAssets redirects only document navigation auth failures', (t) => {
   const config = resolvedConfig(t, {
-    upstreams: {
+    remotes: {
       api: {
         locations: {
           '/api/': {},
@@ -654,7 +654,7 @@ test('writeNginxAssets redirects only document navigation auth failures', (t) =>
 test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) => {
   const config = resolvedConfig(t, {
     telemetry: {},
-    upstreams: {
+    remotes: {
       api: {
         locations: {
           '/live/': { ws: true },
@@ -780,7 +780,7 @@ test('writeNginxAssets keeps login endpoints public and protects sign-out', (t) 
 
 test('writeNginxAssets resolves Compose hostnames and keeps IP addresses static', (t) => {
   const config = resolvedConfig(t, {
-    upstreams: {
+    remotes: {
       backend: {
         host: 'backend',
         port: 8080,
@@ -867,14 +867,14 @@ test('writeNginxAssets quotes external IdP sign-out redirects', (t) => {
   );
 });
 
-test('writeNginxAssets preserves browser host for the built-in Vite upstream', (t) => {
+test('writeNginxAssets preserves browser host for the application upstream', (t) => {
   const config = resolvedConfig(t);
 
   writeNginxAssets(config);
 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   const root = locationBlock(nginx, '/');
-  const vite = upstreamBlock(nginx, 'vite');
+  const app = upstreamBlock(nginx, 'app');
 
   assert.match(root, /if \(\$csrf_reject\) {\s+return 403;\s+}/);
   assert.match(root, /proxy_set_header Host \$host;/);
@@ -891,26 +891,18 @@ test('writeNginxAssets preserves browser host for the built-in Vite upstream', (
   assert.match(root, /proxy_http_version 1\.1;/);
   assert.match(root, /proxy_read_timeout 1h;/);
   if (process.platform === 'linux') {
-    assert.match(vite, /server host\.docker\.internal:6173;/);
-    assert.doesNotMatch(vite, /resolve/);
+    assert.match(app, /server host\.docker\.internal:6173;/);
+    assert.doesNotMatch(app, /resolve/);
   } else {
     assert.match(
-      vite,
-      /zone vite 64k;\s+server host\.docker\.internal:6173 resolve;/,
+      app,
+      /zone app 64k;\s+server host\.docker\.internal:6173 resolve;/,
     );
   }
 });
 
 test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
-  const config = resolvedConfig(
-    t,
-    {
-      upstreams: {
-        vite: { port: 6173 },
-      },
-    },
-    'edge-key',
-  );
+  const config = resolvedConfig(t, {}, 'edge-key');
 
   writeNginxAssets(config);
 
@@ -946,7 +938,7 @@ export default function value() {
 
 test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate verification', (t) => {
   const config = resolvedConfig(t, {
-    upstreams: {
+    remotes: {
       api: {
         host: 'api.example.test',
         scheme: 'https',
@@ -975,38 +967,6 @@ test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate
   assert.match(api, /proxy_ssl_verify\s+on;/);
   assert.match(api, /proxy_ssl_verify_depth\s+3;/);
   assert.match(api, /proxy_pass https:\/\/api;/);
-});
-
-test('writeNginxAssets preserves HTTPS for a Vite upstream with an explicit port', (t) => {
-  const config = resolvedConfig(t, {
-    upstreams: {
-      vite: {
-        host: 'app.example.test',
-        scheme: 'https',
-        port: 6174,
-        locations: { '/': { auth: { forward: true } } },
-      },
-    },
-  });
-
-  writeNginxAssets(config);
-
-  const nginx = readGeneratedNginx(config, 'nginx.conf');
-  const root = locationBlock(nginx, '/');
-  assert.match(nginx, /listen 9443 ssl;/);
-  assert.match(
-    upstreamBlock(nginx, 'vite'),
-    /server app\.example\.test:6174 resolve;/,
-  );
-  assert.match(root, /proxy_pass https:\/\/vite;/);
-  assert.match(root, /proxy_ssl_server_name on;/);
-  assert.match(root, /proxy_ssl_name\s+app\.example\.test;/);
-  assert.match(root, /proxy_ssl_verify\s+on;/);
-  assert.match(root, /proxy_set_header Authorization \$authorization;/);
-  assert.equal(
-    config.services.vite_loopback.command,
-    'tcp-listen:6174,fork,bind=host.docker.internal tcp-connect:127.0.0.1:6174',
-  );
 });
 
 test('writeNginxAssets does not verify local HTTPS service upstreams by default', (t) => {
@@ -1043,7 +1003,7 @@ test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t
         },
       },
     },
-    upstreams: {
+    remotes: {
       external: {
         locations: { '/external/': { auth: { forward: true } } },
       },
@@ -1071,7 +1031,7 @@ test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t
 
 test('writeNginxAssets supports explicit access-token forwarding', (t) => {
   const config = resolvedConfig(t, {
-    upstreams: {
+    remotes: {
       api: {
         port: 8080,
         locations: {
@@ -1283,6 +1243,27 @@ test('writeDexConfig renders configured expiry, sessions, and users', (t) => {
   );
 });
 
+test('OAuth2 Proxy retains its required upstream when false is configured', (t) => {
+  const config = resolvedConfig(t, {
+    services: { oauth2_proxy: { upstream: false } },
+  });
+  writeOauth2ProxyConfig(config);
+  writeNginxAssets(config);
+  const proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.equal(proxy.http_address, '127.0.0.1:4180');
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  assert.match(
+    locationBlock(nginx, '= /oauth2/auth'),
+    /proxy_pass http:\/\/oauth2_proxy;/,
+  );
+  assert.match(
+    locationBlock(nginx, '/oauth2/sign_out'),
+    /post_logout_redirect_uri=/,
+  );
+});
+
 test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret', (t) => {
   const config = resolvedConfig(t);
 
@@ -1462,4 +1443,24 @@ test('writeOauth2ProxyConfig renders configured cookie policy', (t) => {
   assert.equal(oauth2Proxy.cookie_samesite, 'lax');
   assert.deepEqual(oauth2Proxy.cookie_domains, ['.local.test']);
   assert.equal(oauth2Proxy.cookie_path, '/app/');
+});
+
+test('OAuth renderers share the resolved callback URL', (t) => {
+  const config = resolvedConfig(t);
+  const callback = 'https://auth.local.test:8443/oauth2/callback';
+  const resolved = {
+    ...config,
+    app: {
+      ...config.app,
+      client: { ...config.app.client, redirectUri: callback },
+    },
+  };
+  writeDexConfig(resolved);
+  writeOauth2ProxyConfig(resolved);
+  const dex = parse(readGenerated(config, config.files.dex[0]));
+  const proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.deepEqual(dex.staticClients[0].redirectURIs, [callback]);
+  assert.equal(proxy.redirect_url, callback);
 });

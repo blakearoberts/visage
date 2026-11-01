@@ -65,19 +65,14 @@ export function visage(options: VisageOptions = {}): Plugin {
         }
 
         const config = resolveConfig({
-          ...resolveOptions({
-            ...options,
-            upstreams: {
-              ...options.upstreams,
-              vite: { port: address.port, ...options.upstreams?.vite },
-            },
-          }),
+          ...resolvedOptions,
+          appPort: address.port,
           root: vite.config.root,
           cache: join(vite.config.cacheDir, 'visage'),
           edgeKey,
         });
         vite.resolvedUrls = {
-          local: [`https://${config.host}:${config.port}/`],
+          local: [`https://${config.app.host}:${config.app.port}/`],
           network: [],
         };
 

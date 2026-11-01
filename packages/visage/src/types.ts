@@ -50,9 +50,10 @@ export type VisageOptions = {
    */
   readonly volumes?: Record<string, VisageVolume>;
   /**
-   * Upstream targets that NGINX can route to by path.
+   * Remotes are proxy targets whose processes Visage does not manage. Remote
+   * and service names must be distinct.
    */
-  readonly upstreams?: Record<string, VisageUpstream>;
+  readonly remotes?: Record<string, VisageUpstream>;
 };
 
 /**
@@ -379,15 +380,16 @@ export type VisageService = {
   readonly volumes?: readonly string[];
   /**
    * Optional upstream override for this service. Omit this to create a default
-   * upstream from the service name.
+   * upstream from the service name. Set to false to disable automatic upstream
+   * creation.
    */
-  readonly upstream?: VisageUpstream;
+  readonly upstream?: VisageUpstream | false;
 };
 
 /**
  * Named proxy target that NGINX routes to for one or more locations.
  */
-export type VisageUpstream = {
+export type VisageUpstream = VisageProxyPolicy & {
   /**
    * Hostname or Compose service name NGINX should proxy to.
    *
@@ -397,7 +399,7 @@ export type VisageUpstream = {
   /**
    * URL scheme NGINX should use when proxying to this upstream.
    *
-   * @defaultValue `'https'` for external upstreams; `'http'` otherwise.
+   * @defaultValue `'https'` for remotes; `'http'` for services.
    */
   readonly scheme?: 'http' | 'https';
   /**
@@ -407,20 +409,17 @@ export type VisageUpstream = {
    */
   readonly port?: number;
   /**
-   * Request headers to apply to every location for this upstream. Per-location
-   * headers override matching values from this map.
-   */
-  readonly headers?: { readonly [key: string]: string };
-  /**
    * Path-location policies for this upstream, keyed by NGINX location path.
    *
    * @defaultValue `/{upstreamName}/`
    */
   readonly locations?: { readonly [path: string]: VisageProxyPolicy };
+  /** Additional raw NGINX http context. */
+  readonly http?: string;
 };
 
 /**
- * Per-location NGINX authentication and header forwarding policy.
+ * NGINX proxy policy for configuring an upstream or upstream location.
  */
 export type VisageProxyPolicy = {
   /**
@@ -437,7 +436,7 @@ export type VisageProxyPolicy = {
      * Token forwarding behavior for the upstream `Authorization` header. Set
      * to `false` to omit a bearer token. Set to `true` to forward the
      * default bearer token for the upstream kind: an OAuth access token for
-     * external upstreams, or an OIDC ID token for local service upstreams.
+     * remotes, or an OIDC ID token for services.
      *
      * Use `'id'` or `'access'` to force a specific token kind.
      *
@@ -468,8 +467,8 @@ export type VisageProxyPolicy = {
    * Request headers to set when proxying to the upstream. Values may include
    * NGINX variables. These are merged with Visage's default proxy headers:
    * `Cookie`, `Host`, `X-Real-IP`, `X-Forwarded-For`, and
-   * `X-Forwarded-Proto`. `Host` defaults to the upstream host for top-level
-   * upstreams with no matching service, and to `$host` otherwise.
+   * `X-Forwarded-Proto`. `Host` defaults to the upstream host for remotes,
+   * and to `$host` for services.
    */
   readonly headers?: { readonly [key: string]: string };
   /**

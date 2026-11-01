@@ -71,14 +71,14 @@ visage({
 });
 ```
 
-### Upstreams
+### Remotes
 
-Upstreams are proxy targets that Visage routes to. A top-level upstream with no
-matching service entry is treated as an external upstream.
+Remotes are proxy targets whose processes Visage does not manage. Remote and
+service names must be distinct.
 
 ```ts
 visage({
-  upstreams: {
+  remotes: {
     api: { host: 'api.local.test', locations: { '/api/': {} } },
   },
 });
@@ -153,6 +153,7 @@ and other click-jacking controls remain application policy.
 - [ ] Support [runtime config reloads](docs/config-reload.md).
 - [ ] Support [Dex connectors](https://dexidp.io/docs/connectors/).
 - [ ] Support Dex on a distinct subdomain, such as `auth.localhost`.
-- [ ] Support [HTTP mode without local TLS](docs/tls-http-mode.md).
-- [ ] Support delegated, audience-restricted authorization between services,
-      with RFC 8693 token exchange implementing the delegation.
+- [ ] Support [Local HTTP Mode](docs/local-http-mode.md).
+- [ ] Support subject-token exchange with client attribution and audience trust
+      (RFC 8693 without actor-based delegation) using Dex as the default
+      authorization server acting as an STS.

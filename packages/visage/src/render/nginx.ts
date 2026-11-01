@@ -92,7 +92,7 @@ http {
         ~^(GET|HEAD):navigate:document$ @auth_redirect;
     }
 
-    <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
+    <%_ for (const [name, upstream] of it.upstreams) { %>
     <%_ if (upstream.http) { %>
     <%~ it.indentHttp(upstream.http).trimStart() %>
     <%_ } %>
@@ -119,7 +119,7 @@ http {
         # Redirect HTTP to HTTPS.
         error_page 497 =301 https://$http_host$request_uri;
 
-        <%_ for (const [name, upstream] of Object.entries(it.upstreams)) { %>
+        <%_ for (const [name, upstream] of it.upstreams) { %>
         <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
         location <%~ path %> {
             <%_ if (it.telemetry) { %>
@@ -245,17 +245,17 @@ function indentHttp(http: string): string {
 }
 
 function renderNginxConfig(config: VisageConfig): string {
-  const origin = `https://${config.host}:${config.port}`;
+  const origin = `https://${config.app.host}:${config.app.port}`;
   const referer = `~^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([/?#]|$)`;
   const data = {
     indentHttp,
-    host: config.host,
-    port: config.port,
+    host: config.app.host,
+    port: config.app.port,
     telemetry: config.telemetry,
     modules: config.nginx.modules,
-    email: config.oauth2.scopes.includes('email'),
+    email: config.app.client.scopes.includes('email'),
     cookie_name: JSON.stringify(
-      config.cookie.cookie_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      config.app.cookie.cookie_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
     ).slice(1, -1),
     csrf: { origin, referer },
     ssl: {
@@ -263,27 +263,32 @@ function renderNginxConfig(config: VisageConfig): string {
       key: join(config.nginx.mount[1], 'certs', 'tls.key'),
     },
     edgeKeyScript: join(config.nginx.mount[1], 'edge-key.js'),
-    upstreams: Object.fromEntries(
-      Object.entries(config.upstreams).map(([name, upstream]) => [
-        name,
-        {
-          ...upstream,
-          locations: Object.fromEntries(
-            Object.entries(upstream.locations).map(([path, location]) => [
-              path,
-              {
-                ...location,
-                target: path.replace(/^(?:\^~|~\*|[=~])\s*/, ''),
-              },
-            ]),
-          ),
-          resolve:
-            upstream.host === 'host.docker.internal'
-              ? process.platform !== 'linux'
-              : isIP(upstream.host) === 0,
-        },
-      ]),
-    ),
+    upstreams: [
+      ['app', config.app.upstream] as const,
+      ...Object.entries(config.services).flatMap(([name, { upstream }]) => {
+        if (upstream === undefined) return [];
+        return [[name, upstream] as const];
+      }),
+      ...Object.entries(config.remotes),
+    ].map(([name, upstream]) => [
+      name,
+      {
+        ...upstream,
+        locations: Object.fromEntries(
+          Object.entries(upstream.locations).map(([path, location]) => [
+            path,
+            {
+              ...location,
+              target: path.replace(/^(?:\^~|~\*|[=~])\s*/, ''),
+            },
+          ]),
+        ),
+        resolve:
+          upstream.host === 'host.docker.internal'
+            ? process.platform !== 'linux'
+            : isIP(upstream.host) === 0,
+      },
+    ]),
   };
   return new Eta({ autoTrim: false }).renderString(template, data);
 }

@@ -95,23 +95,23 @@ visage({
 });
 ```
 
-### Upstreams
+### Remotes
 
-Upstreams are proxy targets that Visage routes to. A top-level upstream with no
-matching service entry is treated as an external upstream.
+Remotes are proxy targets whose processes Visage does not manage. Remote and
+service names must be distinct.
 
 ```ts
 visage({
-  upstreams: {
+  remotes: {
     api: { host: 'api.local.test', locations: { '/api/': {} } },
   },
 });
 ```
 
-Authenticated upstream locations do not forward bearer tokens by default. Set
+Service and remote locations do not forward bearer tokens by default. Set
 `auth.forward` to `true` to forward the default bearer token for the upstream
-kind: external upstreams receive the OAuth access token, while local service
-upstreams receive the OIDC ID token.
+kind: remotes receive the OAuth access token, while services receive the OIDC ID
+token. The application does not forward a bearer token.
 
 Hosted backend APIs that validate bearer auth should generally receive the
 access token, provided the token is issued for that API's issuer, audience, and
@@ -119,7 +119,7 @@ scopes. Use `'access'` or `'id'` when you need to force a specific token kind.
 
 ```ts
 visage({
-  upstreams: {
+  remotes: {
     api: {
       locations: {
         '/api/': { auth: { forward: true } },
@@ -142,7 +142,7 @@ that needs them:
 
 ```ts
 visage({
-  upstreams: {
+  remotes: {
     api: {
       locations: {
         '/api/': {

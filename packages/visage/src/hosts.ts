@@ -1,11 +1,14 @@
 import { spawnSync } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 import { appendFileSync, readFileSync } from 'node:fs';
 
 import type { VisageConfig } from './config';
 
 const HOSTS_FILE = '/etc/hosts';
 
-export function ensureHostEntry({ host }: VisageConfig): void {
+export async function ensureHostEntry({
+  app: { host },
+}: VisageConfig): Promise<void> {
   if (
     !host ||
     host.trim() !== host ||
@@ -24,16 +27,21 @@ export function ensureHostEntry({ host }: VisageConfig): void {
     }
 
     const [address, ...names] = uncommented.split(/\s+/);
-    if (!names.includes(host)) {
+    if (!names.includes(host) || address.includes(':')) {
       continue;
     }
 
-    if (address === '127.0.0.1' || address === '::1') {
+    if (address === '127.0.0.1') {
       // Already configured to loopback, nothing to do.
       return;
     }
 
     throw new Error('Hosts file contains a conflicting entry');
+  }
+
+  const resolved = await lookup(host, { family: 4 }).catch(() => undefined);
+  if (resolved?.address === '127.0.0.1') {
+    return;
   }
 
   const prefix = contents.endsWith('\n') ? '' : '\n';

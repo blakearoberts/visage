@@ -92,14 +92,14 @@ http {
         ~^(GET|HEAD):navigate:document$ @auth_redirect;
     }
 
-    <%_ for (const [name, upstream] of it.upstreams) { %>
+    <%_ for (const upstream of it.upstreams) { %>
     <%_ if (upstream.http) { %>
     <%~ it.indentHttp(upstream.http).trimStart() %>
     <%_ } %>
 
-    upstream <%~ name %> {
+    upstream <%~ upstream.name %> {
         <%_ if (upstream.resolve) { %>
-        zone <%~ name %> 64k;
+        zone <%~ upstream.name %> 64k;
         server <%~ upstream.host %>:<%~ upstream.port %> resolve;
         <%_ } else { %>
         server <%~ upstream.host %>:<%~ upstream.port %>;
@@ -107,27 +107,27 @@ http {
     }
     <%_ } %>
 
+    <%_ for (const server of it.servers) { %>
     server {
-        listen <%~ it.port %> ssl;
-        server_name <%~ it.host %>;
+        listen <%~ server.port %> ssl;
+        server_name <%~ server.host %>;
 
-        ssl_certificate     <%~ it.ssl.cert %>;
-        ssl_certificate_key <%~ it.ssl.key %>;
+        ssl_certificate     <%~ server.ssl.cert %>;
+        ssl_certificate_key <%~ server.ssl.key %>;
 
         access_log /var/log/nginx/access.log access_log_format;
 
         # Redirect HTTP to HTTPS.
         error_page 497 =301 https://$http_host$request_uri;
 
-        <%_ for (const [name, upstream] of it.upstreams) { %>
-        <%_ for (const [path, location] of Object.entries(upstream.locations)) { %>
-        location <%~ path %> {
+        <%_ for (const location of server.locations) { %>
+        location <%~ location.path %> {
             <%_ if (it.telemetry) { %>
             <%_ if (location.ws) { %>
             otel_trace off;
             <%_ } else { %>
             otel_span_name "$request_method <%~ location.target %>";
-            otel_span_attr service.peer.name "<%~ name %>";
+            otel_span_attr service.peer.name "<%~ location.upstream %>";
             <%_ } %>
 
             <%_ } %>
@@ -161,20 +161,17 @@ http {
             <%~ directive %><%~ value === '' ? '' : ' ' + value %>;
                 <%_ } %>
             <%_ } %>
-            <%_ if (upstream.scheme === 'https') { %>
+            <%_ if (location.ssl) { %>
             proxy_ssl_server_name on;
-            proxy_ssl_name        <%~ upstream.host %>;
-            <%_ if (upstream.external) { %>
+            proxy_ssl_name        <%~ location.ssl.name %>;
             proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
             proxy_ssl_verify              on;
             proxy_ssl_verify_depth        3;
             <%_ } %>
-            <%_ } %>
-            proxy_pass <%~ upstream.scheme %>://<%~ name %>;
+            proxy_pass <%~ location.proxyPass %>;
         }
         <%_ } %>
 
-        <%_ } %>
         location @auth_redirect {
             <%_ if (it.telemetry) { %>
             otel_span_name "$request_method @auth_redirect";
@@ -190,6 +187,7 @@ http {
             return 401;
         }
     }
+    <%_ } %>
 }
 `;
 
@@ -244,13 +242,19 @@ function indentHttp(http: string): string {
     .replace(/^\n+|\n+$/g, '');
 }
 
-function renderNginxConfig(config: VisageConfig): string {
+function resolveNginxConfig(config: VisageConfig) {
   const origin = `https://${config.app.host}:${config.app.port}`;
   const referer = `~^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([/?#]|$)`;
-  const data = {
+  const upstreams = [
+    ['app', config.app.upstream] as const,
+    ...Object.entries(config.services).flatMap(([name, { upstream }]) => {
+      if (upstream === undefined) return [];
+      return [[name, upstream] as const];
+    }),
+    ...Object.entries(config.remotes),
+  ];
+  return {
     indentHttp,
-    host: config.app.host,
-    port: config.app.port,
     telemetry: config.telemetry,
     modules: config.nginx.modules,
     email: config.app.client.scopes.includes('email'),
@@ -258,37 +262,43 @@ function renderNginxConfig(config: VisageConfig): string {
       config.app.cookie.cookie_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
     ).slice(1, -1),
     csrf: { origin, referer },
-    ssl: {
-      cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),
-      key: join(config.nginx.mount[1], 'certs', 'tls.key'),
-    },
     edgeKeyScript: join(config.nginx.mount[1], 'edge-key.js'),
-    upstreams: [
-      ['app', config.app.upstream] as const,
-      ...Object.entries(config.services).flatMap(([name, { upstream }]) => {
-        if (upstream === undefined) return [];
-        return [[name, upstream] as const];
-      }),
-      ...Object.entries(config.remotes),
-    ].map(([name, upstream]) => [
+    upstreams: upstreams.map(([name, upstream]) => ({
       name,
+      host: upstream.host,
+      port: upstream.port,
+      http: upstream.http,
+      resolve:
+        upstream.host === 'host.docker.internal'
+          ? process.platform !== 'linux'
+          : isIP(upstream.host) === 0,
+    })),
+    servers: [
       {
-        ...upstream,
-        locations: Object.fromEntries(
-          Object.entries(upstream.locations).map(([path, location]) => [
+        host: config.app.host,
+        port: config.app.port,
+        ssl: {
+          cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),
+          key: join(config.nginx.mount[1], 'certs', 'tls.key'),
+        },
+        locations: upstreams.flatMap(([name, upstream]) =>
+          Object.entries(upstream.locations).map(([path, location]) => ({
+            ...location,
             path,
-            {
-              ...location,
-              target: path.replace(/^(?:\^~|~\*|[=~])\s*/, ''),
-            },
-          ]),
+            target: path.replace(/^(?:\^~|~\*|[=~])\s*/, ''),
+            upstream: name,
+            proxyPass: `${upstream.scheme}://${name}`,
+            ssl: upstream.scheme === 'https' ? { name: upstream.host } : false,
+          })),
         ),
-        resolve:
-          upstream.host === 'host.docker.internal'
-            ? process.platform !== 'linux'
-            : isIP(upstream.host) === 0,
       },
-    ]),
+    ],
   };
-  return new Eta({ autoTrim: false }).renderString(template, data);
+}
+
+function renderNginxConfig(config: VisageConfig): string {
+  return new Eta({ autoTrim: false }).renderString(
+    template,
+    resolveNginxConfig(config),
+  );
 }

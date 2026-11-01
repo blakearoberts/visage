@@ -86,7 +86,6 @@ type ResolvedProxyPolicy = {
 };
 
 type ResolvedUpstream = {
-  readonly external: boolean;
   readonly scheme: 'http' | 'https';
   readonly host: string;
   readonly port: number;
@@ -619,7 +618,6 @@ function resolveUpstreamConfig(
   const host = upstream.host ?? name;
   return {
     ...upstream,
-    external,
     scheme,
     host,
     port: upstream.port ?? (scheme === 'https' ? 443 : 80),

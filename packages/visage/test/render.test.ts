@@ -969,30 +969,6 @@ test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate
   assert.match(api, /proxy_pass https:\/\/api;/);
 });
 
-test('writeNginxAssets does not verify local HTTPS service upstreams by default', (t) => {
-  const config = resolvedConfig(t, {
-    services: {
-      secure: {
-        image: 'example/secure:test',
-        upstream: {
-          scheme: 'https',
-        },
-      },
-    },
-  });
-
-  writeNginxAssets(config);
-
-  const nginx = readGeneratedNginx(config, 'nginx.conf');
-  const secure = locationBlock(nginx, '/secure/');
-  assert.match(secure, /proxy_ssl_server_name on;/);
-  assert.match(secure, /proxy_ssl_name\s+secure;/);
-  assert.doesNotMatch(secure, /proxy_ssl_trusted_certificate/);
-  assert.doesNotMatch(secure, /proxy_ssl_verify\s+on;/);
-  assert.doesNotMatch(secure, /proxy_ssl_verify_depth/);
-  assert.match(secure, /proxy_pass https:\/\/secure;/);
-});
-
 test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t) => {
   const config = resolvedConfig(t, {
     services: {

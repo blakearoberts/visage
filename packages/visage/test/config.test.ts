@@ -39,6 +39,61 @@ function resolveForTest(
   };
 }
 
+test('resolveConfig isolates services and adds explicit shared networks', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: { users: [] },
+    telemetry: {},
+    services: {
+      nginx: { networks: ['edge'] },
+      otelcol: {
+        networks: ['grafana'],
+        environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
+      },
+      grafana: { image: 'example/grafana' },
+      api: { image: 'example/api', networks: ['backend', 'backend'] },
+      db: { image: 'example/db', networks: ['backend'], upstream: false },
+      isolated: { image: 'example/isolated' },
+    },
+  });
+
+  assert.deepEqual(config.services.api.networks, ['api', 'backend']);
+  assert.deepEqual(config.services.db.networks, ['db', 'backend']);
+  assert.deepEqual(config.services.isolated.networks, ['isolated']);
+  assert.deepEqual(config.services.otelcol.networks, ['otelcol', 'grafana']);
+  assert.deepEqual(config.services.grafana.networks, ['grafana']);
+  assert.deepEqual(config.services.nginx.networks, ['nginx', 'edge']);
+});
+
+test('resolveConfig preserves network modes without network memberships', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: { users: [] },
+    services: {
+      offline: {
+        image: 'example/offline',
+        network_mode: 'none',
+        networks: ['backend'],
+        upstream: false,
+      },
+      sidecar: {
+        image: 'example/sidecar',
+        network_mode: 'service:nginx',
+        upstream: false,
+      },
+    },
+  });
+
+  for (const [name, mode] of Object.entries({
+    offline: 'none',
+    sidecar: 'service:nginx',
+    dex: 'service:nginx',
+    oauth2_proxy: 'service:nginx',
+    vite_loopback: 'host',
+  })) {
+    assert.equal(config.services[name].networks, undefined);
+    assert.equal(config.services[name].network_mode, mode);
+  }
+});
+
 test('resolveOptions applies public defaults', () => {
   const options = resolveOptions({});
 
@@ -433,6 +488,7 @@ test('resolveConfig derives upstreams from services', (t) => {
   assert.deepEqual(apiService, {
     image: 'example/api:test',
     restart: 'on-failure',
+    networks: ['api'],
   });
   assert.equal(apiUpstream.host, 'api.local.test');
   assert.equal(apiUpstream.scheme, 'http');
@@ -1132,6 +1188,7 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
 
   assert.deepEqual(config.services.nginx, {
     image: 'custom-nginx:test',
+    networks: ['nginx'],
     depends_on: ['api'],
     environment: {
       OTEL_SERVICE_NAME: 'custom-nginx',
@@ -1146,6 +1203,7 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
     image: 'example/api:test',
     command: ['serve'],
     restart: 'on-failure',
+    networks: ['api'],
   });
   assert.equal(apiUpstream.host, 'backend');
   assert.deepEqual(Object.keys(apiUpstream.locations), ['/api/']);

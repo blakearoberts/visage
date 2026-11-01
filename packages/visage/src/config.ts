@@ -586,29 +586,34 @@ function resolveServicesConfig(
     },
   };
   return Object.fromEntries(
-    Object.entries(serviceOptions).map(([name, { upstream, ...service }]) => [
-      name,
-      {
-        restart: 'on-failure',
-        ...(telemetry && telemetry.fluentd !== undefined
-          ? {
-              logging: {
-                driver: 'fluentd',
-                options: {
-                  'fluentd-address': telemetry.fluentd,
-                  'fluentd-async': 'true',
-                  'cache-disabled': 'true',
-                  tag: `${packageName}/${name}|{{.ImageName}}`,
+    Object.entries(serviceOptions).map(
+      ([name, { upstream, networks, ...service }]) => [
+        name,
+        {
+          restart: 'on-failure',
+          ...(telemetry && telemetry.fluentd !== undefined
+            ? {
+                logging: {
+                  driver: 'fluentd',
+                  options: {
+                    'fluentd-address': telemetry.fluentd,
+                    'fluentd-async': 'true',
+                    'cache-disabled': 'true',
+                    tag: `${packageName}/${name}|{{.ImageName}}`,
+                  },
                 },
-              },
-            }
-          : {}),
-        ...service,
-        ...(upstream === false
-          ? {}
-          : { upstream: resolveUpstreamConfig(name, upstream ?? {}, false) }),
-      } satisfies ResolvedService,
-    ]),
+              }
+            : {}),
+          ...service,
+          ...(service.network_mode === undefined
+            ? { networks: [...new Set([name, ...(networks ?? [])])] }
+            : {}),
+          ...(upstream === false
+            ? {}
+            : { upstream: resolveUpstreamConfig(name, upstream ?? {}, false) }),
+        } satisfies ResolvedService,
+      ],
+    ),
   );
 }
 

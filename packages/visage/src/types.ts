@@ -359,6 +359,12 @@ export type VisageService = {
    */
   readonly network_mode?: string;
   /**
+   * Additional shared Docker networks. A service gets its own private network
+   * shared with NGINX by default. Configured networks are ignored when
+   * `network_mode` is set.
+   */
+  readonly networks?: readonly string[];
+  /**
    * Published ports in Compose short syntax.
    */
   readonly ports?: readonly string[];

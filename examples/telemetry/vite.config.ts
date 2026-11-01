@@ -14,6 +14,7 @@ export default defineConfig({
       services: {
         dex: { host: 'idp.localhost' },
         otelcol: {
+          networks: ['grafana'],
           environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
         },
         grafana: {

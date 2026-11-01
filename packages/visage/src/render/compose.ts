@@ -20,6 +20,11 @@ function renderComposeConfig(config: VisageConfig): string {
   );
 
   return stringify({
+    networks: Object.fromEntries(
+      Object.values(config.services).flatMap((service) =>
+        (service.networks ?? []).map((name) => [name, {}]),
+      ),
+    ),
     volumes: config.volumes,
     secrets: {
       [config.secrets.cookieSecret]: {
@@ -53,6 +58,18 @@ function renderComposeConfig(config: VisageConfig): string {
         : {}),
       nginx: {
         ...nginx,
+        networks: [
+          ...new Set([
+            ...(nginx.networks ?? []),
+            ...Object.entries(config.services)
+              .filter(
+                ([, service]) =>
+                  service.network_mode === undefined &&
+                  service.upstream !== undefined,
+              )
+              .map(([name]) => name),
+          ]),
+        ],
         environment: {
           OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
           OTEL_SERVICE_NAME: 'nginx',

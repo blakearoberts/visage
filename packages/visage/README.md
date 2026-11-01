@@ -86,8 +86,8 @@ visage({ host: 'localhost', port: 9001 });
 ### Services
 
 Services are Docker Compose services managed by the Vite dev-server lifecycle.
-Additional services automatically get a matching managed upstream with the same
-name, host, and default `/{name}/` location.
+Additional services automatically configure an upstream with the same name,
+host, and `/{name}/` location.
 
 ```ts
 visage({
@@ -95,15 +95,30 @@ visage({
 });
 ```
 
+#### Service Networks
+
+Each service joins its own private Docker network. NGINX joins the private
+networks of services with upstreams. To allow direct service-to-service
+connections, add the same network name to each service's `networks` list.
+
+```ts
+visage({
+  services: {
+    api: { image: 'example/api' },
+    res: { image: 'mysql', upstream: false, networks: ['api'] },
+  },
+});
+```
+
 ### Remotes
 
-Remotes are proxy targets whose processes Visage does not manage. Remote and
-service names must be distinct.
+Remotes are upstreams without a Visage managed Docker container process. Remotes
+automatically configure an upstream with the same host and `/{name}/` location.
 
 ```ts
 visage({
   remotes: {
-    api: { host: 'api.local.test', locations: { '/api/': {} } },
+    api: { host: 'api.remote.test' },
   },
 });
 ```
@@ -111,7 +126,7 @@ visage({
 Service and remote locations do not forward bearer tokens by default. Set
 `auth.forward` to `true` to forward the default bearer token for the upstream
 kind: remotes receive the OAuth access token, while services receive the OIDC ID
-token. The application does not forward a bearer token.
+token.
 
 Hosted backend APIs that validate bearer auth should generally receive the
 access token, provided the token is issued for that API's issuer, audience, and
@@ -121,24 +136,18 @@ scopes. Use `'access'` or `'id'` when you need to force a specific token kind.
 visage({
   remotes: {
     api: {
+      host: 'api.remote.test',
       locations: {
-        '/api/': { auth: { forward: true } },
+        '/api/v1': { auth: { forward: true } },
       },
     },
   },
 });
 ```
 
-OAuth2 Proxy returns the canonical authenticated principal in
-`X-Auth-Request-User`. Visage captures it as `$auth_user` and forwards it to the
-Vite app. When `oauth2.scopes` includes `email`, Visage also captures
-`X-Auth-Request-Email` as `$auth_email` and forwards it to the Vite app. Without
-the `email` scope, `$auth_email` is empty and NGINX omits the header.
-
 OAuth2 Proxy can also return `X-Auth-Request-Groups` and
 `X-Auth-Request-Preferred-Username`, but Visage does not capture or forward them
-automatically. Capture and forward optional identity values on each location
-that needs them:
+automatically. Capture and forward optional identity values as needed:
 
 ```ts
 visage({
@@ -163,18 +172,8 @@ visage({
 });
 ```
 
-Requested scopes and identity provider claims determine whether OAuth2 Proxy can
-populate these values. Visage clears incoming `X-Auth-Request-*` identity
-headers before proxying to prevent callers from spoofing them; explicit location
-headers such as those above override the corresponding clears.
-
-Authenticated locations also get CSRF checks by default. The policy allows
-same-origin requests and top-level `GET` document navigations, blocks other
-same-site and cross-site browser requests when modern Fetch Metadata headers are
-present, and falls back to an exact `Origin` match or `Referer` origin-prefix
-match against the configured browser origin for unsafe methods when Fetch
-Metadata is absent or unrecognized. Set `csrf: false` when the upstream
-intentionally handles cross-site browser requests itself. See
+Authenticated locations also get CSRF checks by default. Set `csrf: false` when
+the upstream intentionally handles cross-site browser requests itself. See
 [CSRF Policy](../../docs/csrf-policy.md).
 
 ### External IdPs
@@ -198,8 +197,6 @@ client registration and application-assignment policy must ensure every identity
 that can obtain an OIDC response for the Visage client is intended to access the
 local application; Visage does not apply an additional email-domain allowlist.
 
-See [`VisageOptions`](src/types.ts) for the full option surface.
-
 ### Telemetry
 
 Set `telemetry` to enable collection, redaction, and export of telemetry signals
@@ -214,6 +211,8 @@ via OTLP/gRPC.
 - The Collector exports OTLP to `host.docker.internal:4317` by default; the
   [telemetry example](../../examples/telemetry) demonstrates how to configure
   Grafana as a Visage managed service to receive and view the telemetry.
+
+See [`VisageOptions`](src/types.ts) for the full option surface.
 
 ## Required Tools
 

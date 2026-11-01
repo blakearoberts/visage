@@ -126,6 +126,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     {
       services: {
         nginx: {
+          networks: ['edge'],
           environment: {
             CUSTOM_NGINX_SETTING: 'value',
           },
@@ -137,12 +138,18 @@ test('writeComposeConfig renders base services and custom services', (t) => {
         api: {
           image: 'example/api:test',
           command: ['serve'],
+          networks: ['backend'],
           environment: { API_MODE: 'test' },
           depends_on: ['nginx'],
           volumes: ['./api.yml:/etc/api/api.yml:ro'],
           upstream: {
             locations: { '/api/': {} },
           },
+        },
+        db: {
+          image: 'example/db:test',
+          networks: ['backend'],
+          upstream: false,
         },
       },
     },
@@ -215,12 +222,21 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     depends_on: ['nginx'],
     restart: 'on-failure',
     volumes: ['./api.yml:/etc/api/api.yml:ro'],
+    networks: ['api', 'backend'],
   });
   for (const name of Object.keys(compose.services)) {
     assert.equal(compose.services[name].upstream, undefined);
   }
   assert.equal(compose.services.otelcol, undefined);
-  assert.equal(compose.networks, undefined);
+  assert.deepEqual(compose.networks, {
+    api: {},
+    backend: {},
+    db: {},
+    nginx: {},
+    edge: {},
+  });
+  assert.deepEqual(compose.services.nginx.networks, ['nginx', 'edge', 'api']);
+  assert.deepEqual(compose.services.db.networks, ['db', 'backend']);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
@@ -388,7 +404,7 @@ test('writeComposeConfig publishes only the collector logging port', (t) => {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317',
   });
   assert.deepEqual(compose.services.otelcol.ports, ['127.0.0.1:24224:24224']);
-  assert.equal(compose.services.otelcol.networks, undefined);
+  assert.deepEqual(compose.services.otelcol.networks, ['otelcol']);
   assert.equal(compose.services.otelcol.restart, 'always');
   assert.equal(compose.services.otelcol.volumes.length, 1);
   assert.match(

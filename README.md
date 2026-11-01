@@ -62,8 +62,8 @@ visage({ host: 'localhost', port: 9001 });
 ### Services
 
 Services are Docker Compose services managed by the Vite dev-server lifecycle.
-Additional services automatically get a matching managed upstream with the same
-name, host, and default `/{name}/` location.
+Additional services automatically configure an upstream with the same name,
+host, and `/{name}/` location.
 
 ```ts
 visage({
@@ -73,14 +73,12 @@ visage({
 
 ### Remotes
 
-Remotes are proxy targets whose processes Visage does not manage. Remote and
-service names must be distinct.
+Remotes are upstreams without a Visage managed Docker container process. Remotes
+automatically configure an upstream with the same host and `/{name}/` location.
 
 ```ts
 visage({
-  remotes: {
-    api: { host: 'api.local.test', locations: { '/api/': {} } },
-  },
+  remotes: { api: { host: 'api.remote.test' } },
 });
 ```
 

@@ -9,9 +9,10 @@ export default defineConfig({
     react(),
     visage({
       oauth2: { scopes: ['openid', 'email', 'offline_access'] },
-      telemetry: {},
+      telemetry: true,
       volumes: { 'lgtm-data': {} },
       services: {
+        dex: { host: 'idp.localhost' },
         otelcol: {
           environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
         },

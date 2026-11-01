@@ -30,8 +30,7 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
   rmSync(cert, { force: true });
   rmSync(key, { force: true });
 
-  const names = [...new Set([config.app.host, 'localhost', '127.0.0.1'])];
-  const args = ['-cert-file', cert, '-key-file', key, ...names];
+  const args = ['-cert-file', cert, '-key-file', key, ...config.hosts];
   const result = spawnSync(mkcert, args, { stdio });
   if (result.error) throw result.error;
   if (result.status !== 0) {

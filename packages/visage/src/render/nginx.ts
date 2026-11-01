@@ -57,12 +57,12 @@ http {
     map $http_origin $csrf_origin {
         default invalid;
         ''      absent;
-        "<%~ it.csrf.origin %>" match;
+        "<%~ it.origin %>" match;
     }
     map $http_referer $csrf_referer {
         default invalid;
         ''      absent;
-        "<%~ it.csrf.referer %>" match;
+        "<%~ it.referer %>" match;
     }
     map "$csrf_method:$csrf_origin:$csrf_referer" $csrf_fallback {
         default             deny;
@@ -177,7 +177,7 @@ http {
             otel_span_name "$request_method @auth_redirect";
             <%_ } %>
             add_header Set-Cookie $auth_set_cookie always;
-            return 302 /oauth2/start?rd=$scheme://$http_host$request_uri;
+            return 302 <%~ it.origin %>/oauth2/start?rd=<%~ it.origin %>$request_uri;
         }
         location @auth_401 {
             <%_ if (it.telemetry) { %>
@@ -246,22 +246,25 @@ function resolveNginxConfig(config: VisageConfig) {
   const origin = `https://${config.app.host}:${config.app.port}`;
   const referer = `~^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([/?#]|$)`;
   const upstreams = [
-    ['app', config.app.upstream] as const,
-    ...Object.entries(config.services).flatMap(([name, { upstream }]) => {
+    ['app', config.app.upstream, config.app.host] as const,
+    ...Object.entries(config.services).flatMap(([name, { upstream, host }]) => {
       if (upstream === undefined) return [];
-      return [[name, upstream] as const];
+      return [[name, upstream, host ?? config.app.host] as const];
     }),
-    ...Object.entries(config.remotes),
+    ...Object.entries(config.remotes).map(
+      ([name, upstream]) => [name, upstream, config.app.host] as const,
+    ),
   ];
   return {
     indentHttp,
+    origin,
+    referer,
     telemetry: config.telemetry,
     modules: config.nginx.modules,
     email: config.app.client.scopes.includes('email'),
     cookie_name: JSON.stringify(
       config.app.cookie.cookie_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
     ).slice(1, -1),
-    csrf: { origin, referer },
     edgeKeyScript: join(config.nginx.mount[1], 'edge-key.js'),
     upstreams: upstreams.map(([name, upstream]) => ({
       name,
@@ -273,15 +276,16 @@ function resolveNginxConfig(config: VisageConfig) {
           ? process.platform !== 'linux'
           : isIP(upstream.host) === 0,
     })),
-    servers: [
-      {
-        host: config.app.host,
-        port: config.app.port,
-        ssl: {
-          cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),
-          key: join(config.nginx.mount[1], 'certs', 'tls.key'),
-        },
-        locations: upstreams.flatMap(([name, upstream]) =>
+    servers: config.hosts.map((host) => ({
+      host,
+      port: config.app.port,
+      ssl: {
+        cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),
+        key: join(config.nginx.mount[1], 'certs', 'tls.key'),
+      },
+      locations: upstreams
+        .filter(([, , publicHost]) => publicHost === host)
+        .flatMap(([name, upstream]) =>
           Object.entries(upstream.locations).map(([path, location]) => ({
             ...location,
             path,
@@ -291,8 +295,7 @@ function resolveNginxConfig(config: VisageConfig) {
             ssl: upstream.scheme === 'https' ? { name: upstream.host } : false,
           })),
         ),
-      },
-    ],
+    })),
   };
 }
 

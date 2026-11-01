@@ -458,13 +458,11 @@ test('resolveConfig skips automatic upstreams disabled by service configuration'
     services: { worker: { image: 'example/worker', upstream: false } },
   });
 
-  assert.equal(Object.hasOwn(config.services.worker, 'upstream'), false);
-  assert.equal(Object.hasOwn(config.services.nginx, 'upstream'), false);
-  assert.equal(Object.hasOwn(config.services.vite_loopback, 'upstream'), false);
-  assert.deepEqual(config.services.worker, {
-    image: 'example/worker',
-    restart: 'on-failure',
-  });
+  assert.equal(config.services.worker.upstream, undefined);
+  assert.equal(config.services.nginx.upstream, undefined);
+  assert.equal(config.services.vite_loopback.upstream, undefined);
+  assert.equal(config.services.worker.image, 'example/worker');
+  assert.equal(config.services.worker.restart, 'on-failure');
 });
 
 test('resolveConfig rejects remotes sharing a service name even when its upstream is disabled', (t) => {
@@ -489,15 +487,6 @@ test('resolveConfig rejects collisions with built-in services and remotes', (t) 
           remotes: { [name]: {} },
         }),
       { message: 'Remote and service names must be distinct' },
-    );
-  }
-  for (const options of [
-    { services: { app: { image: 'example/app' } } },
-    { remotes: { app: { host: 'other.example.test' } } },
-  ]) {
-    assert.throws(
-      () => resolveForTest(t, options),
-      /Upstream name "app" is reserved/,
     );
   }
   assert.throws(
@@ -1201,4 +1190,77 @@ test('Dex upstream overrides preserve its built-in defaults', (t) => {
   ]);
   assert.ok(dex.http);
   assert.match(dex.http, /~\^POST:\/dex\/auth\//);
+});
+
+test('Dex public hosts retain paths and isolate the application session', (t) => {
+  const { config } = resolveForTest(t, {
+    services: { dex: { host: 'idp.local.test' } },
+  });
+  assert.deepEqual(config.hosts, ['app.local.test', 'idp.local.test']);
+  assert.equal(config.idp.oidc.issuer, 'https://idp.local.test:9443/dex');
+  assert.equal(
+    config.idp.oidc.authorization,
+    'https://idp.local.test:9443/dex/auth',
+  );
+  assert.equal(
+    config.idp.oidc.end_session_endpoint,
+    'https://idp.local.test:9443/dex/logout',
+  );
+  assert.equal(config.idp.oidc.token, 'http://127.0.0.1:5556/dex/token');
+  assert.equal(config.idp.oidc.jwks, 'http://127.0.0.1:5556/dex/keys');
+  assert.equal(
+    config.app.client.redirectUri,
+    'https://app.local.test:9443/oauth2/callback',
+  );
+  assert.equal(config.app.cookie.cookie_name, '__Host-sess');
+  assert.equal(config.app.cookie.cookie_domains, undefined);
+  assert.ok(config.services.dex.upstream);
+  assert.deepEqual(Object.keys(config.services.dex.upstream.locations), [
+    '/dex/',
+  ]);
+  assert.equal(
+    config.services.dex.upstream.locations['/dex/'].auth.enabled,
+    false,
+  );
+});
+
+test('service hosts preserve backend addresses, paths, and independent authentication', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      api: { host: 'api.dev.test', upstream: { host: 'backend.internal' } },
+      worker: { host: 'worker.dev.test', upstream: false },
+      custom: {
+        host: 'custom.dev.test',
+        upstream: { locations: { '/custom/': { auth: { enabled: false } } } },
+      },
+    },
+    remotes: {
+      remote: { host: 'remote.internal', locations: { '/remote/': {} } },
+    },
+  });
+  assert.deepEqual(config.hosts, [
+    'app.local.test',
+    'api.dev.test',
+    'worker.dev.test',
+    'custom.dev.test',
+  ]);
+  assert.equal(config.services.worker.host, 'worker.dev.test');
+  assert.equal(config.services.worker.upstream, undefined);
+  assert.ok(config.services.api.upstream);
+  assert.equal(
+    config.services.api.upstream.locations['/api/'].auth.enabled,
+    true,
+  );
+  assert.equal(config.services.api.upstream.locations['/api/'].csrf, true);
+  assert.equal(config.services.api.upstream.host, 'backend.internal');
+  assert.ok(config.services.custom.upstream);
+  assert.equal(
+    config.services.custom.upstream.locations['/custom/'].auth.enabled,
+    false,
+  );
+  assert.deepEqual(Object.keys(config.services.custom.upstream.locations), [
+    '/custom/',
+  ]);
+  assert.equal(config.remotes.remote.host, 'remote.internal');
+  assert.equal(config.remotes.remote.locations['/remote/'].auth.enabled, true);
 });

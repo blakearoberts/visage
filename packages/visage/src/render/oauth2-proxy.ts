@@ -55,11 +55,13 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
       : 'sub',
     email_domains: ['*'],
     whitelist_domains: [
-      config.app.host,
-      `${config.app.host}:${config.app.port}`,
-      ...(!('dex' in config.idp) && config.idp.oidc.end_session_endpoint
-        ? [new URL(config.idp.oidc.end_session_endpoint).host]
-        : []),
+      ...new Set([
+        config.app.host,
+        `${config.app.host}:${config.app.port}`,
+        ...(config.idp.oidc.end_session_endpoint
+          ? [new URL(config.idp.oidc.end_session_endpoint).host]
+          : []),
+      ]),
     ] satisfies string[],
     scope: config.app.client.scopes.join(' '),
     reverse_proxy: true,

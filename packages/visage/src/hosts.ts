@@ -6,9 +6,13 @@ import type { VisageConfig } from './config';
 
 const HOSTS_FILE = '/etc/hosts';
 
-export async function ensureHostEntry({
-  app: { host },
-}: VisageConfig): Promise<void> {
+export async function ensureHostEntry(config: VisageConfig): Promise<void> {
+  for (const host of config.hosts) {
+    await ensureHost(host);
+  }
+}
+
+async function ensureHost(host: string): Promise<void> {
   if (
     !host ||
     host.trim() !== host ||

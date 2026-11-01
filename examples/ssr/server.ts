@@ -4,28 +4,23 @@ import { createVisageServer } from '@blakearoberts/visage';
 import connect from 'connect';
 import { createServer as createViteServer, type ViteDevServer } from 'vite';
 
-const port = 6175;
 const app = connect();
-const server = app.listen(port, '127.0.0.1');
+const server = app.listen(6175, '127.0.0.1');
 
 const visage = createVisageServer({
   port: 9003,
   services: { whoami: { image: 'traefik/whoami' } },
-  upstreams: { vite: { port } },
 });
 app.use(visage.middleware);
 server.prependListener('upgrade', visage.upgrade);
-await visage.listen();
+await visage.listen(server);
 
 const vite = await createViteServer({
-  server: { middlewareMode: true, ws: { server } },
   appType: 'custom',
+  server: { middlewareMode: true, ws: { server } },
 });
 app.use(vite.middlewares);
 app.use(ssrHandler(vite));
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
 
 async function shutdown() {
   await vite.close();
@@ -33,6 +28,8 @@ async function shutdown() {
   visage.close();
   process.exit(0);
 }
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 function ssrHandler(vite: ViteDevServer): connect.SimpleHandleFunction {
   return async function ssr(req, res) {

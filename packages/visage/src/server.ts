@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
+import { once } from 'node:events';
 import { chmodSync, mkdirSync, rmSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Socket } from 'node:net';
+import type { Server, Socket } from 'node:net';
 import { join } from 'node:path';
 
 import { ensureCerts } from './certs';
@@ -36,38 +37,46 @@ export type VisageUpgradeHandler = (
  */
 export type VisageServer = {
   /**
-   * Reject requests that did not pass through the Visage-managed NGINX edge.
+   * Accept requests that passed through Visage; reject others.
    */
   middleware: VisageMiddleware;
   /**
-   * Reject upgrade requests that did not pass through the Visage-managed NGINX
-   * edge.
+   * Accept upgrade requests that passed through Visage; reject others.
    */
   upgrade: VisageUpgradeHandler;
   /**
-   * Start the Visage managed services (NGINX, OAuth2 Proxy, and sometimes Dex).
+   * Start Visage managed services.
    */
-  listen(): Promise<void>;
+  listen(server: Server): Promise<void>;
   /**
-   * Stop the Visage managed services.
+   * Stop Visage managed services.
    */
   close(): void;
 };
 
 export function createVisageServer(options: VisageOptions): VisageServer {
-  const root = process.cwd();
+  const resolvedOptions = resolveOptions(options);
   const edgeKey = randomBytes(32).toString('base64url');
-  const config = resolveConfig({
-    ...resolveOptions(options),
-    root,
-    cache: join(root, '.visage'),
-    edgeKey,
-  });
   let stop: (() => void) | undefined;
   return {
     middleware: createVisageMiddleware(edgeKey),
     upgrade: createVisageUpgradeHandler(edgeKey),
-    async listen() {
+    async listen(server) {
+      if (!server.listening) await once(server, 'listening');
+
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Failed to resolve port');
+      }
+
+      const root = process.cwd();
+      const config = resolveConfig({
+        ...resolvedOptions,
+        appPort: address.port,
+        root,
+        cache: join(root, '.visage'),
+        edgeKey,
+      });
       stop ??= await startVisageServer(config);
     },
     close() {
@@ -86,7 +95,7 @@ export async function startVisageServer(
   chmodSync(logs, 0o700);
 
   await ensureCerts(config);
-  ensureHostEntry(config);
+  await ensureHostEntry(config);
 
   writeComposeConfig(config);
   if ('dex' in config.idp) {

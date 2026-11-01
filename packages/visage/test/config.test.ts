@@ -30,14 +30,11 @@ function resolveForTest(
         host: 'app.local.test',
         port: 9443,
         ...options,
-        upstreams: {
-          vite: { port: 6173 },
-          ...options.upstreams,
-        },
       }),
       cache,
       root: 'test-app',
       edgeKey: 'edge-key',
+      appPort: 6173,
     }),
   };
 }
@@ -49,41 +46,84 @@ test('resolveOptions applies public defaults', () => {
   assert.equal(options.port, 9001);
   assert.equal(options.telemetry, false);
   assert.equal(options.services.otelcol, undefined);
-  assert.equal(options.upstreams.otelcol, undefined);
+  assert.equal(options.remotes.otelcol, undefined);
   assert.deepEqual(options.cookie, {
     cookie_name: '__Host-sess',
     cookie_expire: '720h',
     cookie_refresh: '30s',
     cookie_path: '/',
   });
-  assert.deepEqual(options.idp, {
-    dex: {
-      expiry: {
-        idTokens: '1m',
-        refreshTokens: {
-          reuseInterval: '1s',
-          validIfNotUsedFor: '720h',
-          absoluteLifetime: '720h',
-        },
+  assert.ok('dex' in options.idp);
+  assert.deepEqual(options.idp.dex, {
+    expiry: {
+      idTokens: '1m',
+      refreshTokens: {
+        reuseInterval: '1s',
+        validIfNotUsedFor: '720h',
+        absoluteLifetime: '720h',
       },
-      sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
-      users: [
-        {
-          email: 'user@example.com',
-          password: 'visage-password',
-          username: 'user',
-          userID: 'user@example.com',
-        },
-      ],
     },
+    sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
+    users: [
+      {
+        email: 'user@example.com',
+        password: 'visage-password',
+        username: 'user',
+        userID: 'user@example.com',
+      },
+    ],
   });
   assert.deepEqual(options.oauth2, {
     id: 'visage',
     secret: 'visage-secret',
     scopes: ['openid', 'offline_access'],
     public: false,
+    redirectUri: 'https://localhost:9001/oauth2/callback',
     postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
   });
+});
+
+test('resolution keeps service overrides in options and assembles defaults in config', (t) => {
+  const services = {
+    dex: {
+      environment: { EXAMPLE: 'value' },
+      upstream: { headers: { 'X-Example': 'value' } },
+    },
+  };
+  const options = resolveOptions({
+    telemetry: true,
+    services,
+  });
+  assert.deepEqual(options.services, services);
+  assert.equal(options.remotes.vite, undefined);
+
+  const config = resolveConfig({
+    ...options,
+    root: 'test-app',
+    cache: tempCache(t),
+    edgeKey: 'edge-key',
+    appPort: 6173,
+  });
+  for (const [name, port] of [
+    ['dex', 5556],
+    ['oauth2_proxy', 4180],
+    ['otelcol', 4318],
+  ] as const) {
+    assert.ok(config.services[name].upstream);
+    assert.equal(config.services[name].upstream.port, port);
+  }
+  assert.deepEqual(config.services.dex.environment, {
+    DEX_SESSIONS_ENABLED: 'true',
+    EXAMPLE: 'value',
+  });
+  assert.ok(config.services.dex.upstream);
+  assert.equal(
+    config.services.dex.upstream.locations['/dex/'].headers['X-Example'],
+    'value',
+  );
+  assert.deepEqual(options.services, services);
+  assert.equal(options.remotes.vite, undefined);
+  assert.equal('upstreams' in config, false);
 });
 
 test('resolveOptions preserves Dex defaults with partial overrides', () => {
@@ -112,9 +152,7 @@ test('resolveOptions preserves Dex defaults with partial overrides', () => {
 test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   const { config } = resolveForTest(t, { telemetry: {} });
 
-  assert.deepEqual(config.telemetry, {
-    fluentd: '127.0.0.1:24224',
-  });
+  assert.equal(config.telemetry, true);
   for (const name of ['nginx', 'oauth2_proxy', 'dex', 'otelcol']) {
     assert.deepEqual(config.services[name].logging, {
       driver: 'fluentd',
@@ -132,64 +170,56 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
   });
   assert.equal(config.services.nginx.environment, undefined);
-  assert.equal(config.upstreams.otelcol.host, 'otelcol');
-  assert.equal(config.upstreams.otelcol.port, 4318);
-  assert.deepEqual(config.upstreams.otelcol.locations['/t/'].auth, {
+  assert.ok(config.services.otelcol.upstream);
+  assert.equal(config.services.otelcol.upstream.host, 'otelcol');
+  assert.equal(config.services.otelcol.upstream.port, 4318);
+  assert.deepEqual(config.services.otelcol.upstream.locations['/t/'].auth, {
     enabled: true,
     forward: false,
   });
-  assert.deepEqual(config.upstreams.otelcol.locations['/t/'].directives, {
-    proxy_buffer_size: ['8k'],
-    proxy_connect_timeout: ['5s'],
-    proxy_read_timeout: ['5s'],
-    proxy_send_timeout: ['5s'],
-    rewrite: ['^/t/(.*)$ /$1 break'],
-  });
+  assert.deepEqual(
+    config.services.otelcol.upstream.locations['/t/'].directives,
+    {
+      proxy_buffer_size: ['8k'],
+      proxy_connect_timeout: ['5s'],
+      proxy_read_timeout: ['5s'],
+      proxy_send_timeout: ['5s'],
+      rewrite: ['^/t/(.*)$ /$1 break'],
+    },
+  );
 });
 
-test('resolveConfig resolves the complete Vite loopback service', (t) => {
-  for (const [vite, port] of [
-    [{}, 80],
-    [{ scheme: 'https' }, 443],
-    [{ port: 6173 }, 6173],
-    [{ scheme: 'https', port: 6174 }, 6174],
-  ] as const) {
-    const { config } = resolveForTest(t, { upstreams: { vite } });
-    assert.equal(
-      config.services.vite_loopback.command,
-      `tcp-listen:${port},fork,bind=host.docker.internal ` +
-        `tcp-connect:127.0.0.1:${port}`,
-    );
-    assert.equal(config.upstreams.vite.port, port);
-    assert.deepEqual(config.services.vite_loopback.profiles, ['linux']);
-    assert.equal(config.services.vite_loopback.restart, 'always');
-  }
-
+test('resolveConfig preserves loopback service overrides', (t) => {
   const service = { image: 'custom/socat', command: ['custom'], profiles: [] };
   const { config } = resolveForTest(t, {
-    upstreams: { vite: { port: 6173 } },
     services: { vite_loopback: service },
   });
   assert.equal(config.services.vite_loopback.image, service.image);
   assert.deepEqual(config.services.vite_loopback.command, service.command);
   assert.deepEqual(config.services.vite_loopback.profiles, service.profiles);
-  for (const services of [undefined, { vite_loopback: service }]) {
-    const standalone = resolveConfig({
-      ...resolveOptions({ services }),
+});
+
+test('resolveConfig uses each bound port without changing resolved options', (t) => {
+  const options = resolveOptions({});
+  for (const appPort of [6176, 6177]) {
+    const config = resolveConfig({
+      ...options,
       root: 'test-app',
       cache: tempCache(t),
       edgeKey: 'edge-key',
+      appPort,
     });
-    assert.deepEqual(
-      standalone.services.vite_loopback,
-      services
-        ? {
-            restart: 'on-failure',
-            ...service,
-          }
-        : undefined,
+    assert.equal(config.app.upstream.port, appPort);
+    assert.equal(config.app.upstream.host, 'host.docker.internal');
+    assert.deepEqual(Object.keys(config.app.upstream.locations), ['/']);
+    assert.equal(
+      config.services.vite_loopback.command,
+      `tcp-listen:${appPort},fork,bind=host.docker.internal ` +
+        `tcp-connect:127.0.0.1:${appPort}`,
     );
   }
+  assert.equal(options.remotes.vite, undefined);
+  assert.deepEqual(options.services, {});
 });
 
 test('resolveOptions prefixes host-only cookie names', () => {
@@ -246,33 +276,32 @@ test('resolveOptions applies Dex overrides', () => {
     },
   });
 
-  assert.deepEqual(options.idp, {
-    dex: {
-      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
-      expiry: {
-        idTokens: '10m',
-        authRequests: '2m',
-        refreshTokens: {
-          validIfNotUsedFor: '1h',
-          absoluteLifetime: '8h',
-          reuseInterval: '10s',
-        },
+  assert.ok('dex' in options.idp);
+  assert.deepEqual(options.idp.dex, {
+    sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+    expiry: {
+      idTokens: '10m',
+      authRequests: '2m',
+      refreshTokens: {
+        validIfNotUsedFor: '1h',
+        absoluteLifetime: '8h',
+        reuseInterval: '10s',
       },
-      users: [
-        {
-          email: 'admin@example.com',
-          password: 'secret',
-          username: 'admin',
-          userID: 'admin@example.com',
-        },
-        {
-          email: 'reader@example.com',
-          password: 'reader-password',
-          username: 'reader',
-          userID: 'reader-1',
-        },
-      ],
     },
+    users: [
+      {
+        email: 'admin@example.com',
+        password: 'secret',
+        username: 'admin',
+        userID: 'admin@example.com',
+      },
+      {
+        email: 'reader@example.com',
+        password: 'reader-password',
+        username: 'reader',
+        userID: 'reader-1',
+      },
+    ],
   });
 });
 
@@ -290,6 +319,7 @@ test('resolveOptions applies OAuth2 client overrides', () => {
     secret: 'local-secret',
     scopes: ['openid', 'email'],
     public: false,
+    redirectUri: 'https://localhost:9001/oauth2/callback',
     postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
   });
 });
@@ -302,7 +332,7 @@ test('resolveOptions applies IdP overrides', () => {
     },
   });
 
-  assert.deepEqual(options.idp, {
+  assert.deepEqual(options.idp.oidc, {
     issuer: 'http://idp.localhost:5557/idp',
     algs: ['RS512'],
   });
@@ -310,7 +340,7 @@ test('resolveOptions applies IdP overrides', () => {
 
 test('resolveConfig applies upstream defaults', (t) => {
   const { config } = resolveForTest(t, {
-    upstreams: {
+    remotes: {
       api: {},
       secure: {
         scheme: 'https',
@@ -318,17 +348,17 @@ test('resolveConfig applies upstream defaults', (t) => {
     },
   });
 
-  assert.equal(config.upstreams.api.host, 'api');
-  assert.equal(config.upstreams.api.scheme, 'https');
-  assert.equal(config.upstreams.api.port, 443);
-  assert.equal(config.upstreams.secure.host, 'secure');
-  assert.equal(config.upstreams.secure.scheme, 'https');
-  assert.equal(config.upstreams.secure.port, 443);
+  assert.equal(config.remotes.api.host, 'api');
+  assert.equal(config.remotes.api.scheme, 'https');
+  assert.equal(config.remotes.api.port, 443);
+  assert.equal(config.remotes.secure.host, 'secure');
+  assert.equal(config.remotes.secure.scheme, 'https');
+  assert.equal(config.remotes.secure.port, 443);
 });
 
 test('resolveConfig applies upstream headers to every location', (t) => {
   const { config } = resolveForTest(t, {
-    upstreams: {
+    remotes: {
       api: {
         headers: {
           Host: 'api.internal',
@@ -348,23 +378,23 @@ test('resolveConfig applies upstream headers to every location', (t) => {
   });
 
   assert.equal(
-    config.upstreams.api.locations['/api/'].headers.Host,
+    config.remotes.api.locations['/api/'].headers.Host,
     'api.internal',
   );
   assert.equal(
-    config.upstreams.api.locations['/api/'].headers['X-Service'],
+    config.remotes.api.locations['/api/'].headers['X-Service'],
     'api',
   );
   assert.equal(
-    config.upstreams.api.locations['/api/'].headers['X-Scope'],
+    config.remotes.api.locations['/api/'].headers['X-Scope'],
     'upstream',
   );
   assert.equal(
-    config.upstreams.api.locations['/admin/'].headers['X-Service'],
+    config.remotes.api.locations['/admin/'].headers['X-Service'],
     'api',
   );
   assert.equal(
-    config.upstreams.api.locations['/admin/'].headers['X-Scope'],
+    config.remotes.api.locations['/admin/'].headers['X-Scope'],
     'admin',
   );
 });
@@ -375,7 +405,8 @@ test('resolveConfig derives upstreams from services', (t) => {
       api: {
         image: 'example/api:test',
         upstream: {
-          port: 8080,
+          host: 'api.local.test',
+          port: 9000,
           locations: { '/api/': { auth: { forward: 'access' } } },
         },
       },
@@ -389,11 +420,7 @@ test('resolveConfig derives upstreams from services', (t) => {
         },
       },
     },
-    upstreams: {
-      api: {
-        host: 'api.local.test',
-        port: 9000,
-      },
+    remotes: {
       external: {},
       externalHttp: {
         scheme: 'http',
@@ -401,96 +428,263 @@ test('resolveConfig derives upstreams from services', (t) => {
     },
   });
 
-  assert.deepEqual(config.services.api, {
+  const { upstream: apiUpstream, ...apiService } = config.services.api;
+  assert.ok(apiUpstream);
+  assert.deepEqual(apiService, {
     image: 'example/api:test',
     restart: 'on-failure',
   });
-  assert.equal(config.upstreams.api.host, 'api.local.test');
-  assert.equal(config.upstreams.api.scheme, 'http');
-  assert.equal(config.upstreams.api.port, 9000);
-  assert.equal(config.upstreams.whoami.host, 'whoami');
-  assert.equal(config.upstreams.whoami.scheme, 'http');
-  assert.equal(config.upstreams.whoami.port, 80);
-  assert.equal(config.upstreams.secure.host, 'secure');
-  assert.equal(config.upstreams.secure.scheme, 'https');
-  assert.equal(config.upstreams.secure.port, 443);
-  assert.equal(config.upstreams.external.host, 'external');
-  assert.equal(config.upstreams.external.scheme, 'https');
-  assert.equal(config.upstreams.external.port, 443);
-  assert.equal(config.upstreams.externalHttp.host, 'externalHttp');
-  assert.equal(config.upstreams.externalHttp.scheme, 'http');
-  assert.equal(config.upstreams.externalHttp.port, 80);
+  assert.equal(apiUpstream.host, 'api.local.test');
+  assert.equal(apiUpstream.scheme, 'http');
+  assert.equal(apiUpstream.port, 9000);
+  assert.ok(config.services.whoami.upstream);
+  assert.equal(config.services.whoami.upstream.host, 'whoami');
+  assert.equal(config.services.whoami.upstream.scheme, 'http');
+  assert.equal(config.services.whoami.upstream.port, 80);
+  assert.ok(config.services.secure.upstream);
+  assert.equal(config.services.secure.upstream.host, 'secure');
+  assert.equal(config.services.secure.upstream.scheme, 'https');
+  assert.equal(config.services.secure.upstream.port, 443);
+  assert.equal(config.remotes.external.host, 'external');
+  assert.equal(config.remotes.external.scheme, 'https');
+  assert.equal(config.remotes.external.port, 443);
+  assert.equal(config.remotes.externalHttp.host, 'externalHttp');
+  assert.equal(config.remotes.externalHttp.scheme, 'http');
+  assert.equal(config.remotes.externalHttp.port, 80);
 });
 
-test('resolveConfig applies Vite upstream defaults and merges the root location', (t) => {
+test('resolveConfig skips automatic upstreams disabled by service configuration', (t) => {
   const { config } = resolveForTest(t, {
-    upstreams: {
-      vite: {
-        port: 6173,
-        headers: {
-          Host: 'vite.internal',
-          'X-Shared': 'vite',
-        },
-        locations: {
-          '/': {
-            auth: { forward: true },
-            headers: {
-              'X-App': 'root',
-            },
+    services: { worker: { image: 'example/worker', upstream: false } },
+  });
+
+  assert.equal(Object.hasOwn(config.services.worker, 'upstream'), false);
+  assert.equal(Object.hasOwn(config.services.nginx, 'upstream'), false);
+  assert.equal(Object.hasOwn(config.services.vite_loopback, 'upstream'), false);
+  assert.deepEqual(config.services.worker, {
+    image: 'example/worker',
+    restart: 'on-failure',
+  });
+});
+
+test('resolveConfig rejects remotes sharing a service name even when its upstream is disabled', (t) => {
+  for (const upstream of [undefined, false, {}] as const) {
+    assert.throws(
+      () =>
+        resolveForTest(t, {
+          services: { api: { image: 'example/api', upstream } },
+          remotes: { api: { host: 'api.example.test' } },
+        }),
+      { message: 'Remote and service names must be distinct' },
+    );
+  }
+});
+
+test('resolveConfig rejects collisions with built-in services and remotes', (t) => {
+  for (const name of ['dex', 'oauth2_proxy', 'nginx', 'otelcol']) {
+    assert.throws(
+      () =>
+        resolveForTest(t, {
+          telemetry: true,
+          remotes: { [name]: {} },
+        }),
+      { message: 'Remote and service names must be distinct' },
+    );
+  }
+  for (const options of [
+    { services: { app: { image: 'example/app' } } },
+    { remotes: { app: { host: 'other.example.test' } } },
+  ]) {
+    assert.throws(
+      () => resolveForTest(t, options),
+      /Upstream name "app" is reserved/,
+    );
+  }
+  assert.throws(
+    () =>
+      resolveForTest(t, {
+        idp: { issuer: 'https://idp.example.test' },
+        services: { idp: { image: 'example/idp' } },
+      }),
+    { message: 'Remote and service names must be distinct' },
+  );
+});
+
+test('resolveConfig preserves built-in routes when service ports are overridden', (t) => {
+  const { config } = resolveForTest(t, {
+    services: { dex: { upstream: { port: 5558 } } },
+  });
+  const dex = config.services.dex.upstream;
+  assert.ok(dex);
+  assert.equal(dex.host, '127.0.0.1');
+  assert.equal(dex.port, 5558);
+  assert.equal(dex.scheme, 'http');
+  assert.equal(dex.locations['/dex/'].auth.enabled, false);
+  assert.equal(dex.locations['/dex/'].csrf, false);
+  assert.equal(
+    dex.locations['/dex/'].headers.Cookie,
+    'dex_session=$cookie_dex_session',
+  );
+  assert.deepEqual(dex.locations['/dex/'].directives.limit_req, [
+    'zone=dex_password burst=5 nodelay',
+  ]);
+  assert.ok(dex.http);
+  assert.match(dex.http, /limit_req_zone/);
+  const proxy = config.services.oauth2_proxy.upstream;
+  assert.ok(proxy);
+  assert.equal(proxy.host, '127.0.0.1');
+  assert.equal(proxy.port, 4180);
+  assert.equal(proxy.locations['/oauth2/'].auth.enabled, false);
+  assert.equal(proxy.locations['/oauth2/'].headers.Cookie, '$http_cookie');
+  assert.equal(proxy.locations['= /oauth2/auth'].headers.Cookie, '$app_cookie');
+  assert.deepEqual(proxy.locations['= /oauth2/auth'].directives.internal, ['']);
+  assert.equal(proxy.locations['/oauth2/sign_out'].auth.enabled, true);
+  assert.match(
+    proxy.locations['/oauth2/sign_out'].headers['X-Auth-Request-Redirect'],
+    /id_token_hint=\{id_token\}/,
+  );
+});
+
+test('resolveConfig uses service upstream configuration for custom and built-in services', (t) => {
+  for (const name of ['api', 'dex', 'oauth2_proxy']) {
+    const { config } = resolveForTest(t, {
+      services: {
+        [name]: {
+          upstream: {
+            host: 'service.internal',
+            headers: { 'X-Example': 'value' },
+            port: 8080,
+            locations: { '/custom/': { auth: { enabled: false } } },
           },
-          '/app/': {
-            headers: {
-              'X-App': 'nested',
+        },
+      },
+    });
+    assert.ok(config.services[name].upstream);
+    const upstream = config.services[name].upstream;
+    assert.equal(upstream.host, 'service.internal');
+    assert.equal(upstream.port, 8080);
+    assert.equal(upstream.scheme, 'http');
+    assert.deepEqual(Object.keys(upstream.locations), ['/custom/']);
+    assert.equal(upstream.locations['/custom/'].auth.enabled, false);
+    assert.equal(upstream.locations['/custom/'].headers['X-Example'], 'value');
+  }
+});
+
+test('resolveConfig derives service forwarding and WebSocket settings after location overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      api: {
+        image: 'example/api',
+        upstream: {
+          port: 8080,
+          auth: { forward: 'access' },
+          ws: true,
+          headers: { 'X-Service': 'api', 'X-Layer': 'service' },
+          directives: { proxy_connect_timeout: '20s' },
+          locations: {
+            '/api/': {
+              auth: { forward: false },
+              ws: false,
+              headers: { 'X-Layer': 'route', 'X-Route': 'api' },
+              directives: { proxy_send_timeout: '30s' },
             },
           },
         },
       },
     },
   });
+  const api = config.services.api.upstream;
+  assert.ok(api);
+  assert.equal(api.host, 'api');
+  assert.equal(api.port, 8080);
+  assert.equal(api.scheme, 'http');
+  const route = api.locations['/api/'];
+  assert.deepEqual(route.auth, { enabled: true, forward: false });
+  assert.equal(route.headers.Authorization, '""');
+  assert.equal(route.headers.Connection, undefined);
+  assert.equal(route.headers.Upgrade, undefined);
+  assert.equal(route.headers['X-Service'], 'api');
+  assert.equal(route.headers['X-Layer'], 'route');
+  assert.equal(route.headers['X-Route'], 'api');
+  assert.equal(route.directives.proxy_http_version, undefined);
+  assert.deepEqual(route.directives.proxy_connect_timeout, ['20s']);
+  assert.deepEqual(route.directives.proxy_read_timeout, ['5s']);
+  assert.deepEqual(route.directives.proxy_send_timeout, ['30s']);
+});
 
-  assert.equal(config.upstreams.vite.host, 'host.docker.internal');
-  assert.equal(config.upstreams.vite.scheme, 'http');
-  assert.equal(config.upstreams.vite.port, 6173);
-  assert.deepEqual(config.upstreams.vite.locations['/'].auth, {
-    enabled: true,
-    forward: 'id',
+test('resolveConfig inherits upstream proxy policy and permits location overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    remotes: {
+      api: {
+        auth: { forward: true },
+        csrf: false,
+        ws: true,
+        directives: { proxy_read_timeout: '20s' },
+        locations: {
+          '/api/': {},
+          '/public/': {
+            auth: { enabled: false, forward: false },
+            csrf: true,
+            ws: false,
+            directives: { proxy_read_timeout: '10s' },
+          },
+        },
+      },
+    },
   });
-  assert.equal(config.upstreams.vite.locations['/'].csrf, true);
-  assert.equal(config.upstreams.vite.locations['/'].headers.Host, '$host');
-  assert.equal(
-    config.upstreams.vite.locations['/'].headers.Upgrade,
-    '$http_upgrade',
-  );
-  assert.equal(
-    config.upstreams.vite.locations['/'].headers.Connection,
-    '$connection_upgrade',
-  );
-  assert.deepEqual(
-    config.upstreams.vite.locations['/'].directives.proxy_http_version,
-    ['1.1'],
-  );
-  assert.deepEqual(
-    config.upstreams.vite.locations['/'].directives.proxy_read_timeout,
-    ['1h'],
-  );
-  assert.equal(
-    config.upstreams.vite.locations['/'].headers['X-Shared'],
-    'vite',
-  );
-  assert.equal(config.upstreams.vite.locations['/'].headers['X-App'], 'root');
-  assert.equal(
-    config.upstreams.vite.locations['/app/'].headers['X-Shared'],
-    'vite',
-  );
-  assert.equal(
-    config.upstreams.vite.locations['/app/'].headers['X-App'],
-    'nested',
-  );
+
+  const api = config.remotes.api.locations['/api/'];
+  assert.deepEqual(api.auth, { enabled: true, forward: 'access' });
+  assert.equal(api.csrf, false);
+  assert.equal(api.ws, true);
+  assert.equal(api.headers.Authorization, '"Bearer $access_token"');
+  assert.equal(api.headers.Upgrade, '$http_upgrade');
+  assert.deepEqual(api.directives.proxy_read_timeout, ['20s']);
+
+  const publicRoute = config.remotes.api.locations['/public/'];
+  assert.deepEqual(publicRoute.auth, { enabled: false, forward: false });
+  assert.equal(publicRoute.csrf, true);
+  assert.equal(publicRoute.ws, false);
+  assert.equal(publicRoute.headers.Authorization, '""');
+  assert.equal(publicRoute.headers.Upgrade, undefined);
+  assert.deepEqual(publicRoute.directives.proxy_read_timeout, ['10s']);
+});
+
+test('resolveConfig gives the application root its identity and WebSocket defaults', (t) => {
+  const { config } = resolveForTest(t);
+  const upstream = config.app.upstream;
+  const root = upstream.locations['/'];
+  assert.equal(upstream.host, 'host.docker.internal');
+  assert.equal(upstream.scheme, 'http');
+  assert.equal(upstream.port, 6173);
+  assert.deepEqual(Object.keys(upstream.locations), ['/']);
+  assert.deepEqual(root.auth, { enabled: true, forward: false });
+  assert.equal(root.csrf, true);
+  assert.equal(root.ws, true);
+  assert.equal(root.headers.Authorization, '""');
+  assert.equal(root.headers.Host, '$host');
+  assert.equal(root.headers['X-Auth-Request-User'], '$auth_user');
+  assert.equal(root.headers['X-Auth-Request-Email'], '$auth_email');
+  assert.equal(root.headers[VisageEdgeKeyHeader], '$edge_key');
+  assert.equal(root.headers.Upgrade, '$http_upgrade');
+  assert.equal(root.headers.Connection, '$connection_upgrade');
+  assert.deepEqual(root.directives.proxy_http_version, ['1.1']);
+  assert.deepEqual(root.directives.proxy_read_timeout, ['1h']);
+  assert.equal(config.remotes.app, undefined);
+  assert.equal(config.remotes.vite, undefined);
+});
+
+test('resolveConfig respects explicit empty service locations', (t) => {
+  const { config } = resolveForTest(t, {
+    services: { api: { image: 'example/api', upstream: { locations: {} } } },
+  });
+  assert.ok(config.services.api.upstream);
+  assert.deepEqual(config.services.api.upstream.locations, {});
 });
 
 test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) => {
   const { config } = resolveForTest(t, {
-    upstreams: {
+    remotes: {
       api: {
         locations: {
           '/live/': { ws: true },
@@ -512,73 +706,73 @@ test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) 
     },
   });
 
-  assert.equal(config.upstreams.api.locations['/live/'].ws, true);
-  assert.equal(config.upstreams.api.locations['/plain/'].ws, false);
-  assert.equal(config.upstreams.api.locations['/disabled/'].ws, false);
+  assert.equal(config.remotes.api.locations['/live/'].ws, true);
+  assert.equal(config.remotes.api.locations['/plain/'].ws, false);
+  assert.equal(config.remotes.api.locations['/disabled/'].ws, false);
   assert.equal(
-    config.upstreams.api.locations['/live/'].headers.Connection,
+    config.remotes.api.locations['/live/'].headers.Connection,
     '$connection_upgrade',
   );
   assert.equal(
-    config.upstreams.api.locations['/live/'].headers.Upgrade,
+    config.remotes.api.locations['/live/'].headers.Upgrade,
     '$http_upgrade',
   );
   assert.deepEqual(
-    config.upstreams.api.locations['/live/'].directives.proxy_http_version,
+    config.remotes.api.locations['/live/'].directives.proxy_http_version,
     ['1.1'],
   );
   assert.deepEqual(
-    config.upstreams.api.locations['/live/'].directives.proxy_read_timeout,
+    config.remotes.api.locations['/live/'].directives.proxy_read_timeout,
     ['1h'],
   );
 
   assert.equal(
-    config.upstreams.api.locations['/plain/'].headers.Connection,
+    config.remotes.api.locations['/plain/'].headers.Connection,
     undefined,
   );
   assert.equal(
-    config.upstreams.api.locations['/plain/'].headers.Upgrade,
+    config.remotes.api.locations['/plain/'].headers.Upgrade,
     undefined,
   );
   assert.equal(
-    config.upstreams.api.locations['/plain/'].directives.proxy_http_version,
+    config.remotes.api.locations['/plain/'].directives.proxy_http_version,
     undefined,
   );
   assert.deepEqual(
-    config.upstreams.api.locations['/plain/'].directives.proxy_read_timeout,
+    config.remotes.api.locations['/plain/'].directives.proxy_read_timeout,
     ['5s'],
   );
   assert.equal(
-    config.upstreams.api.locations['/disabled/'].headers.Connection,
+    config.remotes.api.locations['/disabled/'].headers.Connection,
     undefined,
   );
   assert.equal(
-    config.upstreams.api.locations['/disabled/'].headers.Upgrade,
+    config.remotes.api.locations['/disabled/'].headers.Upgrade,
     undefined,
   );
   assert.equal(
-    config.upstreams.api.locations['/disabled/'].directives.proxy_http_version,
+    config.remotes.api.locations['/disabled/'].directives.proxy_http_version,
     undefined,
   );
   assert.deepEqual(
-    config.upstreams.api.locations['/disabled/'].directives.proxy_read_timeout,
+    config.remotes.api.locations['/disabled/'].directives.proxy_read_timeout,
     ['5s'],
   );
 
   assert.equal(
-    config.upstreams.api.locations['/custom/'].headers.Connection,
+    config.remotes.api.locations['/custom/'].headers.Connection,
     'close',
   );
   assert.equal(
-    config.upstreams.api.locations['/custom/'].headers.Upgrade,
+    config.remotes.api.locations['/custom/'].headers.Upgrade,
     '$custom_upgrade',
   );
   assert.deepEqual(
-    config.upstreams.api.locations['/custom/'].directives.proxy_http_version,
+    config.remotes.api.locations['/custom/'].directives.proxy_http_version,
     ['2'],
   );
   assert.deepEqual(
-    config.upstreams.api.locations['/custom/'].directives.proxy_read_timeout,
+    config.remotes.api.locations['/custom/'].directives.proxy_read_timeout,
     ['30s'],
   );
 });
@@ -596,6 +790,7 @@ test('resolveOptions supports OAuth2 public PKCE clients', () => {
     id: 'local-app',
     scopes: ['openid', 'email', 'profile', 'offline_access'],
     public: true,
+    redirectUri: 'https://localhost:9001/oauth2/callback',
     postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
   });
 });
@@ -615,19 +810,11 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.equal(config.services.oauth2_proxy.depends_on, undefined);
   assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
-  assert.equal(config.upstreams.dex, undefined);
-  assert.equal(config.upstreams.idp.host, 'idp.localhost');
-  assert.equal(config.upstreams.idp.scheme, 'http');
-  assert.equal(config.upstreams.idp.port, 5557);
-  assert.deepEqual(config.upstreams.idp.locations, {});
-  assert.deepEqual(config.idp.upstream, {
-    idp: {
-      host: 'idp.localhost',
-      locations: {},
-      scheme: 'http',
-      port: 5557,
-    },
-  });
+  assert.equal(config.services.dex, undefined);
+  assert.equal(config.remotes.idp.host, 'idp.localhost');
+  assert.equal(config.remotes.idp.scheme, 'http');
+  assert.equal(config.remotes.idp.port, 5557);
+  assert.deepEqual(config.remotes.idp.locations, {});
   assert.equal(config.idp.oidc.issuer, 'http://idp.localhost:5557/idp');
   assert.equal(config.idp.oidc.algs, undefined);
   assert.equal(config.idp.oidc.end_session_endpoint, undefined);
@@ -647,8 +834,9 @@ test('resolveConfig supports external IdP end-session endpoints', (t) => {
     config.idp.oidc.end_session_endpoint,
     'http://idp.localhost:5557/idp/logout',
   );
+  assert.ok(config.services.oauth2_proxy.upstream);
   assert.equal(
-    config.upstreams.oauth2_proxy.locations['/oauth2/sign_out'].headers[
+    config.services.oauth2_proxy.upstream.locations['/oauth2/sign_out'].headers[
       'X-Auth-Request-Redirect'
     ],
     '"http://idp.localhost:5557/idp/logout?id_token_hint={id_token}&post_logout_redirect_uri=https%3A%2F%2Fapp.local.test%3A9443%2F"',
@@ -662,9 +850,9 @@ test('resolveConfig uses issuer scheme for external IdP upstream defaults', (t) 
     },
   });
 
-  assert.equal(config.upstreams.idp.scheme, 'https');
-  assert.equal(config.upstreams.idp.port, 443);
-  assert.deepEqual(config.upstreams.idp.locations, {});
+  assert.equal(config.remotes.idp.scheme, 'https');
+  assert.equal(config.remotes.idp.port, 443);
+  assert.deepEqual(config.remotes.idp.locations, {});
 });
 
 test('resolveConfig omits external IdP upstream locations for root issuer paths', (t) => {
@@ -677,10 +865,10 @@ test('resolveConfig omits external IdP upstream locations for root issuer paths'
     },
   });
 
-  assert.equal(config.upstreams.idp.host, 'idp.example.test');
-  assert.equal(config.upstreams.idp.scheme, 'https');
-  assert.equal(config.upstreams.idp.port, 443);
-  assert.deepEqual(config.upstreams.idp.locations, {});
+  assert.equal(config.remotes.idp.host, 'idp.example.test');
+  assert.equal(config.remotes.idp.scheme, 'https');
+  assert.equal(config.remotes.idp.port, 443);
+  assert.deepEqual(config.remotes.idp.locations, {});
   assert.equal(config.idp.oidc.issuer, 'https://idp.example.test');
   assert.ok('authorization' in config.idp.oidc);
   assert.equal(
@@ -736,14 +924,12 @@ test('resolveConfig preserves managed service defaults for partial service overr
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
   assert.equal(config.services.otelcol.network_mode, undefined);
   assert.equal(config.services.otelcol.depends_on, undefined);
-  assert.deepEqual(config.telemetry, {
-    fluentd: '127.0.0.1:24224',
-  });
+  assert.equal(config.telemetry, true);
 });
 
 test('resolveConfig applies defaults and normalizes upstream locations', (t) => {
   const { cache, config } = resolveForTest(t, {
-    upstreams: {
+    remotes: {
       api: {
         host: 'api',
         port: 8080,
@@ -765,25 +951,27 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     },
   });
 
-  assert.equal(config.host, 'app.local.test');
-  assert.equal(config.port, 9443);
+  assert.equal(config.app.host, 'app.local.test');
+  assert.equal(config.app.port, 9443);
   assert.equal(config.cache, cache);
   assert.equal(
     config.idp.oidc.end_session_endpoint,
     'https://app.local.test:9443/dex/logout',
   );
-  assert.equal(config.upstreams.vite.scheme, 'http');
-  assert.equal(config.upstreams.dex.port, 5556);
-  assert.equal(config.upstreams.dex.scheme, 'http');
-  assert.equal(config.upstreams.oauth2_proxy.host, '127.0.0.1');
-  assert.equal(config.upstreams.oauth2_proxy.port, 4180);
-  assert.equal(config.upstreams.oauth2_proxy.scheme, 'http');
-  assert.deepEqual(config.upstreams.api.locations['/api/'].auth, {
+  assert.equal(config.app.upstream.scheme, 'http');
+  assert.ok(config.services.dex.upstream);
+  assert.equal(config.services.dex.upstream.port, 5556);
+  assert.equal(config.services.dex.upstream.scheme, 'http');
+  assert.ok(config.services.oauth2_proxy.upstream);
+  assert.equal(config.services.oauth2_proxy.upstream.host, '127.0.0.1');
+  assert.equal(config.services.oauth2_proxy.upstream.port, 4180);
+  assert.equal(config.services.oauth2_proxy.upstream.scheme, 'http');
+  assert.deepEqual(config.remotes.api.locations['/api/'].auth, {
     enabled: true,
     forward: 'access',
   });
-  assert.equal(config.upstreams.api.locations['/api/'].csrf, true);
-  assert.deepEqual(config.upstreams.api.locations['/api/'].headers, {
+  assert.equal(config.remotes.api.locations['/api/'].csrf, true);
+  assert.deepEqual(config.remotes.api.locations['/api/'].headers, {
     Cookie: '""',
     'X-Auth-Request-User': '""',
     'X-Auth-Request-Email': '""',
@@ -796,37 +984,37 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     'X-Forwarded-Proto': '$scheme',
     'X-Service': 'api',
   });
-  assert.deepEqual(config.upstreams.api.locations['/api/'].directives, {
+  assert.deepEqual(config.remotes.api.locations['/api/'].directives, {
     proxy_buffer_size: ['16k'],
     proxy_connect_timeout: ['5s'],
     proxy_read_timeout: ['5s'],
     proxy_send_timeout: ['5s'],
     proxy_hide_header: ['X-A', 'X-B'],
   });
-  assert.equal(config.upstreams.metrics.host, 'metrics');
-  assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].auth, {
+  assert.equal(config.remotes.metrics.host, 'metrics');
+  assert.deepEqual(config.remotes.metrics.locations['/metrics/'].auth, {
     enabled: true,
     forward: false,
   });
-  assert.equal(config.upstreams.metrics.locations['/metrics/'].csrf, true);
-  assert.deepEqual(config.upstreams.metrics.locations['/metrics/'].directives, {
+  assert.equal(config.remotes.metrics.locations['/metrics/'].csrf, true);
+  assert.deepEqual(config.remotes.metrics.locations['/metrics/'].directives, {
     proxy_buffer_size: ['8k'],
     proxy_connect_timeout: ['5s'],
     proxy_read_timeout: ['5s'],
     proxy_send_timeout: ['5s'],
   });
   assert.equal(
-    config.upstreams.metrics.locations['/metrics/'].headers?.Host,
+    config.remotes.metrics.locations['/metrics/'].headers?.Host,
     'metrics',
   );
-  assert.equal(config.upstreams.metrics.scheme, 'https');
-  assert.equal(config.upstreams.metrics.port, 443);
+  assert.equal(config.remotes.metrics.scheme, 'https');
+  assert.equal(config.remotes.metrics.port, 443);
   assert.equal(
-    config.upstreams.vite.locations['/'].headers?.['X-Auth-Request-User'],
+    config.app.upstream.locations['/'].headers?.['X-Auth-Request-User'],
     '$auth_user',
   );
   assert.equal(
-    config.upstreams.vite.locations['/'].headers?.['X-Auth-Request-Email'],
+    config.app.upstream.locations['/'].headers?.['X-Auth-Request-Email'],
     '$auth_email',
   );
 });
@@ -844,90 +1032,10 @@ test('resolveConfig resolves scoped package names', (t) => {
     cache: join(root, '.visage'),
     root,
     edgeKey: 'edge-key',
+    appPort: 6173,
   });
 
   assert.equal(config.package, '@blakearoberts/visage');
-});
-
-test('resolveConfig adds the managed edge key to the Vite root location and preserves other headers', (t) => {
-  const cache = tempCache(t);
-  const config = resolveConfig({
-    ...resolveOptions({
-      upstreams: {
-        vite: {
-          port: 6173,
-          locations: {
-            '/': {
-              headers: {
-                'X-App': 'root',
-              },
-            },
-            '/app/': {
-              headers: {
-                'X-App': 'nested',
-              },
-            },
-          },
-        },
-      },
-    }),
-    cache,
-    root: 'edge-test',
-    edgeKey: 'edge-key',
-  });
-
-  assert.equal(config.edgeKey, 'edge-key');
-  assert.equal(config.secrets.edgeKey, 'VISAGE_EDGE_KEY');
-  assert.equal(
-    config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
-    '$edge_key',
-  );
-  assert.equal(
-    config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
-    undefined,
-  );
-  assert.equal(config.upstreams.vite.locations['/'].headers['X-App'], 'root');
-  assert.equal(
-    config.upstreams.vite.locations['/app/'].headers['X-App'],
-    'nested',
-  );
-});
-
-test('resolveConfig gives the managed edge key precedence in the Vite root location', (t) => {
-  const cache = tempCache(t);
-  const config = resolveConfig({
-    ...resolveOptions({
-      upstreams: {
-        vite: {
-          port: 6173,
-          locations: {
-            '/': {
-              headers: {
-                [VisageEdgeKeyHeader]: 'overridden',
-              },
-            },
-            '/app/': {
-              headers: {
-                [VisageEdgeKeyHeader]: 'nested-override',
-              },
-            },
-          },
-        },
-      },
-    }),
-    cache,
-    root: 'edge-test',
-    edgeKey: 'edge-key',
-  });
-
-  assert.equal(
-    config.upstreams.vite.locations['/'].headers[VisageEdgeKeyHeader],
-    '$edge_key',
-  );
-  assert.equal(
-    config.upstreams.vite.locations['/app/'].headers[VisageEdgeKeyHeader],
-    'nested-override',
-  );
 });
 
 test('resolveConfig resolves automatic token forwarding by upstream kind', (t) => {
@@ -940,47 +1048,38 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
         },
       },
     },
-    upstreams: {
+    remotes: {
       external: {
         locations: { '/external/': { auth: { forward: true } } },
       },
-      vite: {
-        port: 6173,
-        locations: { '/': { auth: { forward: true } } },
-      },
     },
   });
-
-  assert.equal(config.upstreams.api.locations['/api/'].auth.forward, 'id');
+  assert.ok(config.services.api.upstream);
   assert.equal(
-    config.upstreams.external.locations['/external/'].auth.forward,
+    config.services.api.upstream.locations['/api/'].auth.forward,
+    'id',
+  );
+  assert.equal(
+    config.remotes.external.locations['/external/'].auth.forward,
     'access',
   );
-  assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
+  assert.equal(config.app.upstream.locations['/'].auth.forward, false);
 });
 
-test('resolveConfig treats the resolved Vite upstream as first-party for token forwarding', (t) => {
+test('a remote named vite is independent of the application', (t) => {
   const { config } = resolveForTest(t, {
-    upstreams: {
-      vite: {
-        port: 6173,
-        locations: { '/': { auth: { forward: true } } },
-      },
-    },
+    remotes: { vite: { host: 'other.example.test', auth: { forward: true } } },
   });
-
-  assert.equal(config.upstreams.vite.host, 'host.docker.internal');
-  assert.equal(config.upstreams.vite.external, true);
-  assert.equal(config.upstreams.vite.locations['/'].auth.forward, 'id');
-  assert.equal(
-    config.upstreams.vite.locations['/'].headers.Authorization,
-    '$authorization',
-  );
+  assert.equal(config.app.upstream.host, 'host.docker.internal');
+  assert.equal(config.app.upstream.port, 6173);
+  assert.equal(config.remotes.vite.host, 'other.example.test');
+  assert.equal(config.remotes.vite.scheme, 'https');
+  assert.equal(config.remotes.vite.locations['/vite/'].auth.forward, 'access');
 });
 
 test('resolveConfig applies CSRF defaults and overrides', (t) => {
   const { config } = resolveForTest(t, {
-    upstreams: {
+    remotes: {
       api: {
         locations: {
           '/api/': {},
@@ -992,16 +1091,21 @@ test('resolveConfig applies CSRF defaults and overrides', (t) => {
     },
   });
 
-  assert.equal(config.upstreams.vite.locations['/'].csrf, true);
-  assert.equal(config.upstreams.api.locations['/api/'].csrf, true);
-  assert.equal(config.upstreams.api.locations['/browser/'].csrf, true);
-  assert.equal(config.upstreams.api.locations['/webhook/'].csrf, false);
-  assert.equal(config.upstreams.api.locations['/custom/'].csrf, false);
-  assert.equal(config.upstreams.dex.locations['/dex/'].csrf, false);
-  assert.equal(config.upstreams.oauth2_proxy.locations['/oauth2/'].csrf, false);
+  assert.equal(config.app.upstream.locations['/'].csrf, true);
+  assert.equal(config.remotes.api.locations['/api/'].csrf, true);
+  assert.equal(config.remotes.api.locations['/browser/'].csrf, true);
+  assert.equal(config.remotes.api.locations['/webhook/'].csrf, false);
+  assert.equal(config.remotes.api.locations['/custom/'].csrf, false);
+  assert.ok(config.services.dex.upstream);
+  assert.equal(config.services.dex.upstream.locations['/dex/'].csrf, false);
+  assert.ok(config.services.oauth2_proxy.upstream);
+  assert.equal(
+    config.services.oauth2_proxy.upstream.locations['/oauth2/'].csrf,
+    false,
+  );
 });
 
-test('resolveConfig lets named services and upstreams override base entries', (t) => {
+test('resolveConfig lets services and remotes override their own defaults', (t) => {
   const { config } = resolveForTest(t, {
     services: {
       nginx: {
@@ -1021,9 +1125,9 @@ test('resolveConfig lets named services and upstreams override base entries', (t
         },
       },
     },
-    upstreams: {
-      vite: {
-        host: 'vite',
+    remotes: {
+      external: {
+        host: 'external',
         port: 3000,
         locations: {
           '/app/': {
@@ -1047,25 +1151,54 @@ test('resolveConfig lets named services and upstreams override base entries', (t
     extra_hosts: ['host.docker.internal:host-gateway'],
     restart: 'always',
   });
-  assert.deepEqual(config.services.api, {
+  const { upstream: apiUpstream, ...apiService } = config.services.api;
+  assert.ok(apiUpstream);
+  assert.deepEqual(apiService, {
     image: 'example/api:test',
     command: ['serve'],
     restart: 'on-failure',
   });
-  assert.equal(config.upstreams.api.host, 'backend');
-  assert.deepEqual(Object.keys(config.upstreams.api.locations), ['/api/']);
-  assert.equal(config.upstreams.api.locations['/api/'].headers?.Host, '$host');
+  assert.equal(apiUpstream.host, 'backend');
+  assert.deepEqual(Object.keys(apiUpstream.locations), ['/api/']);
+  assert.equal(apiUpstream.locations['/api/'].headers?.Host, '$host');
 
-  assert.equal(config.upstreams.vite.host, 'vite');
-  assert.equal(config.upstreams.vite.port, 3000);
-  assert.deepEqual(config.upstreams.vite.locations['/app/'].auth, {
+  assert.equal(config.remotes.external.host, 'external');
+  assert.equal(config.remotes.external.port, 3000);
+  assert.deepEqual(config.remotes.external.locations['/app/'].auth, {
     enabled: true,
     forward: 'access',
   });
-  assert.equal(config.upstreams.vite.locations['/app/'].headers?.Cookie, '""');
-  assert.equal(config.upstreams.vite.locations['/app/'].headers?.Host, 'vite');
   assert.equal(
-    config.upstreams.vite.locations['/app/'].headers?.Upgrade,
+    config.remotes.external.locations['/app/'].headers?.Cookie,
+    '""',
+  );
+  assert.equal(
+    config.remotes.external.locations['/app/'].headers?.Host,
+    'external',
+  );
+  assert.equal(
+    config.remotes.external.locations['/app/'].headers?.Upgrade,
     '$http_upgrade',
   );
+});
+
+test('Dex upstream overrides preserve its built-in defaults', (t) => {
+  const { config } = resolveForTest(t, {
+    services: { dex: { upstream: { ws: true } } },
+  });
+  const dex = config.services.dex.upstream;
+  assert.ok(dex);
+  const login = dex.locations['/dex/'];
+  assert.equal(dex.host, '127.0.0.1');
+  assert.equal(dex.port, 5556);
+  assert.equal(dex.scheme, 'http');
+  assert.equal(login.ws, true);
+  assert.deepEqual(login.auth, { enabled: false, forward: false });
+  assert.equal(login.csrf, false);
+  assert.equal(login.headers.Cookie, 'dex_session=$cookie_dex_session');
+  assert.deepEqual(login.directives.limit_req, [
+    'zone=dex_password burst=5 nodelay',
+  ]);
+  assert.ok(dex.http);
+  assert.match(dex.http, /~\^POST:\/dex\/auth\//);
 });

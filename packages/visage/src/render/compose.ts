@@ -12,7 +12,11 @@ export function writeComposeConfig(config: VisageConfig): void {
 }
 
 function renderComposeConfig(config: VisageConfig): string {
-  const { dex, nginx, oauth2_proxy, ...services } = config.services;
+  const { dex, nginx, oauth2_proxy, ...services } = Object.fromEntries(
+    Object.entries(config.services).map(
+      ([name, { upstream: _upstream, ...service }]) => [name, service] as const,
+    ),
+  );
 
   return stringify({
     volumes: config.volumes,
@@ -23,7 +27,7 @@ function renderComposeConfig(config: VisageConfig): string {
       [config.secrets.edgeKey]: {
         environment: config.secrets.edgeKey,
       },
-      ...(config.oauth2.public
+      ...(config.app.client.public
         ? {}
         : {
             [config.secrets.clientSecret]: {
@@ -40,7 +44,7 @@ function renderComposeConfig(config: VisageConfig): string {
                 `${config.files.dex[0]}:${config.files.dex[1]}:ro`,
                 ...(dex.volumes ?? []),
               ],
-              ...(config.oauth2.public
+              ...(config.app.client.public
                 ? {}
                 : { secrets: [config.secrets.clientSecret] }),
             },
@@ -55,7 +59,7 @@ function renderComposeConfig(config: VisageConfig): string {
           ...nginx.environment,
         },
         secrets: [config.secrets.edgeKey],
-        ports: [`127.0.0.1:${config.port}:${config.port}`],
+        ports: [`127.0.0.1:${config.app.port}:${config.app.port}`],
         volumes: [
           `${config.nginx.mount[0]}:${config.nginx.mount[1]}`,
           ...(nginx.volumes ?? []),
@@ -69,7 +73,7 @@ function renderComposeConfig(config: VisageConfig): string {
         ],
         secrets: [
           config.secrets.cookieSecret,
-          ...(config.oauth2.public ? [] : [config.secrets.clientSecret]),
+          ...(config.app.client.public ? [] : [config.secrets.clientSecret]),
         ],
       },
       ...services,

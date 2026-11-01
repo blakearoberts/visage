@@ -14,6 +14,8 @@ This file is intended for LLM based collaborators.
   dependencies, configuration, or abstractions unless they are required for the
   requested behavior.
 - Prefer existing code shape and local patterns over new abstractions.
+- Error messages must be static strings, without interpolation or dynamically
+  constructed content, so they can be searched verbatim in the source.
 - After editing, review the diff line by line and remove code that is not
   directly required.
 

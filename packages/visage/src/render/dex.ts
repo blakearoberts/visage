@@ -14,33 +14,30 @@ export function writeDexConfig(config: VisageConfig): void {
 function renderDexConfig(config: VisageConfig): string {
   if (!('dex' in config.idp)) throw new Error('Dex config missing');
   const {
-    host,
-    port,
-    oauth2,
-    secrets,
+    app: { client },
+    secrets: { clientSecret },
     idp: {
       dex: { expiry, sessions, users },
       oidc,
-      upstream,
     },
   } = config;
   return stringify({
     issuer: oidc.issuer,
     storage: { type: 'memory' },
-    web: { http: `127.0.0.1:${upstream.dex.port}` },
+    web: { http: new URL(oidc.token).host },
     oauth2: { skipApprovalScreen: true },
     staticClients: [
       {
-        id: oauth2.id,
-        name: oauth2.id,
-        ...(oauth2.public
+        id: client.id,
+        name: client.id,
+        ...(client.public
           ? { public: true }
           : {
-              secret: `{{ file.Read "/run/secrets/${secrets.clientSecret}" }}`,
+              secret: `{{ file.Read "/run/secrets/${clientSecret}" }}`,
             }),
         refreshTokenLifetime: 'session',
-        postLogoutRedirectURIs: [oauth2.postLogoutRedirectUri],
-        redirectURIs: [`https://${host}:${port}/oauth2/callback`],
+        postLogoutRedirectURIs: [client.postLogoutRedirectUri],
+        redirectURIs: [client.redirectUri],
       },
     ],
     enablePasswordDB: true,

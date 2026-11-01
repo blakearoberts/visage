@@ -26,6 +26,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       cache: '',
       root: 'compose-test',
       edgeKey: 'edge-key',
+      appPort: 6173,
     }),
     package: '@blakearoberts/visage',
   };
@@ -177,6 +178,7 @@ test('startCompose cleans up failed detached startup', async (t) => {
     cache: '',
     root: 'compose-test',
     edgeKey: 'edge-key',
+    appPort: 6173,
   });
   const spawnSyncCalls: SpawnCall[] = [];
   const spawnCalls: SpawnCall[] = [];
@@ -239,6 +241,7 @@ test('startCompose surfaces NGINX validation errors before startup', async (t) =
     cache: '',
     root: 'compose-test',
     edgeKey: 'edge-key',
+    appPort: 6173,
   });
   const spawnSyncCalls: SpawnCall[] = [];
   const spawnCalls: SpawnCall[] = [];

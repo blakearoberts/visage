@@ -4,27 +4,14 @@ import { createServer as createViteServer } from 'vite';
 
 import { createSessionCacheMiddleware } from './sessioncache/server';
 
-const appPort = 6176;
-const visagePort = 9004;
-
 const app = connect();
-const server = app.listen(appPort);
+const server = app.listen(6176);
 
 const visage = createVisageServer({
-  port: visagePort,
-  services: {
-    blob: {
-      image: 'traefik/whoami',
-      upstream: {
-        locations: {
-          '/blob/': { headers: { 'X-Auth-Request-User': '$auth_user' } },
-        },
-      },
-    },
-  },
-  upstreams: { vite: { port: appPort } },
+  port: 9004,
+  services: { blob: { image: 'traefik/whoami' } },
 });
-await visage.listen();
+await visage.listen(server);
 
 const vite = await createViteServer({
   appType: 'spa',
@@ -36,11 +23,11 @@ app.use(visage.middleware);
 app.use(createSessionCacheMiddleware());
 app.use(vite.middlewares);
 
-function close() {
-  vite.close();
+async function shutdown() {
+  await vite.close();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
   visage.close();
-  server.close();
+  process.exit(0);
 }
-
-process.once('SIGINT', close);
-process.once('SIGTERM', close);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

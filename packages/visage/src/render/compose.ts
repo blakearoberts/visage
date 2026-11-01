@@ -14,7 +14,8 @@ export function writeComposeConfig(config: VisageConfig): void {
 function renderComposeConfig(config: VisageConfig): string {
   const { dex, nginx, oauth2_proxy, ...services } = Object.fromEntries(
     Object.entries(config.services).map(
-      ([name, { upstream: _upstream, ...service }]) => [name, service] as const,
+      ([name, { host: _host, upstream: _upstream, ...service }]) =>
+        [name, service] as const,
     ),
   );
 

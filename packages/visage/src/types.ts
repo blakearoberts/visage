@@ -316,6 +316,12 @@ export type VisageOAuth2Client = {
  */
 export type VisageService = {
   /**
+   * Public hostname served by NGINX for this service. Omit to serve its
+   * locations on the application's hostname. The application's session only
+   * covers the application's hostname.
+   */
+  readonly host?: string;
+  /**
    * Docker build context for the service.
    */
   readonly build?: string;

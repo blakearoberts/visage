@@ -47,7 +47,7 @@
   },
   "scripts": {
     "build": "rollup -c",
-    "test": "tsx --test test/*.test.ts",
+    "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc"
   },
   "dependencies": {

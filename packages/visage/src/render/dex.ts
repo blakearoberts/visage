@@ -11,6 +11,17 @@ export function writeDexConfig(config: VisageConfig): void {
   writeFileSync(file, render, 'utf-8');
 }
 
+/** @internal Exported for unit testing. */
+export function validateDexPassword(password: string): void {
+  const length = [...password].length; // Unicode length
+  if (length < 15 || length > 64) {
+    throw new Error('Password must be between 15 and 64 characters');
+  }
+  if (truncates(password)) {
+    throw new Error('Password must not exceed 72 UTF-8 bytes');
+  }
+}
+
 function renderDexConfig(config: VisageConfig): string {
   if (!('dex' in config.idp)) throw new Error('Dex config missing');
   const {
@@ -44,13 +55,7 @@ function renderDexConfig(config: VisageConfig): string {
     ...(expiry === undefined ? {} : { expiry }),
     ...(sessions === undefined ? {} : { sessions }),
     staticPasswords: users.map(({ password, ...user }) => {
-      const length = [...password].length; // Unicode length
-      if (length < 15 || length > 64) {
-        throw new Error('Password must be between 15 and 64 characters');
-      }
-      if (truncates(password)) {
-        throw new Error('Password must not exceed 72 UTF-8 bytes');
-      }
+      validateDexPassword(password);
       return { ...user, hash: hashSync(password) };
     }),
   });

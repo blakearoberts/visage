@@ -7,9 +7,6 @@ This file is intended for LLM based collaborators.
 - Prefer the smallest faithful diff that satisfies the request.
 - Before editing, identify the intended behavior change and the files that
   should change. Keep the final diff inside that boundary.
-- When the user provides a code snippet or target shape, treat it as the source
-  of truth. Keep implementation structurally close to it; justify any deviation
-  before adding it.
 - Do not add fallback values, helper functions, lifecycle handling,
   dependencies, configuration, or abstractions unless they are required for the
   requested behavior.
@@ -18,6 +15,12 @@ This file is intended for LLM based collaborators.
   constructed content, so they can be searched verbatim in the source.
 - After editing, review the diff line by line and remove code that is not
   directly required.
+- Unit tests must avoid expensive work unrelated to the behavior under test. Use
+  minimal fixtures; leave real password hashing and service integration to E2E
+  coverage.
+- Investigate any unit test exceeding 20 ms. Remove unnecessary work or explain
+  why its cost is essential. Do not satisfy timing targets by splitting tests,
+  moving expensive work into setup, or weakening assertions.
 
 ## Command phrases
 

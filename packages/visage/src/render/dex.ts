@@ -26,7 +26,6 @@ function renderDexConfig(config: VisageConfig): string {
   if (!('dex' in config.idp)) throw new Error('Dex config missing');
   const {
     app: { client },
-    secrets: { clientSecret },
     idp: {
       dex: { expiry, sessions, users },
       oidc,
@@ -44,7 +43,7 @@ function renderDexConfig(config: VisageConfig): string {
         ...(client.public
           ? { public: true }
           : {
-              secret: `{{ file.Read "/run/secrets/${clientSecret}" }}`,
+              secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
             }),
         refreshTokenLifetime: 'session',
         postLogoutRedirectURIs: [client.postLogoutRedirectUri],

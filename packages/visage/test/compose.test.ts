@@ -30,20 +30,20 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     }),
     package: '@blakearoberts/visage',
   };
-  const previousCookieSecret = process.env[config.secrets.cookieSecret];
-  const previousEdgeKey = process.env[config.secrets.edgeKey];
-  delete process.env[config.secrets.cookieSecret];
-  delete process.env[config.secrets.edgeKey];
+  const previousCookieSecret = process.env.OAUTH2_PROXY_COOKIE_SECRET;
+  const previousEdgeKey = process.env.VISAGE_EDGE_KEY;
+  delete process.env.OAUTH2_PROXY_COOKIE_SECRET;
+  delete process.env.VISAGE_EDGE_KEY;
   t.after(() => {
     if (previousCookieSecret === undefined) {
-      delete process.env[config.secrets.cookieSecret];
+      delete process.env.OAUTH2_PROXY_COOKIE_SECRET;
     } else {
-      process.env[config.secrets.cookieSecret] = previousCookieSecret;
+      process.env.OAUTH2_PROXY_COOKIE_SECRET = previousCookieSecret;
     }
     if (previousEdgeKey === undefined) {
-      delete process.env[config.secrets.edgeKey];
+      delete process.env.VISAGE_EDGE_KEY;
     } else {
-      process.env[config.secrets.edgeKey] = previousEdgeKey;
+      process.env.VISAGE_EDGE_KEY = previousEdgeKey;
     }
   });
 
@@ -90,14 +90,14 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
   try {
     startCompose(config);
-    const firstSecret = spawnSyncCalls[2]?.env?.[config.secrets.cookieSecret];
-    const firstEdgeKey = spawnSyncCalls[2]?.env?.[config.secrets.edgeKey];
+    const firstSecret = spawnSyncCalls[2]?.env?.OAUTH2_PROXY_COOKIE_SECRET;
+    const firstEdgeKey = spawnSyncCalls[2]?.env?.VISAGE_EDGE_KEY;
 
-    process.env[config.secrets.cookieSecret] = 'changed-cookie-secret';
-    process.env[config.secrets.edgeKey] = 'changed-edge-key';
+    process.env.OAUTH2_PROXY_COOKIE_SECRET = 'changed-cookie-secret';
+    process.env.VISAGE_EDGE_KEY = 'changed-edge-key';
     stop = startCompose(config);
-    const secondSecret = spawnSyncCalls[5]?.env?.[config.secrets.cookieSecret];
-    const secondEdgeKey = spawnSyncCalls[5]?.env?.[config.secrets.edgeKey];
+    const secondSecret = spawnSyncCalls[5]?.env?.OAUTH2_PROXY_COOKIE_SECRET;
+    const secondEdgeKey = spawnSyncCalls[5]?.env?.VISAGE_EDGE_KEY;
 
     assert.equal(spawnSyncCalls.length, 6);
     assert.equal(spawnSyncCalls[0]?.command, 'docker');

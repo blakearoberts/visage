@@ -146,11 +146,8 @@ and other click-jacking controls remain application policy.
 
 ## TO-DO
 
-- [ ] Harden the default security posture by addressing the
-      [security hardening backlog](docs/security-hardening.md).
 - [ ] Support [runtime config reloads](docs/config-reload.md).
 - [ ] Support [Dex connectors](https://dexidp.io/docs/connectors/).
-- [ ] Support Dex on a distinct subdomain, such as `auth.localhost`.
 - [ ] Support [Local HTTP Mode](docs/local-http-mode.md).
 - [ ] Support subject-token exchange with client attribution and audience trust
       (RFC 8693 without actor-based delegation) using Dex as the default

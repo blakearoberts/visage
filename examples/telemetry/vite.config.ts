@@ -19,6 +19,7 @@ export default defineConfig({
         },
         grafana: {
           build: resolve(import.meta.dirname, 'otel-lgtm'),
+          tmpfs: ['/tmp'],
           environment: {
             GF_AUTH_ANONYMOUS_ENABLED: 'false',
             GF_AUTH_PROXY_ENABLED: 'true',
@@ -37,7 +38,8 @@ export default defineConfig({
               '-store.retention=24h -compactor.retention-enabled=true -compactor.delete-request-store=filesystem',
           },
           volumes: [
-            `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage`,
+            `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage:ro`,
+            `${resolve(import.meta.dirname, 'otel-lgtm/dashboards')}:/otel-lgtm/visage/dashboards`,
             'lgtm-data:/data',
           ],
           upstream: {

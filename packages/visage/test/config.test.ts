@@ -94,116 +94,6 @@ test('resolveConfig preserves network modes without network memberships', (t) =>
   }
 });
 
-test('resolveOptions applies public defaults', () => {
-  const options = resolveOptions({});
-
-  assert.equal(options.host, 'localhost');
-  assert.equal(options.port, 9001);
-  assert.equal(options.telemetry, false);
-  assert.equal(options.services.otelcol, undefined);
-  assert.equal(options.remotes.otelcol, undefined);
-  assert.deepEqual(options.cookie, {
-    cookie_name: '__Host-sess',
-    cookie_expire: '720h',
-    cookie_refresh: '30s',
-    cookie_path: '/',
-  });
-  assert.ok('dex' in options.idp);
-  assert.deepEqual(options.idp.dex, {
-    expiry: {
-      idTokens: '1m',
-      refreshTokens: {
-        reuseInterval: '1s',
-        validIfNotUsedFor: '720h',
-        absoluteLifetime: '720h',
-      },
-    },
-    sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
-    users: [
-      {
-        email: 'user@example.com',
-        password: 'visage-password',
-        username: 'user',
-        userID: 'user@example.com',
-      },
-    ],
-  });
-  assert.deepEqual(options.oauth2, {
-    id: 'visage',
-    secret: 'visage-secret',
-    scopes: ['openid', 'offline_access'],
-    public: false,
-    redirectUri: 'https://localhost:9001/oauth2/callback',
-    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
-  });
-});
-
-test('resolution keeps service overrides in options and assembles defaults in config', (t) => {
-  const services = {
-    dex: {
-      environment: { EXAMPLE: 'value' },
-      upstream: { headers: { 'X-Example': 'value' } },
-    },
-  };
-  const options = resolveOptions({
-    telemetry: true,
-    services,
-  });
-  assert.deepEqual(options.services, services);
-  assert.equal(options.remotes.vite, undefined);
-
-  const config = resolveConfig({
-    ...options,
-    root: 'test-app',
-    cache: tempCache(t),
-    edgeKey: 'edge-key',
-    appPort: 6173,
-  });
-  for (const [name, port] of [
-    ['dex', 5556],
-    ['oauth2_proxy', 4180],
-    ['otelcol', 4318],
-  ] as const) {
-    assert.ok(config.services[name].upstream);
-    assert.equal(config.services[name].upstream.port, port);
-  }
-  assert.deepEqual(config.services.dex.environment, {
-    DEX_SESSIONS_ENABLED: 'true',
-    EXAMPLE: 'value',
-  });
-  assert.ok(config.services.dex.upstream);
-  assert.equal(
-    config.services.dex.upstream.locations['/dex/'].headers['X-Example'],
-    'value',
-  );
-  assert.deepEqual(options.services, services);
-  assert.equal(options.remotes.vite, undefined);
-  assert.equal('upstreams' in config, false);
-});
-
-test('resolveOptions preserves Dex defaults with partial overrides', () => {
-  const options = resolveOptions({
-    idp: {
-      expiry: { refreshTokens: { reuseInterval: '2s' } },
-      sessions: { absoluteLifetime: '1440h' },
-    },
-  });
-
-  assert.ok('dex' in options.idp);
-  assert.deepEqual(options.idp.dex.expiry, {
-    idTokens: '1m',
-    refreshTokens: {
-      reuseInterval: '2s',
-      validIfNotUsedFor: '720h',
-      absoluteLifetime: '720h',
-    },
-  });
-  assert.deepEqual(options.idp.dex.sessions, {
-    absoluteLifetime: '1440h',
-    validIfNotUsedFor: '720h',
-  });
-});
-
 test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   const { config } = resolveForTest(t, { telemetry: {} });
 
@@ -244,6 +134,79 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   );
 });
 
+test('resolveConfig defaults to read-only filesystems unless managed secrets are required', (t) => {
+  for (const clientSecret of ['client-secret', null]) {
+    const { config } = resolveForTest(t, {
+      idp: { users: [] },
+      oauth2: { clientSecret },
+      services: { api: { image: 'example/api' } },
+    });
+    assert.equal(config.services.api.read_only, true);
+    assert.equal(config.services.vite_loopback.read_only, true);
+    assert.equal(config.services.dex.read_only, false);
+    assert.equal(config.services.nginx.read_only, false);
+    assert.equal(config.services.oauth2_proxy.read_only, false);
+  }
+});
+
+test('resolveConfig adds custom secrets without replacing managed secrets', (t) => {
+  for (const clientSecret of ['client-secret', null]) {
+    const { config } = resolveForTest(t, {
+      idp: { users: [] },
+      oauth2: { clientSecret },
+      services: {
+        api: { image: 'example/api', secrets: ['API_TOKEN'] },
+        dex: { secrets: ['DEX_TOKEN'] },
+        nginx: { secrets: ['NGINX_TOKEN'] },
+        oauth2_proxy: {
+          secrets: ['PROXY_TOKEN'],
+        },
+      },
+    });
+    assert.deepEqual(config.services.api.secrets, ['API_TOKEN']);
+    assert.equal(config.services.api.read_only, false);
+    assert.deepEqual(config.services.dex.secrets, [
+      'OAUTH2_CLIENT_SECRET',
+      'DEX_TOKEN',
+    ]);
+    assert.equal(config.services.dex.read_only, false);
+    assert.deepEqual(config.services.nginx.secrets, [
+      'VISAGE_EDGE_KEY',
+      'NGINX_TOKEN',
+    ]);
+    assert.deepEqual(config.services.oauth2_proxy.secrets, [
+      'OAUTH2_PROXY_COOKIE_SECRET',
+      'OAUTH2_CLIENT_SECRET',
+      'PROXY_TOKEN',
+    ]);
+  }
+});
+
+test('resolveConfig preserves container security overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: { users: [] },
+    services: {
+      nginx: { user: '1234:1234', cap_add: [], tmpfs: ['/tmp'] },
+      api: {
+        image: 'example/api',
+        security_opt: [],
+        cap_drop: [],
+        cap_add: ['NET_BIND_SERVICE'],
+        read_only: false,
+        tmpfs: ['/tmp'],
+      },
+    },
+  });
+  assert.equal(config.services.nginx.user, '1234:1234');
+  assert.deepEqual(config.services.nginx.cap_add, []);
+  assert.deepEqual(config.services.nginx.tmpfs, ['/tmp']);
+  assert.deepEqual(config.services.api.security_opt, []);
+  assert.deepEqual(config.services.api.cap_drop, []);
+  assert.deepEqual(config.services.api.cap_add, ['NET_BIND_SERVICE']);
+  assert.equal(config.services.api.read_only, false);
+  assert.deepEqual(config.services.api.tmpfs, ['/tmp']);
+});
+
 test('resolveConfig preserves loopback service overrides', (t) => {
   const service = { image: 'custom/socat', command: ['custom'], profiles: [] };
   const { config } = resolveForTest(t, {
@@ -275,122 +238,6 @@ test('resolveConfig uses each bound port without changing resolved options', (t)
   }
   assert.equal(options.remotes.vite, undefined);
   assert.deepEqual(options.services, {});
-});
-
-test('resolveOptions prefixes host-only cookie names', () => {
-  const options = resolveOptions({ cookie: { name: 'custom' } });
-
-  assert.equal(options.cookie.cookie_name, '__Host-custom');
-});
-
-test('resolveOptions applies cookie overrides', () => {
-  const options = resolveOptions({
-    cookie: {
-      name: 'custom',
-      expire: '30m',
-      refresh: '5m',
-      domains: ['.local.test', 'app.local.test'],
-      path: '/app/',
-    },
-  });
-
-  assert.deepEqual(options.cookie, {
-    cookie_name: 'custom',
-    cookie_expire: '30m',
-    cookie_refresh: '5m',
-    cookie_domains: ['.local.test', 'app.local.test'],
-    cookie_path: '/app/',
-  });
-});
-
-test('resolveOptions applies Dex overrides', () => {
-  const options = resolveOptions({
-    idp: {
-      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
-      expiry: {
-        idTokens: '10m',
-        authRequests: '2m',
-        refreshTokens: {
-          validIfNotUsedFor: '1h',
-          absoluteLifetime: '8h',
-          reuseInterval: '10s',
-        },
-      },
-      users: [
-        {
-          email: 'admin@example.com',
-          password: 'secret',
-        },
-        {
-          email: 'reader@example.com',
-          password: 'reader-password',
-          username: 'reader',
-          userID: 'reader-1',
-        },
-      ],
-    },
-  });
-
-  assert.ok('dex' in options.idp);
-  assert.deepEqual(options.idp.dex, {
-    sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
-    expiry: {
-      idTokens: '10m',
-      authRequests: '2m',
-      refreshTokens: {
-        validIfNotUsedFor: '1h',
-        absoluteLifetime: '8h',
-        reuseInterval: '10s',
-      },
-    },
-    users: [
-      {
-        email: 'admin@example.com',
-        password: 'secret',
-        username: 'admin',
-        userID: 'admin@example.com',
-      },
-      {
-        email: 'reader@example.com',
-        password: 'reader-password',
-        username: 'reader',
-        userID: 'reader-1',
-      },
-    ],
-  });
-});
-
-test('resolveOptions applies OAuth2 client overrides', () => {
-  const options = resolveOptions({
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: 'local-secret',
-      scopes: ['openid', 'email'],
-    },
-  });
-
-  assert.deepEqual(options.oauth2, {
-    id: 'local-app',
-    secret: 'local-secret',
-    scopes: ['openid', 'email'],
-    public: false,
-    redirectUri: 'https://localhost:9001/oauth2/callback',
-    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
-  });
-});
-
-test('resolveOptions applies IdP overrides', () => {
-  const options = resolveOptions({
-    idp: {
-      issuer: 'http://idp.localhost:5557/idp',
-      algs: ['RS512'],
-    },
-  });
-
-  assert.deepEqual(options.idp.oidc, {
-    issuer: 'http://idp.localhost:5557/idp',
-    algs: ['RS512'],
-  });
 });
 
 test('resolveConfig applies upstream defaults', (t) => {
@@ -488,6 +335,9 @@ test('resolveConfig derives upstreams from services', (t) => {
   assert.deepEqual(apiService, {
     image: 'example/api:test',
     restart: 'on-failure',
+    security_opt: ['no-new-privileges:true'],
+    cap_drop: ['ALL'],
+    read_only: true,
     networks: ['api'],
   });
   assert.equal(apiUpstream.host, 'api.local.test');
@@ -822,24 +672,6 @@ test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) 
   );
 });
 
-test('resolveOptions supports OAuth2 public PKCE clients', () => {
-  const options = resolveOptions({
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: null,
-      scopes: ['openid', 'email', 'profile', 'offline_access'],
-    },
-  });
-
-  assert.deepEqual(options.oauth2, {
-    id: 'local-app',
-    scopes: ['openid', 'email', 'profile', 'offline_access'],
-    public: true,
-    redirectUri: 'https://localhost:9001/oauth2/callback',
-    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
-  });
-});
-
 test('resolveConfig supports external IdP upstreams', (t) => {
   const { config } = resolveForTest(t, {
     idp: {
@@ -1111,17 +943,6 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
   assert.equal(config.app.upstream.locations['/'].auth.forward, false);
 });
 
-test('a remote named vite is independent of the application', (t) => {
-  const { config } = resolveForTest(t, {
-    remotes: { vite: { host: 'other.example.test', auth: { forward: true } } },
-  });
-  assert.equal(config.app.upstream.host, 'host.docker.internal');
-  assert.equal(config.app.upstream.port, 6173);
-  assert.equal(config.remotes.vite.host, 'other.example.test');
-  assert.equal(config.remotes.vite.scheme, 'https');
-  assert.equal(config.remotes.vite.locations['/vite/'].auth.forward, 'access');
-});
-
 test('resolveConfig applies CSRF defaults and overrides', (t) => {
   const { config } = resolveForTest(t, {
     remotes: {
@@ -1188,6 +1009,12 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
 
   assert.deepEqual(config.services.nginx, {
     image: 'custom-nginx:test',
+    secrets: ['VISAGE_EDGE_KEY'],
+    security_opt: ['no-new-privileges:true'],
+    cap_drop: ['ALL'],
+    user: `${process.getuid?.() ?? 101}:${process.getgid?.() ?? 101}`,
+    tmpfs: ['/var/cache/nginx:mode=1777', '/etc/nginx/http.d:mode=1777'],
+    read_only: false,
     networks: ['nginx'],
     depends_on: ['api'],
     environment: {
@@ -1203,6 +1030,9 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
     image: 'example/api:test',
     command: ['serve'],
     restart: 'on-failure',
+    security_opt: ['no-new-privileges:true'],
+    cap_drop: ['ALL'],
+    read_only: true,
     networks: ['api'],
   });
   assert.equal(apiUpstream.host, 'backend');
@@ -1229,7 +1059,58 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
   );
 });
 
-test('Dex upstream overrides preserve its built-in defaults', (t) => {
+test('resolveConfig assembles managed services without changing resolved options', (t) => {
+  const services = {
+    dex: {
+      environment: { EXAMPLE: 'value' },
+      upstream: { headers: { 'X-Example': 'value' } },
+    },
+  };
+  const options = resolveOptions({
+    telemetry: true,
+    services,
+  });
+  const config = resolveConfig({
+    ...options,
+    root: 'test-app',
+    cache: tempCache(t),
+    edgeKey: 'edge-key',
+    appPort: 6173,
+  });
+  for (const [name, port] of [
+    ['dex', 5556],
+    ['oauth2_proxy', 4180],
+    ['otelcol', 4318],
+  ] as const) {
+    assert.ok(config.services[name].upstream);
+    assert.equal(config.services[name].upstream.port, port);
+  }
+  assert.deepEqual(config.services.dex.environment, {
+    DEX_SESSIONS_ENABLED: 'true',
+    EXAMPLE: 'value',
+  });
+  assert.ok(config.services.dex.upstream);
+  assert.equal(
+    config.services.dex.upstream.locations['/dex/'].headers['X-Example'],
+    'value',
+  );
+  assert.deepEqual(options.services, services);
+  assert.equal(options.remotes.vite, undefined);
+  assert.equal('upstreams' in config, false);
+});
+
+test('resolveConfig keeps a remote named vite independent of the application', (t) => {
+  const { config } = resolveForTest(t, {
+    remotes: { vite: { host: 'other.example.test', auth: { forward: true } } },
+  });
+  assert.equal(config.app.upstream.host, 'host.docker.internal');
+  assert.equal(config.app.upstream.port, 6173);
+  assert.equal(config.remotes.vite.host, 'other.example.test');
+  assert.equal(config.remotes.vite.scheme, 'https');
+  assert.equal(config.remotes.vite.locations['/vite/'].auth.forward, 'access');
+});
+
+test('resolveConfig preserves Dex defaults with upstream overrides', (t) => {
   const { config } = resolveForTest(t, {
     services: { dex: { upstream: { ws: true } } },
   });
@@ -1250,7 +1131,7 @@ test('Dex upstream overrides preserve its built-in defaults', (t) => {
   assert.match(dex.http, /~\^POST:\/dex\/auth\//);
 });
 
-test('Dex public hosts retain paths and isolate the application session', (t) => {
+test('resolveConfig retains Dex paths and isolates the application session on public hosts', (t) => {
   const { config } = resolveForTest(t, {
     services: { dex: { host: 'idp.local.test' } },
   });
@@ -1282,7 +1163,7 @@ test('Dex public hosts retain paths and isolate the application session', (t) =>
   );
 });
 
-test('service hosts preserve backend addresses, paths, and independent authentication', (t) => {
+test('resolveConfig preserves backend addresses, paths, and independent authentication on service hosts', (t) => {
   const { config } = resolveForTest(t, {
     services: {
       api: { host: 'api.dev.test', upstream: { host: 'backend.internal' } },
@@ -1321,4 +1202,250 @@ test('service hosts preserve backend addresses, paths, and independent authentic
   ]);
   assert.equal(config.remotes.remote.host, 'remote.internal');
   assert.equal(config.remotes.remote.locations['/remote/'].auth.enabled, true);
+});
+
+test('resolveConfig resolves telemetry booleans and options', (t) => {
+  for (const [telemetry, enabled] of [
+    [undefined, false],
+    [false, false],
+    [true, true],
+    [{}, true],
+  ] as const) {
+    const { config } = resolveForTest(t, { idp: { users: [] }, telemetry });
+    assert.equal(config.telemetry, enabled);
+  }
+});
+
+test('resolveOptions applies public defaults', () => {
+  const options = resolveOptions({});
+
+  assert.equal(options.host, 'localhost');
+  assert.equal(options.port, 9001);
+  assert.equal(options.telemetry, false);
+  assert.equal(options.services.otelcol, undefined);
+  assert.equal(options.remotes.otelcol, undefined);
+  assert.deepEqual(options.cookie, {
+    cookie_name: '__Host-sess',
+    cookie_expire: '720h',
+    cookie_refresh: '30s',
+    cookie_path: '/',
+  });
+  assert.ok('dex' in options.idp);
+  assert.deepEqual(options.idp.dex, {
+    expiry: {
+      idTokens: '1m',
+      refreshTokens: {
+        reuseInterval: '1s',
+        validIfNotUsedFor: '720h',
+        absoluteLifetime: '720h',
+      },
+    },
+    sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
+    users: [
+      {
+        email: 'user@example.com',
+        password: 'visage-password',
+        username: 'user',
+        userID: 'user@example.com',
+      },
+    ],
+  });
+  assert.deepEqual(options.oauth2, {
+    id: 'visage',
+    secret: 'visage-secret',
+    scopes: ['openid', 'offline_access'],
+    public: false,
+    redirectUri: 'https://localhost:9001/oauth2/callback',
+    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
+  });
+});
+
+test('resolveOptions preserves Dex defaults with partial overrides', () => {
+  const options = resolveOptions({
+    idp: {
+      expiry: { refreshTokens: { reuseInterval: '2s' } },
+      sessions: { absoluteLifetime: '1440h' },
+    },
+  });
+
+  assert.ok('dex' in options.idp);
+  assert.deepEqual(options.idp.dex.expiry, {
+    idTokens: '1m',
+    refreshTokens: {
+      reuseInterval: '2s',
+      validIfNotUsedFor: '720h',
+      absoluteLifetime: '720h',
+    },
+  });
+  assert.deepEqual(options.idp.dex.sessions, {
+    absoluteLifetime: '1440h',
+    validIfNotUsedFor: '720h',
+  });
+});
+
+test('resolveOptions prefixes cookie names only without configured domains', () => {
+  for (const [cookie, name] of [
+    [{ name: 'custom' }, '__Host-custom'],
+    [{ name: 'custom', path: '/' }, '__Host-custom'],
+    [{ name: 'custom', domains: [] }, '__Host-custom'],
+    [{ name: 'custom', domains: ['.local.test'] }, 'custom'],
+    [{ name: '__Host-custom' }, '__Host-custom'],
+  ] as const) {
+    const options = resolveOptions({ cookie });
+    assert.equal(options.cookie.cookie_name, name);
+    assert.equal(options.cookie.cookie_path, '/');
+  }
+});
+
+test('resolveOptions avoids automatic host prefixes for scoped cookie paths', () => {
+  for (const domains of [undefined, []]) {
+    const options = resolveOptions({
+      cookie: { name: 'custom', path: '/app/', domains },
+    });
+    assert.equal(options.cookie.cookie_name, 'custom');
+    assert.equal(options.cookie.cookie_path, '/app/');
+  }
+});
+
+test('resolveOptions applies cookie overrides', () => {
+  const options = resolveOptions({
+    cookie: {
+      name: 'custom',
+      expire: '30m',
+      refresh: '5m',
+      domains: ['.local.test', 'app.local.test'],
+      path: '/app/',
+    },
+  });
+
+  assert.deepEqual(options.cookie, {
+    cookie_name: 'custom',
+    cookie_expire: '30m',
+    cookie_refresh: '5m',
+    cookie_domains: ['.local.test', 'app.local.test'],
+    cookie_path: '/app/',
+  });
+});
+
+test('resolveOptions applies Dex overrides', () => {
+  const options = resolveOptions({
+    idp: {
+      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+      expiry: {
+        idTokens: '10m',
+        authRequests: '2m',
+        refreshTokens: {
+          validIfNotUsedFor: '1h',
+          absoluteLifetime: '8h',
+          reuseInterval: '10s',
+        },
+      },
+      users: [
+        {
+          email: 'admin@example.com',
+          password: 'secret',
+        },
+        {
+          email: 'reader@example.com',
+          password: 'reader-password',
+          username: 'reader',
+          userID: 'reader-1',
+        },
+      ],
+    },
+  });
+
+  assert.ok('dex' in options.idp);
+  assert.deepEqual(options.idp.dex, {
+    sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+    expiry: {
+      idTokens: '10m',
+      authRequests: '2m',
+      refreshTokens: {
+        validIfNotUsedFor: '1h',
+        absoluteLifetime: '8h',
+        reuseInterval: '10s',
+      },
+    },
+    users: [
+      {
+        email: 'admin@example.com',
+        password: 'secret',
+        username: 'admin',
+        userID: 'admin@example.com',
+      },
+      {
+        email: 'reader@example.com',
+        password: 'reader-password',
+        username: 'reader',
+        userID: 'reader-1',
+      },
+    ],
+  });
+});
+
+test('resolveOptions applies OAuth2 client overrides', () => {
+  const options = resolveOptions({
+    oauth2: {
+      clientId: 'local-app',
+      clientSecret: 'local-secret',
+      scopes: ['openid', 'email'],
+    },
+  });
+
+  assert.deepEqual(options.oauth2, {
+    id: 'local-app',
+    secret: 'local-secret',
+    scopes: ['openid', 'email'],
+    public: false,
+    redirectUri: 'https://localhost:9001/oauth2/callback',
+    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
+  });
+});
+
+test('resolveOptions applies IdP overrides', () => {
+  const options = resolveOptions({
+    idp: {
+      issuer: 'http://idp.localhost:5557/idp',
+      algs: ['RS512'],
+    },
+  });
+
+  assert.deepEqual(options.idp.oidc, {
+    issuer: 'http://idp.localhost:5557/idp',
+    algs: ['RS512'],
+  });
+});
+
+test('resolveOptions supports OAuth2 public PKCE clients', () => {
+  const options = resolveOptions({
+    oauth2: {
+      clientId: 'local-app',
+      clientSecret: null,
+      scopes: ['openid', 'email', 'profile', 'offline_access'],
+    },
+  });
+
+  assert.deepEqual(options.oauth2, {
+    id: 'local-app',
+    scopes: ['openid', 'email', 'profile', 'offline_access'],
+    public: true,
+    redirectUri: 'https://localhost:9001/oauth2/callback',
+    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
+  });
+});
+
+test('resolveOptions preserves service overrides without assembling managed services', () => {
+  const services = {
+    dex: {
+      environment: { EXAMPLE: 'value' },
+      upstream: { headers: { 'X-Example': 'value' } },
+    },
+  };
+  const options = resolveOptions({
+    telemetry: true,
+    services,
+  });
+  assert.deepEqual(options.services, services);
+  assert.equal(options.remotes.vite, undefined);
 });

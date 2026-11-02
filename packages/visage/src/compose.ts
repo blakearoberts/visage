@@ -19,12 +19,10 @@ export function startCompose(config: VisageConfig): () => void {
   const dir = join(config.cache, 'logs');
   const env = {
     COMPOSE_MENU: 'false',
-    ...(config.app.client.public
-      ? {}
-      : { [config.secrets.clientSecret]: config.app.client.secret }),
+    OAUTH2_CLIENT_SECRET: config.app.client.secret ?? '',
     ...process.env,
-    [config.secrets.edgeKey]: config.edgeKey,
-    [config.secrets.cookieSecret]: randomBytes(32).toString('base64url'),
+    VISAGE_EDGE_KEY: config.edgeKey,
+    OAUTH2_PROXY_COOKIE_SECRET: randomBytes(32).toString('base64url'),
   };
   const opts = { cwd: config.cache, env };
 

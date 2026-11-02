@@ -26,21 +26,12 @@ function renderComposeConfig(config: VisageConfig): string {
       ),
     ),
     volumes: config.volumes,
-    secrets: {
-      [config.secrets.cookieSecret]: {
-        environment: config.secrets.cookieSecret,
-      },
-      [config.secrets.edgeKey]: {
-        environment: config.secrets.edgeKey,
-      },
-      ...(config.app.client.public
-        ? {}
-        : {
-            [config.secrets.clientSecret]: {
-              environment: config.secrets.clientSecret,
-            },
-          }),
-    },
+    secrets: Object.fromEntries(
+      Object.values(config.services).flatMap(
+        ({ secrets }) =>
+          secrets?.map((name) => [name, { environment: name }]) ?? [],
+      ),
+    ),
     services: {
       ...('dex' in config.idp
         ? {
@@ -50,9 +41,6 @@ function renderComposeConfig(config: VisageConfig): string {
                 `${config.files.dex[0]}:${config.files.dex[1]}:ro`,
                 ...(dex.volumes ?? []),
               ],
-              ...(config.app.client.public
-                ? {}
-                : { secrets: [config.secrets.clientSecret] }),
             },
           }
         : {}),
@@ -76,7 +64,6 @@ function renderComposeConfig(config: VisageConfig): string {
           OTEL_SERVICE_NAMESPACE: config.package,
           ...nginx.environment,
         },
-        secrets: [config.secrets.edgeKey],
         ports: [`127.0.0.1:${config.app.port}:${config.app.port}`],
         volumes: [
           `${config.nginx.mount[0]}:${config.nginx.mount[1]}`,
@@ -88,10 +75,6 @@ function renderComposeConfig(config: VisageConfig): string {
         volumes: [
           `${config.files.oauth2Proxy[0]}:${config.files.oauth2Proxy[1]}:ro`,
           ...(oauth2_proxy.volumes ?? []),
-        ],
-        secrets: [
-          config.secrets.cookieSecret,
-          ...(config.app.client.public ? [] : [config.secrets.clientSecret]),
         ],
       },
       ...services,

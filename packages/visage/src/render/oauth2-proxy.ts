@@ -42,9 +42,9 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
           code_challenge_method: 'S256',
           client_secret_file: '/dev/null',
         }
-      : { client_secret_file: `/run/secrets/${config.secrets.clientSecret}` }),
+      : { client_secret_file: '/run/secrets/OAUTH2_CLIENT_SECRET' }),
     ...config.app.cookie,
-    cookie_secret_file: `/run/secrets/${config.secrets.cookieSecret}`,
+    cookie_secret_file: '/run/secrets/OAUTH2_PROXY_COOKIE_SECRET',
     cookie_httponly: true,
     cookie_secure: true,
     cookie_samesite: 'lax',

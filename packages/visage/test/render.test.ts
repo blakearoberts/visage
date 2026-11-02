@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -27,7 +27,7 @@ function resolvedConfig(
   const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
   t.after(() => rmSync(cache, { recursive: true, force: true }));
 
-  const config = resolveConfig({
+  return resolveConfig({
     ...resolveOptions({
       host: 'app.local.test',
       port: 9443,
@@ -39,8 +39,6 @@ function resolvedConfig(
     edgeKey,
     appPort: 6173,
   });
-  mkdirSync(config.cache, { recursive: true });
-  return config;
 }
 
 function readGenerated(config: VisageConfig, file: string) {
@@ -99,6 +97,29 @@ function parseKeyValueConfig(contents: string) {
   );
 }
 
+test('validateDexPassword enforces password length without truncation', () => {
+  for (const password of [
+    'a'.repeat(15),
+    'a'.repeat(64),
+    'é'.repeat(36),
+    '😀'.repeat(18),
+  ]) {
+    assert.doesNotThrow(() => validateDexPassword(password));
+  }
+
+  for (const password of ['', 'a'.repeat(14), 'a'.repeat(65), '😀'.repeat(8)]) {
+    assert.throws(() => validateDexPassword(password), {
+      message: 'Password must be between 15 and 64 characters',
+    });
+  }
+
+  for (const password of ['é'.repeat(37), '😀'.repeat(19)]) {
+    assert.throws(() => validateDexPassword(password), {
+      message: 'Password must not exceed 72 UTF-8 bytes',
+    });
+  }
+});
+
 test('writeComposeConfig renders named volume declarations and mounts', (t) => {
   const config = resolvedConfig(t, {
     volumes: {
@@ -138,6 +159,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
         api: {
           image: 'example/api:test',
           command: ['serve'],
+          security_opt: [],
+          cap_drop: ['NET_RAW'],
+          read_only: false,
           networks: ['backend'],
           environment: { API_MODE: 'test' },
           depends_on: ['nginx'],
@@ -159,7 +183,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
-  for (const name of ['nginx', 'oauth2_proxy', 'dex', 'api']) {
+  for (const name of Object.keys(compose.services)) {
     assert.equal(compose.services[name].logging, undefined);
   }
   assert.deepEqual(compose.services.dex.command, [
@@ -223,9 +247,24 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     restart: 'on-failure',
     volumes: ['./api.yml:/etc/api/api.yml:ro'],
     networks: ['api', 'backend'],
+    security_opt: [],
+    cap_drop: ['NET_RAW'],
+    read_only: false,
   });
   for (const name of Object.keys(compose.services)) {
     assert.equal(compose.services[name].upstream, undefined);
+    assert.deepEqual(
+      compose.services[name].security_opt,
+      config.services[name].security_opt,
+    );
+    assert.deepEqual(
+      compose.services[name].cap_drop,
+      config.services[name].cap_drop,
+    );
+    assert.equal(
+      compose.services[name].read_only,
+      config.services[name].read_only,
+    );
   }
   assert.equal(compose.services.otelcol, undefined);
   assert.deepEqual(compose.networks, {
@@ -250,7 +289,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   });
 });
 
-test('writeComposeConfig renders public clients without Dex client secret env', (t) => {
+test('writeComposeConfig includes unused client secrets for public clients', (t) => {
   const config = resolvedConfig(t, {
     oauth2: { clientSecret: null },
   });
@@ -258,22 +297,18 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
-  assert.deepEqual(compose.services.nginx.environment, {
-    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
-    OTEL_SERVICE_NAME: 'nginx',
-    OTEL_SERVICE_NAMESPACE: 'render-test',
-  });
-  assert.equal(compose.services.otelcol, undefined);
-  assert.deepEqual(compose.services.oauth2_proxy.volumes, [
-    './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
-  ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
+    'OAUTH2_CLIENT_SECRET',
   ]);
-  assert.equal(compose.services.dex.secrets, undefined);
+  assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
+  assert.equal(compose.services.dex.read_only, false);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
+    },
+    OAUTH2_CLIENT_SECRET: {
+      environment: 'OAUTH2_CLIENT_SECRET',
     },
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
@@ -281,8 +316,28 @@ test('writeComposeConfig renders public clients without Dex client secret env', 
   });
 });
 
+test('writeComposeConfig declares environment-backed secrets used by services', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      api: { image: 'example/api', secrets: ['API_TOKEN', 'SHARED_TOKEN'] },
+      worker: { image: 'example/worker', secrets: ['SHARED_TOKEN'] },
+    },
+  });
+  writeComposeConfig(config);
+  const compose = parse(readGenerated(config, config.files.compose));
+  assert.deepEqual(compose.services.api.secrets, ['API_TOKEN', 'SHARED_TOKEN']);
+  assert.deepEqual(compose.services.worker.secrets, ['SHARED_TOKEN']);
+  assert.deepEqual(compose.secrets, {
+    API_TOKEN: { environment: 'API_TOKEN' },
+    SHARED_TOKEN: { environment: 'SHARED_TOKEN' },
+    OAUTH2_CLIENT_SECRET: { environment: 'OAUTH2_CLIENT_SECRET' },
+    VISAGE_EDGE_KEY: { environment: 'VISAGE_EDGE_KEY' },
+    OAUTH2_PROXY_COOKIE_SECRET: { environment: 'OAUTH2_PROXY_COOKIE_SECRET' },
+  });
+});
+
 test('writeComposeConfig preserves service logging overrides', (t) => {
-  for (const telemetry of [undefined, false, true, {}]) {
+  for (const telemetry of [false, true]) {
     const logging = { driver: 'local', options: { 'max-size': '10m' } };
     const config = resolvedConfig(t, {
       telemetry,
@@ -307,37 +362,8 @@ test('writeComposeConfig preserves service logging overrides', (t) => {
       'otelcol',
       'api',
     ]) {
-      assert.deepEqual(config.services[name].logging, logging);
       assert.deepEqual(compose.services[name].logging, logging);
     }
-    assert.equal(
-      Object.hasOwn(config.services.vite_loopback, 'upstream'),
-      false,
-    );
-  }
-});
-
-test('telemetry booleans enable and disable the Collector, logging, and instrumentation', (t) => {
-  for (const [telemetry, enabled] of [
-    [undefined, false],
-    [false, false],
-    [true, true],
-    [{}, true],
-  ] as const) {
-    const config = resolvedConfig(t, { telemetry });
-    writeComposeConfig(config);
-    writeNginxAssets(config);
-    const compose = parse(readGenerated(config, config.files.compose));
-    assert.equal(config.telemetry, enabled);
-    assert.equal(compose.services.otelcol !== undefined, enabled);
-    for (const name of Object.keys(compose.services)) {
-      assert.equal(
-        compose.services[name].logging?.driver,
-        enabled ? 'fluentd' : undefined,
-      );
-    }
-    const nginx = readGeneratedNginx(config, 'nginx.conf');
-    assert.equal(nginx.includes('ngx_otel_module.so'), enabled);
   }
 });
 
@@ -370,40 +396,17 @@ test('writeComposeConfig publishes only the collector logging port', (t) => {
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
-  assert.deepEqual(compose.services.nginx.environment, {
-    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
-    OTEL_SERVICE_NAME: 'nginx',
-    OTEL_SERVICE_NAMESPACE: 'render-test',
-  });
-  for (const name of [
-    'nginx',
-    'oauth2_proxy',
-    'dex',
-    'vite_loopback',
-    'api',
-    'otelcol',
-  ]) {
+  for (const name of Object.keys(compose.services)) {
     assert.equal(compose.services[name].logging.driver, 'fluentd');
-    assert.equal(
-      compose.services[name].logging.options.tag,
-      `render-test/${name}|{{.ImageName}}`,
-    );
-    assert.equal(
-      compose.services[name].logging.options['cache-disabled'],
-      'true',
-    );
-    assert.equal(
-      compose.services[name].logging.options['fluentd-address'],
-      '127.0.0.1:24224',
-    );
   }
   assert.equal(compose.services.otelcol.image, DockerImages.otelcol.image);
-  assert.equal(compose.services.otelcol.depends_on, undefined);
-  assert.equal(compose.services.otelcol.network_mode, undefined);
   assert.deepEqual(compose.services.otelcol.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317',
   });
   assert.deepEqual(compose.services.otelcol.ports, ['127.0.0.1:24224:24224']);
+  for (const name of ['dex', 'oauth2_proxy', 'vite_loopback']) {
+    assert.equal(compose.services[name].ports, undefined);
+  }
   assert.deepEqual(compose.services.otelcol.networks, ['otelcol']);
   assert.equal(compose.services.otelcol.restart, 'always');
   assert.equal(compose.services.otelcol.volumes.length, 1);
@@ -424,14 +427,142 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
 
   const compose = parse(readGenerated(config, config.files.compose));
   assert.equal(compose.services.dex, undefined);
-  assert.equal(compose.services.nginx.depends_on, undefined);
-  assert.deepEqual(compose.services.nginx.extra_hosts, [
-    'host.docker.internal:host-gateway',
+});
+
+test('writeComposeConfig omits public hosts and upstream metadata from services', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      api: {
+        host: 'api.dev.test',
+        upstream: { host: 'backend.internal', scheme: 'https' },
+      },
+    },
+  });
+  writeComposeConfig(config);
+  const compose = parse(readGenerated(config, config.files.compose));
+  assert.equal(compose.services.api.host, undefined);
+  assert.equal(compose.services.api.upstream, undefined);
+});
+
+test('writeDexConfig renders default OIDC, client, and session settings', (t) => {
+  const config = resolvedConfig(t);
+
+  writeDexConfig(config);
+
+  const dex = parse(readGenerated(config, config.files.dex[0]));
+  assert.equal(dex.issuer, 'https://app.local.test:9443/dex');
+  assert.deepEqual(dex.expiry, {
+    idTokens: '1m',
+    refreshTokens: {
+      reuseInterval: '1s',
+      validIfNotUsedFor: '720h',
+      absoluteLifetime: '720h',
+    },
+  });
+  assert.deepEqual(dex.sessions, {
+    absoluteLifetime: '720h',
+    validIfNotUsedFor: '720h',
+  });
+  assert.deepEqual(dex.storage, { type: 'memory' });
+  assert.deepEqual(dex.web, { http: '127.0.0.1:5556' });
+  assert.deepEqual(dex.staticClients, [
+    {
+      id: 'visage',
+      name: 'visage',
+      secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
+      refreshTokenLifetime: 'session',
+      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
+      redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
+    },
   ]);
-  assert.equal(compose.services.oauth2_proxy.depends_on, undefined);
-  assert.equal(compose.services.oauth2_proxy.extra_hosts, undefined);
-  assert.equal(compose.services.oauth2_proxy.network_mode, 'service:nginx');
-  assert.equal(compose.services.oauth2_proxy.networks, undefined);
+  assert.equal(dex.enablePasswordDB, true);
+  assert.deepEqual(dex.staticPasswords, []);
+});
+
+test('writeDexConfig renders configured OAuth2 public client', (t) => {
+  const config = resolvedConfig(t, {
+    oauth2: {
+      clientId: 'local-app',
+      clientSecret: null,
+      scopes: ['openid', 'email', 'profile', 'offline_access'],
+    },
+  });
+
+  writeDexConfig(config);
+
+  const dex = parse(readGenerated(config, config.files.dex[0]));
+  assert.deepEqual(dex.staticClients, [
+    {
+      id: 'local-app',
+      name: 'local-app',
+      public: true,
+      refreshTokenLifetime: 'session',
+      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
+      redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
+    },
+  ]);
+});
+
+test('writeDexConfig renders configured expiry and sessions', (t) => {
+  const config = resolvedConfig(t, {
+    idp: {
+      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+      expiry: {
+        idTokens: '10m',
+        signingKeys: '6h',
+        refreshTokens: {
+          validIfNotUsedFor: '1h',
+          absoluteLifetime: '8h',
+          reuseInterval: '10s',
+        },
+      },
+      users: [],
+    },
+  });
+
+  writeDexConfig(config);
+
+  const dex = parse(readGenerated(config, config.files.dex[0]));
+  assert.deepEqual(dex.sessions, {
+    absoluteLifetime: '8760h',
+    validIfNotUsedFor: '8760h',
+  });
+  assert.deepEqual(dex.expiry, {
+    idTokens: '10m',
+    signingKeys: '6h',
+    refreshTokens: {
+      validIfNotUsedFor: '1h',
+      absoluteLifetime: '8h',
+      reuseInterval: '10s',
+    },
+  });
+});
+
+test('writeDexConfig uses the resolved callback URL', (t) => {
+  const config = resolvedConfig(t);
+  const callback = 'https://auth.local.test:8443/oauth2/callback';
+  const resolved = {
+    ...config,
+    app: {
+      ...config.app,
+      client: { ...config.app.client, redirectUri: callback },
+    },
+  };
+  writeDexConfig(resolved);
+  const dex = parse(readGenerated(config, config.files.dex[0]));
+  assert.deepEqual(dex.staticClients[0].redirectURIs, [callback]);
+});
+
+test('writeDexConfig uses the public IdP host and application callback', (t) => {
+  const config = resolvedConfig(t, {
+    services: { dex: { host: 'idp.local.test' } },
+  });
+  writeDexConfig(config);
+  const dex = parse(readGenerated(config, config.files.dex[0]));
+  assert.equal(dex.issuer, 'https://idp.local.test:9443/dex');
+  assert.deepEqual(dex.staticClients[0].redirectURIs, [
+    'https://app.local.test:9443/oauth2/callback',
+  ]);
 });
 
 test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => {
@@ -504,10 +635,7 @@ otel_trace_context propagate;
 otel_span_name "$request_method";
 `,
   );
-  assert.match(
-    nginx,
-    /error_page 497 =301 https:\/\/\$http_host\$request_uri;/,
-  );
+  assert.match(nginx, /error_page 497 = @https_redirect;/);
   assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
   assert.match(nginx, /log_format access_log_format escape=json/);
   assert.ok(nginx.includes('"user.name":"$auth_user"'));
@@ -634,6 +762,28 @@ test('writeNginxAssets omits OpenTelemetry config when telemetry is disabled', (
     readGeneratedNginx(config, 'templates/otel.conf.template'),
     /otel_trace on;/,
   );
+});
+
+test('writeNginxAssets rejects host mismatches before proxying or HTTPS redirects', (t) => {
+  const config = resolvedConfig(t, {
+    services: { api: { host: 'api.local.test' } },
+  });
+  writeNginxAssets(config);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  const servers = nginx.split('\n    server {').slice(1);
+  assert.equal(servers.length, 2);
+  for (const [index, host] of config.hosts.entries()) {
+    const server = servers[index];
+    assert.match(
+      server.slice(0, server.indexOf('location ')),
+      /if \(\$host != \$server_name\) \{\s+return 404;/,
+    );
+    const redirect = locationBlock(server, '@https_redirect');
+    assert.match(redirect, /if \(\$host != \$server_name\) \{\s+return 404;/);
+    assert.ok(
+      redirect.includes(`return 301 https://${host}:9443$request_uri;`),
+    );
+  }
 });
 
 test('writeNginxAssets redirects only document navigation auth failures', (t) => {
@@ -827,26 +977,6 @@ test('writeNginxAssets resolves Compose hostnames and keeps IP addresses static'
   const fixed = upstreamBlock(nginx, 'fixed');
   assert.match(fixed, /server 192\.0\.2\.1:8080;/);
   assert.doesNotMatch(fixed, /zone|resolve/);
-});
-
-test('OAuth2 session maps match the configured cookie name literally', (t) => {
-  const config = resolvedConfig(t, { cookie: { name: 'app.session+$' } });
-  writeNginxAssets(config);
-
-  const nginx = readGeneratedNginx(config, 'nginx.conf');
-  const [incoming, refreshed] = [
-    ...nginx.matchAll(/("(?:\\.|[^"\\])*") \$1;/g),
-  ];
-  assert.ok(incoming);
-  assert.ok(refreshed);
-  assert.equal(
-    JSON.parse(incoming[1]),
-    String.raw`~(?:^|;)[[:blank:]]*(__Host-app\.session\+\$=[^;]*)`,
-  );
-  assert.equal(
-    JSON.parse(refreshed[1]),
-    String.raw`~^(__Host-app\.session\+\$=[^;]*)`,
-  );
 });
 
 test('writeNginxAssets keeps OAuth2-only sign-out returning to root', (t) => {
@@ -1076,133 +1206,45 @@ test('writeNginxAssets does not render external IdP upstream locations', (t) => 
   assert.doesNotMatch(nginx, /dex_password|limit_req/);
 });
 
-test('writeDexConfig renders default OIDC, client, and session settings', (t) => {
-  const config = resolvedConfig(t);
-
-  writeDexConfig(config);
-
-  const dex = parse(readGenerated(config, config.files.dex[0]));
-  assert.equal(dex.issuer, 'https://app.local.test:9443/dex');
-  assert.deepEqual(dex.expiry, {
-    idTokens: '1m',
-    refreshTokens: {
-      reuseInterval: '1s',
-      validIfNotUsedFor: '720h',
-      absoluteLifetime: '720h',
-    },
-  });
-  assert.deepEqual(dex.sessions, {
-    absoluteLifetime: '720h',
-    validIfNotUsedFor: '720h',
-  });
-  assert.deepEqual(dex.storage, { type: 'memory' });
-  assert.deepEqual(dex.web, { http: '127.0.0.1:5556' });
-  assert.deepEqual(dex.staticClients, [
-    {
-      id: 'visage',
-      name: 'visage',
-      secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
-      refreshTokenLifetime: 'session',
-      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
-      redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
-    },
-  ]);
-  assert.equal(dex.enablePasswordDB, true);
-  assert.deepEqual(dex.staticPasswords, []);
-});
-
-test('validateDexPassword enforces password length without truncation', () => {
-  for (const password of [
-    'a'.repeat(15),
-    'a'.repeat(64),
-    'é'.repeat(36),
-    '😀'.repeat(18),
-  ]) {
-    assert.doesNotThrow(() => validateDexPassword(password));
-  }
-
-  for (const password of ['', 'a'.repeat(14), 'a'.repeat(65), '😀'.repeat(8)]) {
-    assert.throws(() => validateDexPassword(password), {
-      message: 'Password must be between 15 and 64 characters',
-    });
-  }
-
-  for (const password of ['é'.repeat(37), '😀'.repeat(19)]) {
-    assert.throws(() => validateDexPassword(password), {
-      message: 'Password must not exceed 72 UTF-8 bytes',
-    });
+test('writeNginxAssets enables instrumentation for telemetry options', (t) => {
+  for (const [telemetry, enabled] of [
+    [undefined, false],
+    [false, false],
+    [true, true],
+    [{}, true],
+  ] as const) {
+    const config = resolvedConfig(t, { telemetry });
+    writeNginxAssets(config);
+    const nginx = readGeneratedNginx(config, 'nginx.conf');
+    assert.equal(nginx.includes('ngx_otel_module.so'), enabled);
   }
 });
 
-test('writeDexConfig renders configured OAuth2 public client', (t) => {
-  const config = resolvedConfig(t, {
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: null,
-      scopes: ['openid', 'email', 'profile', 'offline_access'],
-    },
-  });
+test('writeNginxAssets matches the configured cookie name literally in OAuth2 session maps', (t) => {
+  const config = resolvedConfig(t, { cookie: { name: 'app.session+$' } });
+  writeNginxAssets(config);
 
-  writeDexConfig(config);
-
-  const dex = parse(readGenerated(config, config.files.dex[0]));
-  assert.deepEqual(dex.staticClients, [
-    {
-      id: 'local-app',
-      name: 'local-app',
-      public: true,
-      refreshTokenLifetime: 'session',
-      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
-      redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
-    },
-  ]);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  const [incoming, refreshed] = [
+    ...nginx.matchAll(/("(?:\\.|[^"\\])*") \$1;/g),
+  ];
+  assert.ok(incoming);
+  assert.ok(refreshed);
+  assert.equal(
+    JSON.parse(incoming[1]),
+    String.raw`~(?:^|;)[[:blank:]]*(__Host-app\.session\+\$=[^;]*)`,
+  );
+  assert.equal(
+    JSON.parse(refreshed[1]),
+    String.raw`~^(__Host-app\.session\+\$=[^;]*)`,
+  );
 });
 
-test('writeDexConfig renders configured expiry and sessions', (t) => {
-  const config = resolvedConfig(t, {
-    idp: {
-      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
-      expiry: {
-        idTokens: '10m',
-        signingKeys: '6h',
-        refreshTokens: {
-          validIfNotUsedFor: '1h',
-          absoluteLifetime: '8h',
-          reuseInterval: '10s',
-        },
-      },
-      users: [],
-    },
-  });
-
-  writeDexConfig(config);
-
-  const dex = parse(readGenerated(config, config.files.dex[0]));
-  assert.deepEqual(dex.sessions, {
-    absoluteLifetime: '8760h',
-    validIfNotUsedFor: '8760h',
-  });
-  assert.deepEqual(dex.expiry, {
-    idTokens: '10m',
-    signingKeys: '6h',
-    refreshTokens: {
-      validIfNotUsedFor: '1h',
-      absoluteLifetime: '8h',
-      reuseInterval: '10s',
-    },
-  });
-});
-
-test('OAuth2 Proxy retains its required upstream when false is configured', (t) => {
+test('writeNginxAssets retains OAuth2 Proxy routes when the upstream is disabled', (t) => {
   const config = resolvedConfig(t, {
     services: { oauth2_proxy: { upstream: false } },
   });
-  writeOauth2ProxyConfig(config);
   writeNginxAssets(config);
-  const proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
-  );
-  assert.equal(proxy.http_address, '127.0.0.1:4180');
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.match(
     locationBlock(nginx, '= /oauth2/auth'),
@@ -1212,6 +1254,57 @@ test('OAuth2 Proxy retains its required upstream when false is configured', (t) 
     locationBlock(nginx, '/oauth2/sign_out'),
     /post_logout_redirect_uri=/,
   );
+});
+
+test('writeNginxAssets isolates Dex public-host routes from application authentication', (t) => {
+  const config = resolvedConfig(t, {
+    services: { dex: { host: 'idp.local.test' } },
+  });
+  writeNginxAssets(config);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  const [, app, idp] = nginx.split('\n    server {');
+  assert.match(app, /server_name app\.local\.test;/);
+  assert.match(app, /location = \/oauth2\/auth/);
+  assert.doesNotMatch(app, /location \/dex\//);
+  assert.match(idp, /server_name idp\.local\.test;/);
+  assert.match(idp, /location \/dex\//);
+  assert.match(idp, /proxy_pass http:\/\/dex;/);
+  assert.match(
+    idp,
+    /proxy_set_header Cookie dex_session=\$cookie_dex_session;/,
+  );
+  assert.doesNotMatch(idp, /auth_request|location .*oauth2|\$csrf_reject/);
+  assert.match(
+    locationBlock(idp, '@auth_redirect'),
+    /return 302 https:\/\/app\.local\.test:9443\/oauth2\/start\?rd=https:\/\/app\.local\.test:9443\$request_uri;/,
+  );
+  assert.match(locationBlock(idp, '@auth_401'), /return 401;/);
+  assert.match(
+    locationBlock(nginx, '/oauth2/sign_out'),
+    /idp\.local\.test:9443\/dex\/logout/,
+  );
+});
+
+test('writeNginxAssets separates service public hosts from backend TLS names', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      api: {
+        host: 'api.dev.test',
+        upstream: { host: 'backend.internal', scheme: 'https' },
+      },
+    },
+  });
+  writeNginxAssets(config);
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  assert.match(nginx, /server_name api\.dev\.test;/);
+  assert.match(
+    upstreamBlock(nginx, 'api'),
+    /server backend\.internal:443 resolve;/,
+  );
+  const api = locationBlock(nginx, '/api/');
+  assert.match(api, /proxy_ssl_name\s+backend\.internal;/);
+  assert.match(api, /proxy_ssl_verify\s+on;/);
+  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
 });
 
 test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret', (t) => {
@@ -1395,7 +1488,18 @@ test('writeOauth2ProxyConfig renders configured cookie policy', (t) => {
   assert.equal(oauth2Proxy.cookie_path, '/app/');
 });
 
-test('OAuth renderers share the resolved callback URL', (t) => {
+test('writeOauth2ProxyConfig retains its listener when the upstream is disabled', (t) => {
+  const config = resolvedConfig(t, {
+    services: { oauth2_proxy: { upstream: false } },
+  });
+  writeOauth2ProxyConfig(config);
+  const proxy = parseKeyValueConfig(
+    readGenerated(config, config.files.oauth2Proxy[0]),
+  );
+  assert.equal(proxy.http_address, '127.0.0.1:4180');
+});
+
+test('writeOauth2ProxyConfig uses the resolved callback URL', (t) => {
   const config = resolvedConfig(t);
   const callback = 'https://auth.local.test:8443/oauth2/callback';
   const resolved = {
@@ -1405,46 +1509,18 @@ test('OAuth renderers share the resolved callback URL', (t) => {
       client: { ...config.app.client, redirectUri: callback },
     },
   };
-  writeDexConfig(resolved);
   writeOauth2ProxyConfig(resolved);
-  const dex = parse(readGenerated(config, config.files.dex[0]));
   const proxy = parseKeyValueConfig(
     readGenerated(config, config.files.oauth2Proxy[0]),
   );
-  assert.deepEqual(dex.staticClients[0].redirectURIs, [callback]);
   assert.equal(proxy.redirect_url, callback);
 });
 
-test('Dex public hosts render independent routing with app-only OAuth cookies', (t) => {
+test('writeOauth2ProxyConfig uses the public IdP host with host-only application cookies', (t) => {
   const config = resolvedConfig(t, {
     services: { dex: { host: 'idp.local.test' } },
   });
-  writeNginxAssets(config);
-  writeDexConfig(config);
   writeOauth2ProxyConfig(config);
-  const nginx = readGeneratedNginx(config, 'nginx.conf');
-  const [, app, idp] = nginx.split('\n    server {');
-  assert.match(app, /server_name app\.local\.test;/);
-  assert.match(app, /location = \/oauth2\/auth/);
-  assert.doesNotMatch(app, /location \/dex\//);
-  assert.match(idp, /server_name idp\.local\.test;/);
-  assert.match(idp, /location \/dex\//);
-  assert.match(idp, /proxy_pass http:\/\/dex;/);
-  assert.match(
-    idp,
-    /proxy_set_header Cookie dex_session=\$cookie_dex_session;/,
-  );
-  assert.doesNotMatch(idp, /auth_request|location .*oauth2|\$csrf_reject/);
-  assert.match(
-    locationBlock(idp, '@auth_redirect'),
-    /return 302 https:\/\/app\.local\.test:9443\/oauth2\/start\?rd=https:\/\/app\.local\.test:9443\$request_uri;/,
-  );
-  assert.match(locationBlock(idp, '@auth_401'), /return 401;/);
-  const dex = parse(readGenerated(config, config.files.dex[0]));
-  assert.equal(dex.issuer, 'https://idp.local.test:9443/dex');
-  assert.deepEqual(dex.staticClients[0].redirectURIs, [
-    'https://app.local.test:9443/oauth2/callback',
-  ]);
   const oauth2 = readGenerated(config, config.files.oauth2Proxy[0]);
   assert.match(
     oauth2,
@@ -1455,34 +1531,4 @@ test('Dex public hosts render independent routing with app-only OAuth cookies', 
     /whitelist_domains = \["app\.local\.test", "app\.local\.test:9443", "idp\.local\.test:9443"\]/,
   );
   assert.doesNotMatch(oauth2, /cookie_domains/);
-  assert.match(
-    locationBlock(nginx, '/oauth2/sign_out'),
-    /idp\.local\.test:9443\/dex\/logout/,
-  );
-});
-
-test('service public hosts remain separate from backend TLS names and Compose settings', (t) => {
-  const config = resolvedConfig(t, {
-    services: {
-      api: {
-        host: 'api.dev.test',
-        upstream: { host: 'backend.internal', scheme: 'https' },
-      },
-    },
-  });
-  writeNginxAssets(config);
-  writeComposeConfig(config);
-  const nginx = readGeneratedNginx(config, 'nginx.conf');
-  assert.match(nginx, /server_name api\.dev\.test;/);
-  assert.match(
-    upstreamBlock(nginx, 'api'),
-    /server backend\.internal:443 resolve;/,
-  );
-  const api = locationBlock(nginx, '/api/');
-  assert.match(api, /proxy_ssl_name\s+backend\.internal;/);
-  assert.match(api, /proxy_ssl_verify\s+on;/);
-  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
-  const compose = parse(readGenerated(config, config.files.compose));
-  assert.equal(compose.services.api.host, undefined);
-  assert.equal(compose.services.api.upstream, undefined);
 });

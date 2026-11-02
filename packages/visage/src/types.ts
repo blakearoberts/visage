@@ -75,29 +75,26 @@ export type VisageVolume = {
  */
 export type VisageCookiePolicy = {
   /**
-   * Browser session cookie base name. When no domains are configured, Visage
-   * renders a host-only name with a `__Host-` prefix, so the default rendered
-   * name is `__Host-sess`.
+   * Browser session cookie base name. When no domains are configured and the
+   * path is `/`, Visage adds a `__Host-` prefix making the effective default
+   * cookie name `__Host-sess`.
    *
    * @defaultValue `'sess'`
    */
   readonly name?: string;
   /**
    * Cookie lifetime from login or the last successful refresh, not an absolute
-   * deadline from the original login. Rendered as OAuth2 Proxy `cookie_expire`
-   * using its duration syntax. Keep this aligned with the identity provider's
-   * refresh-token lifetime to avoid sessions that can no longer be refreshed
-   * silently.
+   * deadline from the original login. Keep this aligned with the identity provider's
+   * refresh-token lifetime to avoid sessions that can no longer be refreshed.
    *
    * @defaultValue `'720h'`
    */
   readonly expire?: string;
   /**
-   * Session age after which OAuth2 Proxy attempts silent refresh using the
-   * stored refresh token, when one is available. Rendered as `cookie_refresh`
-   * using OAuth2 Proxy duration syntax. If upstreams validate forwarded bearer
-   * tokens, set this below the relevant token lifetime so OAuth2 Proxy refreshes
-   * before forwarding expired token material.
+   * Session age after which OAuth2 Proxy attempts refresh using the stored
+   * refresh token, when one is available. If upstreams validate forwarded
+   * bearer tokens, set this below the relevant token lifetime so OAuth2 Proxy
+   * refreshes before forwarding expired token material.
    *
    * @defaultValue `'30s'`
    */
@@ -109,7 +106,7 @@ export type VisageCookiePolicy = {
   readonly domains?: readonly string[];
   /**
    * Cookie path scope. Keep broad enough for every protected route that should
-   * send the session.
+   * send the session. Omit for a host-only cookie.
    *
    * @defaultValue `'/'`
    */
@@ -340,9 +337,33 @@ export type VisageService = {
    */
   readonly user?: string;
   /**
+   * Docker security options.
+   * @defaultValue `['no-new-privileges:true']`
+   */
+  readonly security_opt?: readonly string[];
+  /**
+   * Linux capabilities to drop.
+   * @defaultValue `['ALL']`
+   */
+  readonly cap_drop?: readonly string[];
+  /** Linux capabilities to add after dropping capabilities. */
+  readonly cap_add?: readonly string[];
+  /**
+   * Mount the container root filesystem read-only.
+   * Defaults to true unless the service receives environment-backed
+   * secrets, which require a writable root filesystem in Docker Compose.
+   */
+  readonly read_only?: boolean;
+  /** Writable in-memory mounts, using Docker Compose tmpfs short syntax. */
+  readonly tmpfs?: readonly string[];
+  /**
    * Environment variables rendered into the Compose service.
    */
   readonly environment?: { readonly [name: string]: string };
+  /**
+   * Host environment variable names mounted at `/run/secrets/<name>`.
+   */
+  readonly secrets?: readonly string[];
   /**
    * Compose service dependencies that should start before this service.
    */

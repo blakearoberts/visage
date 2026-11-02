@@ -104,11 +104,6 @@ export type VisageConfig = {
     readonly dex: Volume;
     readonly oauth2Proxy: Volume;
   };
-  readonly secrets: {
-    readonly cookieSecret: string;
-    readonly clientSecret: string;
-    readonly edgeKey: string;
-  };
   readonly nginx: {
     readonly mount: Volume;
     readonly modules: readonly string[];
@@ -155,6 +150,7 @@ const BaseAppUpstream = {
 } as const satisfies VisageUpstream;
 
 const BaseServiceDex = {
+  secrets: ['OAUTH2_CLIENT_SECRET'],
   image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yaml'],
   environment: { DEX_SESSIONS_ENABLED: 'true' },
@@ -181,6 +177,7 @@ const BaseServiceDex = {
 } as const satisfies VisageService;
 
 const BaseServiceOAuth2Proxy = {
+  secrets: ['OAUTH2_PROXY_COOKIE_SECRET', 'OAUTH2_CLIENT_SECRET'],
   image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
   network_mode: 'service:nginx',
@@ -284,6 +281,7 @@ const DefaultProxyPolicy = {
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const { host = 'localhost', port = 9001, cookie = {}, oauth2 = {} } = options;
   const cookieName = cookie.name ?? 'sess';
+  const cookiePath = cookie.path ?? '/';
   const telemetry = options.telemetry === true ? {} : options.telemetry;
   const idp = resolveIdpOptions(host, port, options);
   const issuer = new URL(idp.oidc.issuer);
@@ -296,9 +294,9 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     cookie: {
       cookie_expire: '720h',
       cookie_refresh: '30s',
-      cookie_path: '/',
+      cookie_path: cookiePath,
       cookie_name:
-        cookie.domains === undefined
+        !cookie.domains?.length && cookiePath === '/'
           ? cookieName.startsWith('__Host-')
             ? cookieName
             : `__Host-${cookieName}`
@@ -310,7 +308,6 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
       ...(cookie.domains === undefined
         ? {}
         : { cookie_domains: cookie.domains }),
-      ...(cookie.path === undefined ? {} : { cookie_path: cookie.path }),
     } satisfies ResolvedCookiePolicy,
     idp,
     oauth2: {
@@ -447,11 +444,6 @@ export function resolveConfig(
       dex: ['./dex.yaml', '/etc/dex/dex.yaml'],
       oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
     },
-    secrets: {
-      cookieSecret: 'OAUTH2_PROXY_COOKIE_SECRET',
-      clientSecret: 'OAUTH2_CLIENT_SECRET',
-      edgeKey: 'VISAGE_EDGE_KEY',
-    },
     nginx: {
       mount: ['./nginx', '/etc/nginx'],
       modules: [
@@ -512,6 +504,7 @@ function resolveServicesConfig(
           dex: {
             ...BaseServiceDex,
             ...dex,
+            secrets: [...BaseServiceDex.secrets, ...(dex.secrets ?? [])],
             upstream:
               dex.upstream === false
                 ? false
@@ -524,7 +517,10 @@ function resolveServicesConfig(
       image: DockerImages.nginx.image,
       restart: 'always',
       upstream: false,
+      user: `${process.getuid?.() ?? 101}:${process.getgid?.() ?? 101}`,
+      tmpfs: ['/var/cache/nginx:mode=1777', '/etc/nginx/http.d:mode=1777'],
       ...nginx,
+      secrets: ['VISAGE_EDGE_KEY', ...(nginx.secrets ?? [])],
       extra_hosts: [
         ...['host.docker.internal:host-gateway'],
         ...(nginx.extra_hosts ?? []),
@@ -533,6 +529,10 @@ function resolveServicesConfig(
     oauth2_proxy: {
       ...BaseServiceOAuth2Proxy,
       ...oauth2_proxy,
+      secrets: [
+        ...BaseServiceOAuth2Proxy.secrets,
+        ...(oauth2_proxy.secrets ?? []),
+      ],
       upstream: oauth2_proxy.upstream || {
         ...BaseServiceOAuth2Proxy.upstream,
         locations: {
@@ -591,6 +591,9 @@ function resolveServicesConfig(
         name,
         {
           restart: 'on-failure',
+          security_opt: ['no-new-privileges:true'],
+          cap_drop: ['ALL'],
+          read_only: !service.secrets?.length,
           ...(telemetry && telemetry.fluentd !== undefined
             ? {
                 logging: {

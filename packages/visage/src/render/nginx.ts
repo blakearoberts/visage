@@ -11,6 +11,8 @@ const template = `
 load_module <%~ module %>;
 <%_ } %>
 
+pid /tmp/nginx.pid;
+
 events {}
 
 http {
@@ -112,13 +114,21 @@ http {
         listen <%~ server.port %> ssl;
         server_name <%~ server.host %>;
 
+        if ($host != $server_name) {
+            return 404;
+        }
+        error_page 497 = @https_redirect;
+        location @https_redirect {
+            if ($host != $server_name) {
+                return 404;
+            }
+            return 301 https://<%~ server.host %>:<%~ server.port %>$request_uri;
+        }
+
         ssl_certificate     <%~ server.ssl.cert %>;
         ssl_certificate_key <%~ server.ssl.key %>;
 
         access_log /var/log/nginx/access.log access_log_format;
-
-        # Redirect HTTP to HTTPS.
-        error_page 497 =301 https://$http_host$request_uri;
 
         <%_ for (const location of server.locations) { %>
         location <%~ location.path %> {
@@ -191,11 +201,11 @@ http {
 }
 `;
 
-const renderEdgeKeyJS = (file: string) => `import fs from 'fs';
+const edgeKeyScript = `import fs from 'fs';
 export default function value() {
   let key = ngx.shared.edge_key.get('edge_key');
   if (key === undefined) {
-    key = fs.readFileSync('/run/secrets/${file}', 'utf8').trim();
+    key = fs.readFileSync('/run/secrets/VISAGE_EDGE_KEY', 'utf8').trim();
     ngx.shared.edge_key.set('edge_key', key);
   }
   return key;
@@ -224,8 +234,7 @@ export function writeNginxAssets(config: VisageConfig): void {
   writeFileSync(file, render, 'utf-8');
 
   const edgeKeyFile = join(directory, 'edge-key.js');
-  const edgeKeyRender = renderEdgeKeyJS(config.secrets.edgeKey);
-  writeFileSync(edgeKeyFile, edgeKeyRender, 'utf-8');
+  writeFileSync(edgeKeyFile, edgeKeyScript, 'utf-8');
 
   const otelFile = join(directory, 'templates', 'otel.conf.template');
   writeFileSync(otelFile, otelTemplate, 'utf-8');

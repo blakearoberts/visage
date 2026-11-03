@@ -151,14 +151,14 @@ http {
 
             <%_ } %>
             <%_ if (location.auth?.enabled) { %>
-            auth_request      /oauth2/auth;
+            auth_request      /oauth/auth;
             auth_request_set  $authorization $upstream_http_authorization;
             auth_request_set  $access_token $upstream_http_x_auth_request_access_token;
             auth_request_set  $auth_user $upstream_http_x_auth_request_user;
             <%_ /* Explicit clear when oauth2-proxy sets sub as email header value. */ %>
             auth_request_set  $auth_email <%~ it.email ? '$upstream_http_x_auth_request_email' : '""' %>;
             auth_request_set  $auth_set_cookie $upstream_http_set_cookie;
-            <%_ if (location.target !== '/oauth2/sign_out') { %>
+            <%_ if (location.target !== '/oauth/sign_out') { %>
             <%_ /* Propagate refreshed session cookie to downstream user agent. */ %>
             add_header        Set-Cookie $auth_set_cookie;
             <%_ } %>
@@ -188,7 +188,7 @@ http {
             otel_span_name "$request_method @auth_redirect";
             <%_ } %>
             add_header Set-Cookie $auth_set_cookie always;
-            return 302 <%~ it.origin %>/oauth2/start?rd=<%~ it.origin %>$request_uri;
+            return 302 <%~ it.origin %>/oauth/start?rd=<%~ it.origin %>$request_uri;
         }
         location @auth_401 {
             <%_ if (it.telemetry) { %>

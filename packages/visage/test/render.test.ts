@@ -257,7 +257,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
       read_only: true,
     },
   ]);
-  assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
+  assert.deepEqual(compose.services.dex.secrets, [
+    'VISAGE_OAUTH_CLIENT_SECRET',
+  ]);
   assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
@@ -303,7 +305,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'OAUTH2_CLIENT_SECRET',
+    'VISAGE_OAUTH_CLIENT_SECRET',
   ]);
   assert.equal(compose.services.vite_loopback.image, DockerImages.socat.image);
   assert.equal(
@@ -367,15 +369,15 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
     },
-    OAUTH2_CLIENT_SECRET: {
-      environment: 'OAUTH2_CLIENT_SECRET',
+    VISAGE_OAUTH_CLIENT_SECRET: {
+      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
     },
   });
 });
 
 test('writeComposeConfig includes unused client secrets for public clients', (t) => {
   const config = resolvedConfig(t, {
-    oauth2: { clientSecret: null },
+    client: { public: true },
   });
 
   writeComposeConfig(config);
@@ -383,16 +385,18 @@ test('writeComposeConfig includes unused client secrets for public clients', (t)
   const compose = parse(readGenerated(config, config.files.compose));
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'OAUTH2_CLIENT_SECRET',
+    'VISAGE_OAUTH_CLIENT_SECRET',
   ]);
-  assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
+  assert.deepEqual(compose.services.dex.secrets, [
+    'VISAGE_OAUTH_CLIENT_SECRET',
+  ]);
   assert.equal(compose.services.dex.read_only, false);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
     },
-    OAUTH2_CLIENT_SECRET: {
-      environment: 'OAUTH2_CLIENT_SECRET',
+    VISAGE_OAUTH_CLIENT_SECRET: {
+      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
     },
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
@@ -414,7 +418,7 @@ test('writeComposeConfig declares environment-backed secrets used by services', 
   assert.deepEqual(compose.secrets, {
     API_TOKEN: { environment: 'API_TOKEN' },
     SHARED_TOKEN: { environment: 'SHARED_TOKEN' },
-    OAUTH2_CLIENT_SECRET: { environment: 'OAUTH2_CLIENT_SECRET' },
+    VISAGE_OAUTH_CLIENT_SECRET: { environment: 'VISAGE_OAUTH_CLIENT_SECRET' },
     VISAGE_EDGE_KEY: { environment: 'VISAGE_EDGE_KEY' },
     OAUTH2_PROXY_COOKIE_SECRET: { environment: 'OAUTH2_PROXY_COOKIE_SECRET' },
   });
@@ -516,11 +520,12 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   assert.equal(compose.services.dex, undefined);
 });
 
-test('writeComposeConfig omits public hosts and upstream metadata from services', (t) => {
+test('writeComposeConfig omits public hosts, upstreams, and clients from services', (t) => {
   const config = resolvedConfig(t, {
     services: {
       api: {
         host: 'api.dev.test',
+        client: { secret: 'api-secret' },
         upstream: { host: 'backend.internal', scheme: 'https' },
       },
     },
@@ -529,6 +534,15 @@ test('writeComposeConfig omits public hosts and upstream metadata from services'
   const compose = parse(readGenerated(config, config.files.compose));
   assert.equal(compose.services.api.host, undefined);
   assert.equal(compose.services.api.upstream, undefined);
+  assert.equal(compose.services.api.client, undefined);
+  assert.ok(compose.services.dex.secrets.includes('VISAGE_api_CLIENT_SECRET'));
+  assert.deepEqual(compose.secrets.VISAGE_api_CLIENT_SECRET, {
+    environment: 'VISAGE_api_CLIENT_SECRET',
+  });
+  assert.doesNotMatch(
+    readGenerated(config, config.files.compose),
+    /api-secret/,
+  );
 });
 
 test('writeDexConfig renders default OIDC, client, and session settings', (t) => {
@@ -556,21 +570,57 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
     {
       id: 'visage',
       name: 'visage',
-      secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
+      secret: '{{ file.Read "/run/secrets/VISAGE_OAUTH_CLIENT_SECRET" }}',
       refreshTokenLifetime: 'session',
-      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
-      redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
+      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth/start?rd=/'],
+      redirectURIs: ['https://app.local.test:9443/oauth/callback'],
     },
   ]);
   assert.equal(dex.enablePasswordDB, true);
   assert.deepEqual(dex.staticPasswords, []);
 });
 
+test('writeDexConfig registers confidential and public service clients', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      grafana: {
+        host: 'g.localhost',
+        client: {
+          id: 'metrics',
+          secret: 'metrics-secret',
+          redirectUri: 'https://g.localhost:9443/login/generic_oauth',
+        },
+      },
+      public_app: { client: { public: true } },
+    },
+  });
+  writeDexConfig(config);
+  const dex = parse(readGenerated(config, config.files.dex));
+  assert.deepEqual(dex.staticClients.slice(1), [
+    {
+      id: 'metrics',
+      name: 'metrics',
+      secret: '{{ file.Read "/run/secrets/VISAGE_grafana_CLIENT_SECRET" }}',
+      refreshTokenLifetime: 'session',
+      redirectURIs: ['https://g.localhost:9443/login/generic_oauth'],
+      postLogoutRedirectURIs: ['https://g.localhost:9443/'],
+    },
+    {
+      id: 'public_app',
+      name: 'public_app',
+      public: true,
+      refreshTokenLifetime: 'session',
+      redirectURIs: ['https://app.local.test:9443/oauth/callback'],
+      postLogoutRedirectURIs: ['https://app.local.test:9443/'],
+    },
+  ]);
+});
+
 test('writeDexConfig renders configured OAuth2 public client', (t) => {
   const config = resolvedConfig(t, {
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: null,
+    client: {
+      id: 'local-app',
+      public: true,
       scopes: ['openid', 'email', 'profile', 'offline_access'],
     },
   });
@@ -584,8 +634,8 @@ test('writeDexConfig renders configured OAuth2 public client', (t) => {
       name: 'local-app',
       public: true,
       refreshTokenLifetime: 'session',
-      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth2/start?rd=/'],
-      redirectURIs: ['https://app.local.test:9443/oauth2/callback'],
+      postLogoutRedirectURIs: ['https://app.local.test:9443/oauth/start?rd=/'],
+      redirectURIs: ['https://app.local.test:9443/oauth/callback'],
     },
   ]);
 });
@@ -627,7 +677,7 @@ test('writeDexConfig renders configured expiry and sessions', (t) => {
 
 test('writeDexConfig uses the resolved callback URL', (t) => {
   const config = resolvedConfig(t);
-  const callback = 'https://auth.local.test:8443/oauth2/callback';
+  const callback = 'https://auth.local.test:8443/oauth/callback';
   const resolved = {
     ...config,
     app: {
@@ -648,14 +698,14 @@ test('writeDexConfig uses the public IdP host and application callback', (t) => 
   const dex = parse(readGenerated(config, './dex.yaml'));
   assert.equal(dex.issuer, 'https://idp.local.test:9443/dex');
   assert.deepEqual(dex.staticClients[0].redirectURIs, [
-    'https://app.local.test:9443/oauth2/callback',
+    'https://app.local.test:9443/oauth/callback',
   ]);
 });
 
 test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => {
   const config = resolvedConfig(t, {
     telemetry: {},
-    oauth2: { scopes: ['openid', 'email', 'offline_access'] },
+    client: { scopes: ['openid', 'email', 'offline_access'] },
     remotes: {
       api: {
         port: 8080,
@@ -703,8 +753,8 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
     /otel_span_name "\$request_method \/api\/";/,
   );
   assert.match(
-    locationBlock(nginx, '= /oauth2/auth'),
-    /otel_span_name "\$request_method \/oauth2\/auth";/,
+    locationBlock(nginx, '= /oauth/auth'),
+    /otel_span_name "\$request_method \/oauth\/auth";/,
   );
 
   const otel = readGeneratedNginx(config, 'templates/otel.conf.template');
@@ -777,7 +827,7 @@ otel_span_name "$request_method";
   assert.match(api, /otel_span_attr service\.peer\.name "api";/);
   assert.match(locationBlock(nginx, '/'), /otel_trace off;/);
   assert.match(
-    locationBlock(nginx, '= /oauth2/auth'),
+    locationBlock(nginx, '= /oauth/auth'),
     /otel_span_attr service\.peer\.name "oauth2_proxy";/,
   );
   assert.match(
@@ -785,7 +835,7 @@ otel_span_name "$request_method";
     /add_header Vary "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest, Origin, Referer" always;/,
   );
   assert.match(api, /if \(\$csrf_reject\) {\s+return 403;\s+}/);
-  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(api, /auth_request\s+\/oauth\/auth;/);
   assert.match(
     api,
     /auth_request_set\s+\$authorization \$upstream_http_authorization;/,
@@ -891,7 +941,7 @@ test('writeNginxAssets redirects only document navigation auth failures', (t) =>
   const authRedirect = locationBlock(nginx, '@auth_redirect');
   const auth401 = locationBlock(nginx, '@auth_401');
 
-  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(api, /auth_request\s+\/oauth\/auth;/);
   assert.match(api, /error_page\s+401 = \$auth_error_page;/);
   assert.match(
     nginx,
@@ -899,7 +949,7 @@ test('writeNginxAssets redirects only document navigation auth failures', (t) =>
   );
   assert.match(
     authRedirect,
-    /return 302 https:\/\/app\.local\.test:9443\/oauth2\/start\?rd=https:\/\/app\.local\.test:9443\$request_uri;/,
+    /return 302 https:\/\/app\.local\.test:9443\/oauth\/start\?rd=https:\/\/app\.local\.test:9443\$request_uri;/,
   );
   assert.match(auth401, /return 401;/);
 });
@@ -963,10 +1013,10 @@ test('writeNginxAssets keeps login endpoints public and protects sign-out', (t) 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   const dex = locationBlock(nginx, '/dex/');
   const oauth2ProxyUpstream = upstreamBlock(nginx, 'oauth2_proxy');
-  const oauth2Proxy = locationBlock(nginx, '/oauth2/');
-  const oauth2Auth = locationBlock(nginx, '= /oauth2/auth');
-  const oauth2UserInfo = locationBlock(nginx, '= /oauth2/userinfo');
-  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
+  const oauth2Proxy = locationBlock(nginx, '/oauth/');
+  const oauth2Auth = locationBlock(nginx, '= /oauth/auth');
+  const oauth2UserInfo = locationBlock(nginx, '= /oauth/userinfo');
+  const oauth2SignOut = locationBlock(nginx, '/oauth/sign_out');
 
   assert.match(oauth2ProxyUpstream, /server 127\.0\.0\.1:4180;/);
   assert.doesNotMatch(dex, /auth_request/);
@@ -1006,7 +1056,7 @@ test('writeNginxAssets keeps login endpoints public and protects sign-out', (t) 
   assert.match(oauth2Auth, /proxy_set_header Content-Length "";/);
   assert.match(oauth2Auth, /proxy_set_header Cookie \$app_cookie;/);
   assert.match(oauth2UserInfo, /return 404;/);
-  assert.match(oauth2SignOut, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(oauth2SignOut, /auth_request\s+\/oauth\/auth;/);
   assert.match(oauth2SignOut, /error_page\s+401 = \$auth_error_page;/);
   assert.match(
     nginx,
@@ -1023,7 +1073,7 @@ test('writeNginxAssets keeps login endpoints public and protects sign-out', (t) 
   assert.match(oauth2SignOut, /proxy_set_header Cookie \$next_app_cookie;/);
   assert.match(
     oauth2SignOut,
-    /proxy_set_header X-Auth-Request-Redirect "https:\/\/app.local.test:9443\/dex\/logout\?id_token_hint=\{id_token\}&post_logout_redirect_uri=https%3A%2F%2Fapp.local.test%3A9443%2Foauth2%2Fstart%3Frd%3D%2F";/,
+    /proxy_set_header X-Auth-Request-Redirect "https:\/\/app.local.test:9443\/dex\/logout\?id_token_hint=\{id_token\}&post_logout_redirect_uri=https%3A%2F%2Fapp.local.test%3A9443%2Foauth%2Fstart%3Frd%3D%2F";/,
   );
   assert.doesNotMatch(
     oauth2SignOut,
@@ -1076,7 +1126,7 @@ test('writeNginxAssets keeps OAuth2-only sign-out returning to root', (t) => {
   writeNginxAssets(config);
 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
-  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
+  const oauth2SignOut = locationBlock(nginx, '/oauth/sign_out');
   assert.match(oauth2SignOut, /proxy_set_header Cookie \$next_app_cookie;/);
   assert.match(oauth2SignOut, /proxy_set_header X-Auth-Request-Redirect \//);
   assert.doesNotMatch(oauth2SignOut, /id_token_hint/);
@@ -1093,7 +1143,7 @@ test('writeNginxAssets quotes external IdP sign-out redirects', (t) => {
   writeNginxAssets(config);
 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
-  const oauth2SignOut = locationBlock(nginx, '/oauth2/sign_out');
+  const oauth2SignOut = locationBlock(nginx, '/oauth/sign_out');
   assert.match(
     oauth2SignOut,
     /proxy_set_header X-Auth-Request-Redirect "http:\/\/idp\.localhost:5557\/idp\/logout\?id_token_hint=\{id_token\}&post_logout_redirect_uri=https%3A%2F%2Fapp\.local\.test%3A9443%2F";/,
@@ -1188,7 +1238,7 @@ test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate
   );
 
   const api = locationBlock(nginx, '/api/');
-  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(api, /auth_request\s+\/oauth\/auth;/);
   assert.match(api, /proxy_set_header Host api\.example\.test;/);
   assert.match(api, /proxy_set_header Authorization "";/);
   assert.match(api, /proxy_ssl_server_name on;/);
@@ -1334,11 +1384,11 @@ test('writeNginxAssets retains OAuth2 Proxy routes when the upstream is disabled
   writeNginxAssets(config);
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.match(
-    locationBlock(nginx, '= /oauth2/auth'),
+    locationBlock(nginx, '= /oauth/auth'),
     /proxy_pass http:\/\/oauth2_proxy;/,
   );
   assert.match(
-    locationBlock(nginx, '/oauth2/sign_out'),
+    locationBlock(nginx, '/oauth/sign_out'),
     /post_logout_redirect_uri=/,
   );
 });
@@ -1351,7 +1401,7 @@ test('writeNginxAssets isolates Dex public-host routes from application authenti
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   const [, app, idp] = nginx.split('\n    server {');
   assert.match(app, /server_name app\.local\.test;/);
-  assert.match(app, /location = \/oauth2\/auth/);
+  assert.match(app, /location = \/oauth\/auth/);
   assert.doesNotMatch(app, /location \/dex\//);
   assert.match(idp, /server_name idp\.local\.test;/);
   assert.match(idp, /location \/dex\//);
@@ -1360,14 +1410,14 @@ test('writeNginxAssets isolates Dex public-host routes from application authenti
     idp,
     /proxy_set_header Cookie dex_session=\$cookie_dex_session;/,
   );
-  assert.doesNotMatch(idp, /auth_request|location .*oauth2|\$csrf_reject/);
+  assert.doesNotMatch(idp, /auth_request|location .*oauth|\$csrf_reject/);
   assert.match(
     locationBlock(idp, '@auth_redirect'),
-    /return 302 https:\/\/app\.local\.test:9443\/oauth2\/start\?rd=https:\/\/app\.local\.test:9443\$request_uri;/,
+    /return 302 https:\/\/app\.local\.test:9443\/oauth\/start\?rd=https:\/\/app\.local\.test:9443\$request_uri;/,
   );
   assert.match(locationBlock(idp, '@auth_401'), /return 401;/);
   assert.match(
-    locationBlock(nginx, '/oauth2/sign_out'),
+    locationBlock(nginx, '/oauth/sign_out'),
     /idp\.local\.test:9443\/dex\/logout/,
   );
 });
@@ -1391,7 +1441,7 @@ test('writeNginxAssets separates service public hosts from backend TLS names', (
   const api = locationBlock(nginx, '/api/');
   assert.match(api, /proxy_ssl_name\s+backend\.internal;/);
   assert.match(api, /proxy_ssl_verify\s+on;/);
-  assert.match(api, /auth_request\s+\/oauth2\/auth;/);
+  assert.match(api, /auth_request\s+\/oauth\/auth;/);
 });
 
 test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret', (t) => {
@@ -1403,6 +1453,8 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
     readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
+  assert.equal(oauth2Proxy.proxy_prefix, '/oauth');
+  assert.equal(oauth2Proxy.code_challenge_method, 'S256');
   assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
   assert.equal(oauth2Proxy.logging_local_time, false);
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
@@ -1412,13 +1464,13 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.oidc_jwks_url, 'http://127.0.0.1:5556/dex/keys');
   assert.equal(
     oauth2Proxy.redirect_url,
-    'https://app.local.test:9443/oauth2/callback',
+    'https://app.local.test:9443/oauth/callback',
   );
   assert.equal(oauth2Proxy.client_id, 'visage');
   assert.equal(oauth2Proxy.client_secret, undefined);
   assert.equal(
     oauth2Proxy.client_secret_file,
-    '/run/secrets/OAUTH2_CLIENT_SECRET',
+    '/run/secrets/VISAGE_OAUTH_CLIENT_SECRET',
   );
   assert.equal(oauth2Proxy.cookie_secret, undefined);
   assert.equal(
@@ -1463,9 +1515,9 @@ test('writeOauth2ProxyConfig exposes telemetry metrics to the collector', (t) =>
 
 test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   const config = resolvedConfig(t, {
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: null,
+    client: {
+      id: 'local-app',
+      public: true,
       scopes: ['openid', 'email', 'profile', 'offline_access'],
     },
   });
@@ -1588,7 +1640,7 @@ test('writeOauth2ProxyConfig retains its listener when the upstream is disabled'
 
 test('writeOauth2ProxyConfig uses the resolved callback URL', (t) => {
   const config = resolvedConfig(t);
-  const callback = 'https://auth.local.test:8443/oauth2/callback';
+  const callback = 'https://auth.local.test:8443/oauth/callback';
   const resolved = {
     ...config,
     app: {

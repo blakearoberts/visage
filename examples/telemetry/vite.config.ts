@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     visage({
-      oauth2: { scopes: ['openid', 'email', 'offline_access'] },
+      client: { scopes: ['openid', 'email', 'offline_access'] },
       telemetry: true,
       services: {
         dex: { host: 'idp.localhost' },

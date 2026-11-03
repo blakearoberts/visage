@@ -20,14 +20,14 @@ export type VisageOptions = {
    */
   readonly cookie?: VisageCookiePolicy;
   /**
-   * Identity provider configuration. Omit this to use Visage's managed Dex
+   * Identity provider configuration. Omit this to use Visage's Dex
    * provider.
    */
   readonly idp?: VisageDexOptions | VisageExternalIdpOptions;
   /**
    * OAuth2 client settings shared by Dex or an external IdP and OAuth2 Proxy.
    */
-  readonly oauth2?: VisageOAuth2Client;
+  readonly client?: VisageOAuth2Client;
   /** @defaultValue `false` */
   readonly telemetry?:
     | boolean
@@ -105,7 +105,7 @@ export type VisageCookiePolicy = {
 };
 
 /**
- * Managed Dex identity provider options. Dex is the default identity provider
+ * Dex identity provider options. Dex is the default identity provider
  * for Visage.
  */
 export type VisageDexOptions = {
@@ -199,7 +199,7 @@ export type VisageDexSessions = {
 };
 
 /**
- * Static user rendered into the managed Dex password database.
+ * Static user rendered into the Dex password database.
  */
 export type VisageDexUser = {
   /**
@@ -272,25 +272,25 @@ export type VisageExternalIdpOptions = {
 };
 
 /**
- * OAuth2 client configuration used by OAuth2 Proxy and, for managed Dex, the
- * rendered Dex static client.
+ * OAuth2 client configuration. Dex registers the app and service
+ * clients; OAuth2 Proxy uses the app client.
  */
 export type VisageOAuth2Client = {
+  /** OIDC callback URL. Defaults to `/oauth/callback` on the client host. */
+  readonly redirectUri?: string;
   /**
    * OAuth2 client identifier.
    *
-   * @defaultValue `'visage'`
+   * @defaultValue `'visage'` for the app, or the service name.
    */
-  readonly clientId?: string;
+  readonly id?: string;
   /**
    * OAuth2 client secret.
    *
-   * Set to `null` for a public OAuth2 client. OAuth2 Proxy uses PKCE, and
-   * managed Dex renders a public static client.
-   *
-   * @defaultValue `'visage-secret'`
+   * @defaultValue A randomly generated secret.
    */
-  readonly clientSecret?: string | null;
+  readonly secret?: string;
+  readonly public?: boolean;
   /**
    * OIDC scopes requested by OAuth2 Proxy.
    *
@@ -303,6 +303,8 @@ export type VisageOAuth2Client = {
  * Subset of a Docker Compose service definition managed by Visage.
  */
 export type VisageService = {
+  /** Register this service's OAuth2 client with Dex. */
+  readonly client?: VisageOAuth2Client;
   /**
    * Public hostname served by NGINX for this service. Omit to serve its
    * locations on the application's hostname. The application's session only

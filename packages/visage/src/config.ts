@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,23 +51,14 @@ type ResolvedIdp = ResolvedDexIdp | ResolvedExternalIdp;
 
 type ResolvedOAuth2Client = {
   readonly id: string;
-  readonly secret?: string;
+  readonly secret: string;
   readonly scopes: readonly string[];
   readonly public: boolean;
   readonly redirectUri: string;
   readonly postLogoutRedirectUri: string;
 };
 
-type ResolvedVisageOptions = {
-  readonly host: string;
-  readonly port: number;
-  readonly telemetry: { readonly fluentd?: string } | false;
-  readonly cookie: ResolvedCookiePolicy;
-  readonly idp: ResolvedIdp;
-  readonly oauth2: ResolvedOAuth2Client;
-  readonly services: Readonly<Record<string, VisageService>>;
-  readonly remotes: Record<string, VisageUpstream>;
-};
+type ResolvedVisageOptions = ReturnType<typeof resolveOptions>;
 
 type ResolvedProxyPolicy = {
   readonly ws: boolean;
@@ -87,15 +79,16 @@ type ResolvedUpstream = {
   readonly http?: string;
 };
 
-type ResolvedService = Omit<VisageService, 'mounts' | 'upstream'> & {
-  readonly volumes: readonly ({
+type ResolvedService = Omit<VisageService, 'mounts'> & {
+  readonly volumes: readonly {
+    readonly type: 'bind' | 'volume' | 'tmpfs';
     readonly target: string;
+    readonly source?: string;
     readonly read_only?: boolean;
-  } & (
-    | { readonly type: 'bind' | 'volume'; readonly source: string }
-    | { readonly type: 'tmpfs'; readonly tmpfs: { readonly mode?: number } }
-  ))[];
+    readonly tmpfs?: { readonly mode?: number };
+  }[];
   readonly upstream?: ResolvedUpstream;
+  readonly client?: ResolvedOAuth2Client;
 };
 
 export type VisageConfig = {
@@ -151,7 +144,7 @@ const BaseAppUpstream = {
 } as const satisfies VisageUpstream;
 
 const BaseServiceDex = {
-  secrets: ['OAUTH2_CLIENT_SECRET'],
+  secrets: ['VISAGE_OAUTH_CLIENT_SECRET'],
   image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yaml'],
   mounts: {
@@ -198,7 +191,7 @@ const BaseServiceNginx = {
 } as const satisfies VisageService;
 
 const BaseServiceOAuth2Proxy = {
-  secrets: ['OAUTH2_PROXY_COOKIE_SECRET', 'OAUTH2_CLIENT_SECRET'],
+  secrets: ['OAUTH2_PROXY_COOKIE_SECRET', 'VISAGE_OAUTH_CLIENT_SECRET'],
   image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
   mounts: {
@@ -214,7 +207,7 @@ const BaseServiceOAuth2Proxy = {
     scheme: 'http',
     port: 4180,
     locations: {
-      '/oauth2/': {
+      '/oauth/': {
         ws: false,
         auth: { enabled: false, forward: false },
         csrf: false,
@@ -223,7 +216,7 @@ const BaseServiceOAuth2Proxy = {
           'X-Auth-Request-Redirect': '$request_uri',
         },
       } satisfies VisageProxyPolicy,
-      '= /oauth2/auth': {
+      '= /oauth/auth': {
         ws: false,
         auth: { enabled: false, forward: false },
         csrf: false,
@@ -236,14 +229,14 @@ const BaseServiceOAuth2Proxy = {
           proxy_pass_request_body: ['off'],
         },
       } satisfies VisageProxyPolicy,
-      '= /oauth2/userinfo': {
+      '= /oauth/userinfo': {
         ws: false,
         auth: { enabled: false, forward: false },
         csrf: false,
         headers: {},
         directives: { return: ['404'] },
       } satisfies VisageProxyPolicy,
-      '/oauth2/sign_out': {
+      '/oauth/sign_out': {
         ws: false,
         auth: { enabled: true, forward: false },
         csrf: false,
@@ -308,8 +301,8 @@ const DefaultProxyPolicy = {
   },
 } as const satisfies ResolvedProxyPolicy;
 
-export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
-  const { host = 'localhost', port = 9001, cookie = {}, oauth2 = {} } = options;
+export function resolveOptions(options: VisageOptions) {
+  const { host = 'localhost', port = 9001, cookie = {}, client = {} } = options;
   const cookieName = cookie.name ?? 'sess';
   const cookiePath = cookie.path ?? '/';
   const telemetry = options.telemetry === true ? {} : options.telemetry;
@@ -320,7 +313,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     port,
     telemetry: telemetry
       ? { fluentd: telemetry.fluentd ?? '127.0.0.1:24224' }
-      : false,
+      : (false as const),
     cookie: {
       cookie_expire: '720h',
       cookie_refresh: '30s',
@@ -340,21 +333,43 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         : { cookie_domains: cookie.domains }),
     } satisfies ResolvedCookiePolicy,
     idp,
-    oauth2: {
-      id: oauth2.clientId ?? 'visage',
-      ...(oauth2.clientSecret === null
-        ? {}
-        : { secret: oauth2.clientSecret ?? 'visage-secret' }),
-      scopes: oauth2.scopes ?? (['openid', 'offline_access'] as const),
-      public: oauth2.clientSecret === null,
-      redirectUri: `https://${host}:${port}/oauth2/callback`,
+    client: {
+      id: 'visage',
+      secret: randomBytes(32).toString('base64url'),
+      scopes: ['openid', 'offline_access'],
+      public: false,
+      redirectUri: `https://${host}:${port}/oauth/callback`,
       postLogoutRedirectUri:
         `https://${host}:${port}` +
         (options.idp !== undefined && 'issuer' in options.idp
           ? '/'
-          : '/oauth2/start?rd=/'),
+          : '/oauth/start?rd=/'),
+      ...client,
     } satisfies ResolvedOAuth2Client,
-    services: options.services ?? {},
+    services: Object.fromEntries(
+      Object.entries(options.services ?? {}).map(
+        ([name, { client, ...service }]) =>
+          [
+            name,
+            {
+              ...service,
+              ...(client === undefined
+                ? {}
+                : {
+                    client: {
+                      id: name,
+                      secret: randomBytes(32).toString('base64url'),
+                      scopes: ['openid', 'offline_access'],
+                      public: false,
+                      redirectUri: `https://${service.host ?? host}:${port}/oauth/callback`,
+                      postLogoutRedirectUri: `https://${service.host ?? host}:${port}/`,
+                      ...client,
+                    },
+                  }),
+            },
+          ] as const,
+      ),
+    ),
     remotes: {
       ...('dex' in idp
         ? {}
@@ -369,8 +384,8 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
             },
           }),
       ...options.remotes,
-    },
-  } satisfies ResolvedVisageOptions;
+    } as Record<string, VisageUpstream>,
+  };
 }
 
 function resolveIdpOptions(
@@ -477,7 +492,7 @@ export function resolveConfig(
     app: {
       host: options.host,
       port: options.port,
-      client: options.oauth2,
+      client: options.client,
       cookie: options.cookie,
       upstream: resolveUpstreamConfig(
         'app',
@@ -514,11 +529,11 @@ function resolveServicesConfig(
   const {
     services: { dex = {}, nginx = {}, oauth2_proxy = {}, ...services },
     telemetry,
-    oauth2,
+    client,
     idp,
   } = options;
   const end_session_endpoint = idp.oidc.end_session_endpoint;
-  const serviceOptions: Record<string, VisageService> = {
+  const serviceOptions: ResolvedVisageOptions['services'] = {
     ...services,
     ...('dex' in idp
       ? {
@@ -529,7 +544,14 @@ function resolveServicesConfig(
               ...BaseServiceDex.mounts,
               ...dex.mounts,
             },
-            secrets: [...BaseServiceDex.secrets, ...(dex.secrets ?? [])],
+            secrets: [
+              ...BaseServiceDex.secrets,
+              ...Object.entries(options.services).flatMap(
+                ([name, { client }]) =>
+                  client ? [`VISAGE_${name}_CLIENT_SECRET`] : [],
+              ),
+              ...(dex.secrets ?? []),
+            ],
             upstream:
               dex.upstream === false
                 ? false
@@ -572,10 +594,10 @@ function resolveServicesConfig(
         ...BaseServiceOAuth2Proxy.upstream,
         locations: {
           ...BaseServiceOAuth2Proxy.upstream.locations,
-          '/oauth2/sign_out': {
-            ...BaseServiceOAuth2Proxy.upstream.locations['/oauth2/sign_out'],
+          '/oauth/sign_out': {
+            ...BaseServiceOAuth2Proxy.upstream.locations['/oauth/sign_out'],
             headers: {
-              ...BaseServiceOAuth2Proxy.upstream.locations['/oauth2/sign_out']
+              ...BaseServiceOAuth2Proxy.upstream.locations['/oauth/sign_out']
                 .headers,
               'X-Auth-Request-Redirect':
                 end_session_endpoint === undefined
@@ -584,7 +606,7 @@ function resolveServicesConfig(
                       end_session_endpoint +
                         (end_session_endpoint.includes('?') ? '&' : '?') +
                         'id_token_hint={id_token}&post_logout_redirect_uri=' +
-                        encodeURIComponent(oauth2.postLogoutRedirectUri),
+                        encodeURIComponent(client.postLogoutRedirectUri),
                     ),
             },
           } satisfies VisageProxyPolicy,

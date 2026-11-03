@@ -22,7 +22,9 @@ type SpawnCall = {
 test('startCompose restarts Compose with in-memory edge and cookie secrets', async (t) => {
   const config = {
     ...resolveConfig({
-      ...resolveOptions({}),
+      ...resolveOptions({
+        services: { worker: { client: { secret: 'worker-secret' } } },
+      }),
       cache: '',
       root: 'compose-test',
       edgeKey: 'edge-key',
@@ -30,6 +32,18 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     }),
     package: '@blakearoberts/visage',
   };
+  const previousClientSecrets = {
+    VISAGE_OAUTH_CLIENT_SECRET: process.env.VISAGE_OAUTH_CLIENT_SECRET,
+    VISAGE_worker_CLIENT_SECRET: process.env.VISAGE_worker_CLIENT_SECRET,
+  };
+  delete process.env.VISAGE_OAUTH_CLIENT_SECRET;
+  delete process.env.VISAGE_worker_CLIENT_SECRET;
+  t.after(() => {
+    for (const [name, value] of Object.entries(previousClientSecrets)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
   const previousCookieSecret = process.env.OAUTH2_PROXY_COOKIE_SECRET;
   const previousEdgeKey = process.env.VISAGE_EDGE_KEY;
   delete process.env.OAUTH2_PROXY_COOKIE_SECRET;
@@ -95,6 +109,8 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
 
     process.env.OAUTH2_PROXY_COOKIE_SECRET = 'changed-cookie-secret';
     process.env.VISAGE_EDGE_KEY = 'changed-edge-key';
+    process.env.VISAGE_OAUTH_CLIENT_SECRET = 'env-app-secret';
+    process.env.VISAGE_worker_CLIENT_SECRET = 'env-worker-secret';
     stop = startCompose(config);
     const secondSecret = spawnSyncCalls[5]?.env?.OAUTH2_PROXY_COOKIE_SECRET;
     const secondEdgeKey = spawnSyncCalls[5]?.env?.VISAGE_EDGE_KEY;
@@ -153,6 +169,22 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
     assert.ok(secondSecret);
     assert.notEqual(secondSecret, 'changed-cookie-secret');
     assert.equal(firstEdgeKey, 'edge-key');
+    assert.equal(
+      spawnSyncCalls[2]?.env?.VISAGE_worker_CLIENT_SECRET,
+      'worker-secret',
+    );
+    assert.equal(
+      spawnSyncCalls[2]?.env?.VISAGE_OAUTH_CLIENT_SECRET,
+      config.app.client.secret,
+    );
+    assert.equal(
+      spawnSyncCalls[5]?.env?.VISAGE_OAUTH_CLIENT_SECRET,
+      'env-app-secret',
+    );
+    assert.equal(
+      spawnSyncCalls[5]?.env?.VISAGE_worker_CLIENT_SECRET,
+      'env-worker-secret',
+    );
     assert.equal(secondEdgeKey, 'edge-key');
     assert.notEqual(secondEdgeKey, 'changed-edge-key');
 

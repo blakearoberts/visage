@@ -37,19 +37,27 @@ function renderDexConfig(config: VisageConfig): string {
     web: { http: new URL(oidc.token).host },
     oauth2: { skipApprovalScreen: true },
     staticClients: [
-      {
-        id: client.id,
-        name: client.id,
-        ...(client.public
-          ? { public: true }
-          : {
-              secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
-            }),
-        refreshTokenLifetime: 'session',
-        postLogoutRedirectURIs: [client.postLogoutRedirectUri],
-        redirectURIs: [client.redirectUri],
-      },
-    ],
+      ['VISAGE_OAUTH_CLIENT_SECRET', client] as const,
+      ...Object.entries(config.services).map(
+        ([name, { client }]) =>
+          [`VISAGE_${name}_CLIENT_SECRET`, client] as const,
+      ),
+    ].flatMap(([secret, client]) =>
+      client
+        ? [
+            {
+              id: client.id,
+              name: client.id,
+              ...(client.public
+                ? { public: true }
+                : { secret: `{{ file.Read "/run/secrets/${secret}" }}` }),
+              refreshTokenLifetime: 'session',
+              postLogoutRedirectURIs: [client.postLogoutRedirectUri],
+              redirectURIs: [client.redirectUri],
+            },
+          ]
+        : [],
+    ),
     enablePasswordDB: true,
     ...(expiry === undefined ? {} : { expiry }),
     ...(sessions === undefined ? {} : { sessions }),

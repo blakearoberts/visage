@@ -12,7 +12,7 @@ export function writeComposeConfig(config: VisageConfig): void {
 }
 
 function renderComposeConfig(config: VisageConfig): string {
-  const { dex, nginx, oauth2_proxy, ...services } = Object.fromEntries(
+  const services = Object.fromEntries(
     Object.entries(config.services).map(
       ([name, { host: _host, upstream: _upstream, ...service }]) =>
         [name, service] as const,
@@ -25,7 +25,13 @@ function renderComposeConfig(config: VisageConfig): string {
         (service.networks ?? []).map((name) => [name, {}]),
       ),
     ),
-    volumes: config.volumes,
+    volumes: Object.fromEntries(
+      Object.values(config.services)
+        .flatMap(({ volumes }) => volumes)
+        .flatMap((volume) =>
+          volume.type === 'volume' ? [[volume.source, {}]] : [],
+        ),
+    ),
     secrets: Object.fromEntries(
       Object.values(config.services).flatMap(
         ({ secrets }) =>
@@ -33,22 +39,12 @@ function renderComposeConfig(config: VisageConfig): string {
       ),
     ),
     services: {
-      ...('dex' in config.idp
-        ? {
-            dex: {
-              ...dex,
-              volumes: [
-                `${config.files.dex[0]}:${config.files.dex[1]}:ro`,
-                ...(dex.volumes ?? []),
-              ],
-            },
-          }
-        : {}),
+      ...services,
       nginx: {
-        ...nginx,
+        ...services.nginx,
         networks: [
           ...new Set([
-            ...(nginx.networks ?? []),
+            ...(services.nginx.networks ?? []),
             ...Object.entries(config.services)
               .filter(
                 ([, service]) =>
@@ -58,26 +54,7 @@ function renderComposeConfig(config: VisageConfig): string {
               .map(([name]) => name),
           ]),
         ],
-        environment: {
-          OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
-          OTEL_SERVICE_NAME: 'nginx',
-          OTEL_SERVICE_NAMESPACE: config.package,
-          ...nginx.environment,
-        },
-        ports: [`127.0.0.1:${config.app.port}:${config.app.port}`],
-        volumes: [
-          `${config.nginx.mount[0]}:${config.nginx.mount[1]}`,
-          ...(nginx.volumes ?? []),
-        ],
       },
-      oauth2_proxy: {
-        ...oauth2_proxy,
-        volumes: [
-          `${config.files.oauth2Proxy[0]}:${config.files.oauth2Proxy[1]}:ro`,
-          ...(oauth2_proxy.volumes ?? []),
-        ],
-      },
-      ...services,
     },
   });
 }

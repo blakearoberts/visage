@@ -114,7 +114,6 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   assert.deepEqual(config.services.otelcol.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'host.docker.internal:4317',
   });
-  assert.equal(config.services.nginx.environment, undefined);
   assert.ok(config.services.otelcol.upstream);
   assert.equal(config.services.otelcol.upstream.host, 'otelcol');
   assert.equal(config.services.otelcol.upstream.port, 4318);
@@ -186,25 +185,82 @@ test('resolveConfig preserves container security overrides', (t) => {
   const { config } = resolveForTest(t, {
     idp: { users: [] },
     services: {
-      nginx: { user: '1234:1234', cap_add: [], tmpfs: ['/tmp'] },
+      nginx: {
+        user: '1234:1234',
+        cap_add: [],
+        mounts: {
+          '/tmp': {},
+        },
+      },
       api: {
         image: 'example/api',
         security_opt: [],
         cap_drop: [],
         cap_add: ['NET_BIND_SERVICE'],
         read_only: false,
-        tmpfs: ['/tmp'],
+        mounts: {
+          '/tmp': {},
+        },
       },
     },
   });
   assert.equal(config.services.nginx.user, '1234:1234');
   assert.deepEqual(config.services.nginx.cap_add, []);
-  assert.deepEqual(config.services.nginx.tmpfs, ['/tmp']);
+  assert.deepEqual(config.services.nginx.volumes, [
+    {
+      type: 'bind',
+      target: '/etc/nginx',
+      source: './nginx',
+      read_only: undefined,
+    },
+    {
+      type: 'tmpfs',
+      target: '/var/cache/nginx',
+      tmpfs: { mode: 0o1777 },
+      read_only: undefined,
+    },
+    {
+      type: 'tmpfs',
+      target: '/etc/nginx/http.d',
+      tmpfs: { mode: 0o1777 },
+      read_only: undefined,
+    },
+    { type: 'tmpfs', target: '/tmp', tmpfs: {}, read_only: undefined },
+  ]);
   assert.deepEqual(config.services.api.security_opt, []);
   assert.deepEqual(config.services.api.cap_drop, []);
   assert.deepEqual(config.services.api.cap_add, ['NET_BIND_SERVICE']);
   assert.equal(config.services.api.read_only, false);
-  assert.deepEqual(config.services.api.tmpfs, ['/tmp']);
+  assert.deepEqual(config.services.api.volumes, [
+    { type: 'tmpfs', target: '/tmp', read_only: undefined, tmpfs: {} },
+  ]);
+});
+
+test('resolveConfig replaces managed mounts by target and preserves other defaults', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: { users: [] },
+    services: { nginx: { mounts: { '/var/cache/nginx': { mode: 0o700 } } } },
+  });
+  assert.deepEqual(config.services.nginx.volumes, [
+    {
+      type: 'bind',
+      target: '/etc/nginx',
+      source: './nginx',
+      read_only: undefined,
+    },
+    {
+      type: 'tmpfs',
+      target: '/var/cache/nginx',
+      tmpfs: { mode: 0o700 },
+      read_only: undefined,
+    },
+    {
+      type: 'tmpfs',
+      target: '/etc/nginx/http.d',
+      tmpfs: { mode: 0o1777 },
+      read_only: undefined,
+    },
+  ]);
 });
 
 test('resolveConfig preserves loopback service overrides', (t) => {
@@ -333,6 +389,7 @@ test('resolveConfig derives upstreams from services', (t) => {
   const { upstream: apiUpstream, ...apiService } = config.services.api;
   assert.ok(apiUpstream);
   assert.deepEqual(apiService, {
+    volumes: [],
     image: 'example/api:test',
     restart: 'on-failure',
     security_opt: ['no-new-privileges:true'],
@@ -781,17 +838,15 @@ test('resolveConfig preserves managed service defaults for partial service overr
   ]);
   assert.deepEqual(config.services.nginx.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4317',
+    OTEL_SERVICE_NAME: 'nginx',
+    OTEL_SERVICE_NAMESPACE: 'test-app',
   });
   assert.equal(config.package, 'test-app');
   assert.equal(
     config.services.nginx.image,
     'ghcr.io/blakearoberts/visage-nginx:next',
   );
-  assert.deepEqual(config.nginx.mount, ['./nginx', '/etc/nginx']);
-  assert.deepEqual(config.nginx.modules, [
-    '/usr/lib/nginx/modules/ngx_http_js_module.so',
-    '/usr/lib/nginx/modules/ngx_otel_module.so',
-  ]);
+  assert.equal(config.files.nginx, './nginx');
   assert.deepEqual(config.services.oauth2_proxy.command, [
     '--config',
     '/etc/oauth2-proxy/config.yml',
@@ -1009,15 +1064,37 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
 
   assert.deepEqual(config.services.nginx, {
     image: 'custom-nginx:test',
+    command: ['nginx', '-p', '/etc/nginx', '-g', 'daemon off;'],
     secrets: ['VISAGE_EDGE_KEY'],
     security_opt: ['no-new-privileges:true'],
     cap_drop: ['ALL'],
     user: `${process.getuid?.() ?? 101}:${process.getgid?.() ?? 101}`,
-    tmpfs: ['/var/cache/nginx:mode=1777', '/etc/nginx/http.d:mode=1777'],
+    volumes: [
+      {
+        type: 'bind',
+        target: '/etc/nginx',
+        source: './nginx',
+        read_only: undefined,
+      },
+      {
+        type: 'tmpfs',
+        target: '/var/cache/nginx',
+        tmpfs: { mode: 0o1777 },
+        read_only: undefined,
+      },
+      {
+        type: 'tmpfs',
+        target: '/etc/nginx/http.d',
+        tmpfs: { mode: 0o1777 },
+        read_only: undefined,
+      },
+    ],
     read_only: false,
     networks: ['nginx'],
+    ports: ['127.0.0.1:9443:9443'],
     depends_on: ['api'],
     environment: {
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
       OTEL_SERVICE_NAME: 'custom-nginx',
       OTEL_SERVICE_NAMESPACE: 'custom-namespace',
     },
@@ -1027,6 +1104,7 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
   const { upstream: apiUpstream, ...apiService } = config.services.api;
   assert.ok(apiUpstream);
   assert.deepEqual(apiService, {
+    volumes: [],
     image: 'example/api:test',
     command: ['serve'],
     restart: 'on-failure',

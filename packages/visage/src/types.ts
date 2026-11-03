@@ -45,27 +45,18 @@ export type VisageOptions = {
    */
   readonly services?: Record<string, VisageService>;
   /**
-   * Named volumes rendered into the top-level Docker Compose volumes map.
-   * Mount these by name in a service's volumes list.
-   */
-  readonly volumes?: Record<string, VisageVolume>;
-  /**
    * Remotes are proxy targets whose processes Visage does not manage. Remote
    * and service names must be distinct.
    */
   readonly remotes?: Record<string, VisageUpstream>;
 };
 
-/**
- * Docker Compose named volume declaration. Use an empty object for defaults.
- */
-export type VisageVolume = {
-  readonly name?: string;
-  readonly external?: boolean;
-  readonly driver?: string;
-  readonly driver_opts?: Readonly<Record<string, string>>;
-  readonly labels?: Readonly<Record<string, string>> | readonly string[];
-};
+/** Mount options, keyed by the container target in a service's mounts map. */
+export type VisageMount = { readonly read_only?: boolean } & (
+  | { readonly bind: string }
+  | { readonly volume: string }
+  | { readonly mode?: number }
+);
 
 /**
  * Settings for the browser session cookie managed by OAuth2 Proxy.
@@ -354,8 +345,6 @@ export type VisageService = {
    * secrets, which require a writable root filesystem in Docker Compose.
    */
   readonly read_only?: boolean;
-  /** Writable in-memory mounts, using Docker Compose tmpfs short syntax. */
-  readonly tmpfs?: readonly string[];
   /**
    * Environment variables rendered into the Compose service.
    */
@@ -407,10 +396,8 @@ export type VisageService = {
    * @defaultValue `'on-failure'`
    */
   readonly restart?: 'always' | 'no' | 'on-failure' | 'unless-stopped';
-  /**
-   * Volume mounts rendered into the Compose service.
-   */
-  readonly volumes?: readonly string[];
+  /** Mounts keyed by container target. Matching volume names share storage. */
+  readonly mounts?: Readonly<Record<string, VisageMount>>;
   /**
    * Optional upstream override for this service. Omit this to create a default
    * upstream from the service name. Set to false to disable automatic upstream

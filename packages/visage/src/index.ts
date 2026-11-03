@@ -5,12 +5,12 @@ export type {
   VisageDexSessions,
   VisageDexUser,
   VisageExternalIdpOptions,
+  VisageMount,
   VisageOAuth2Client,
   VisageOptions,
   VisageProxyPolicy,
   VisageService,
   VisageUpstream,
-  VisageVolume,
 } from './types';
 
 export { default, visage } from './plugin';

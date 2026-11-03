@@ -12,10 +12,7 @@ import type {
   VisageProxyPolicy,
   VisageService,
   VisageUpstream,
-  VisageVolume,
 } from './types';
-
-type Volume = readonly [from: string, to: string];
 
 type ResolvedCookiePolicy = {
   readonly cookie_name: string;
@@ -68,7 +65,6 @@ type ResolvedVisageOptions = {
   readonly idp: ResolvedIdp;
   readonly oauth2: ResolvedOAuth2Client;
   readonly services: Readonly<Record<string, VisageService>>;
-  readonly volumes: Readonly<Record<string, VisageVolume>>;
   readonly remotes: Record<string, VisageUpstream>;
 };
 
@@ -91,7 +87,16 @@ type ResolvedUpstream = {
   readonly http?: string;
 };
 
-type ResolvedService = VisageService & { readonly upstream?: ResolvedUpstream };
+type ResolvedService = Omit<VisageService, 'mounts' | 'upstream'> & {
+  readonly volumes: readonly ({
+    readonly target: string;
+    readonly read_only?: boolean;
+  } & (
+    | { readonly type: 'bind' | 'volume'; readonly source: string }
+    | { readonly type: 'tmpfs'; readonly tmpfs: { readonly mode?: number } }
+  ))[];
+  readonly upstream?: ResolvedUpstream;
+};
 
 export type VisageConfig = {
   readonly hosts: string[];
@@ -101,12 +106,9 @@ export type VisageConfig = {
   readonly cache: string;
   readonly files: {
     readonly compose: string;
-    readonly dex: Volume;
-    readonly oauth2Proxy: Volume;
-  };
-  readonly nginx: {
-    readonly mount: Volume;
-    readonly modules: readonly string[];
+    readonly dex: string;
+    readonly oauth2Proxy: string;
+    readonly nginx: string;
   };
 
   readonly app: {
@@ -118,7 +120,6 @@ export type VisageConfig = {
   };
   readonly idp: ResolvedIdp;
   readonly services: Readonly<Record<string, ResolvedService>>;
-  readonly volumes: Readonly<Record<string, VisageVolume>>;
   readonly remotes: Readonly<Record<string, ResolvedUpstream>>;
 };
 
@@ -153,6 +154,9 @@ const BaseServiceDex = {
   secrets: ['OAUTH2_CLIENT_SECRET'],
   image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yaml'],
+  mounts: {
+    '/etc/dex/dex.yaml': { bind: './dex.yaml', read_only: true },
+  },
   environment: { DEX_SESSIONS_ENABLED: 'true' },
   network_mode: 'service:nginx',
   restart: 'always',
@@ -176,10 +180,33 @@ const BaseServiceDex = {
   },
 } as const satisfies VisageService;
 
+const BaseServiceNginx = {
+  image: DockerImages.nginx.image,
+  command: ['nginx', '-p', '/etc/nginx', '-g', 'daemon off;'],
+  restart: 'always',
+  upstream: false,
+  user: `${process.getuid?.() ?? 101}:${process.getgid?.() ?? 101}`,
+  environment: {
+    OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
+    OTEL_SERVICE_NAME: 'nginx',
+  },
+  mounts: {
+    '/etc/nginx': { bind: './nginx' },
+    '/var/cache/nginx': { mode: 0o1777 },
+    '/etc/nginx/http.d': { mode: 0o1777 },
+  },
+} as const satisfies VisageService;
+
 const BaseServiceOAuth2Proxy = {
   secrets: ['OAUTH2_PROXY_COOKIE_SECRET', 'OAUTH2_CLIENT_SECRET'],
   image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
+  mounts: {
+    '/etc/oauth2-proxy/config.yml': {
+      bind: './oauth2-proxy.yml',
+      read_only: true,
+    },
+  },
   network_mode: 'service:nginx',
   restart: 'always',
   upstream: {
@@ -236,9 +263,12 @@ const BaseServiceOTelCollector = {
   },
   extra_hosts: ['host.docker.internal:host-gateway'],
   restart: 'always',
-  volumes: [
-    `${fileURLToPath(new URL('../otelcol', import.meta.url))}:/etc/otelcol-contrib:ro`,
-  ],
+  mounts: {
+    '/etc/otelcol-contrib': {
+      bind: fileURLToPath(new URL('../otelcol', import.meta.url)),
+      read_only: true,
+    },
+  },
   upstream: {
     port: 4318,
     locations: {
@@ -325,7 +355,6 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
           : '/oauth2/start?rd=/'),
     } satisfies ResolvedOAuth2Client,
     services: options.services ?? {},
-    volumes: options.volumes ?? {},
     remotes: {
       ...('dex' in idp
         ? {}
@@ -438,20 +467,12 @@ export function resolveConfig(
     telemetry: Boolean(options.telemetry),
     edgeKey: options.edgeKey,
     cache: options.cache,
-    volumes: options.volumes,
     files: {
       compose: './compose.yaml',
-      dex: ['./dex.yaml', '/etc/dex/dex.yaml'],
-      oauth2Proxy: ['./oauth2-proxy.yml', '/etc/oauth2-proxy/config.yml'],
-    },
-    nginx: {
-      mount: ['./nginx', '/etc/nginx'],
-      modules: [
-        '/usr/lib/nginx/modules/ngx_http_js_module.so',
-        ...(options.telemetry
-          ? ['/usr/lib/nginx/modules/ngx_otel_module.so']
-          : []),
-      ],
+      dex: BaseServiceDex.mounts[BaseServiceDex.command[2]].bind,
+      oauth2Proxy:
+        BaseServiceOAuth2Proxy.mounts[BaseServiceOAuth2Proxy.command[1]].bind,
+      nginx: BaseServiceNginx.mounts[BaseServiceNginx.command[2]].bind,
     },
     app: {
       host: options.host,
@@ -504,6 +525,10 @@ function resolveServicesConfig(
           dex: {
             ...BaseServiceDex,
             ...dex,
+            mounts: {
+              ...BaseServiceDex.mounts,
+              ...dex.mounts,
+            },
             secrets: [...BaseServiceDex.secrets, ...(dex.secrets ?? [])],
             upstream:
               dex.upstream === false
@@ -514,12 +539,18 @@ function resolveServicesConfig(
         }
       : {}),
     nginx: {
-      image: DockerImages.nginx.image,
-      restart: 'always',
-      upstream: false,
-      user: `${process.getuid?.() ?? 101}:${process.getgid?.() ?? 101}`,
-      tmpfs: ['/var/cache/nginx:mode=1777', '/etc/nginx/http.d:mode=1777'],
+      ...BaseServiceNginx,
       ...nginx,
+      ports: [`127.0.0.1:${options.port}:${options.port}`],
+      environment: {
+        ...BaseServiceNginx.environment,
+        OTEL_SERVICE_NAMESPACE: packageName,
+        ...nginx.environment,
+      },
+      mounts: {
+        ...BaseServiceNginx.mounts,
+        ...nginx.mounts,
+      },
       secrets: ['VISAGE_EDGE_KEY', ...(nginx.secrets ?? [])],
       extra_hosts: [
         ...['host.docker.internal:host-gateway'],
@@ -529,6 +560,10 @@ function resolveServicesConfig(
     oauth2_proxy: {
       ...BaseServiceOAuth2Proxy,
       ...oauth2_proxy,
+      mounts: {
+        ...BaseServiceOAuth2Proxy.mounts,
+        ...oauth2_proxy.mounts,
+      },
       secrets: [
         ...BaseServiceOAuth2Proxy.secrets,
         ...(oauth2_proxy.secrets ?? []),
@@ -587,7 +622,7 @@ function resolveServicesConfig(
   };
   return Object.fromEntries(
     Object.entries(serviceOptions).map(
-      ([name, { upstream, networks, ...service }]) => [
+      ([name, { upstream, networks, mounts, ...service }]) => [
         name,
         {
           restart: 'on-failure',
@@ -608,6 +643,17 @@ function resolveServicesConfig(
               }
             : {}),
           ...service,
+          volumes: Object.entries(mounts ?? {}).map(
+            ([target, { read_only, ...mount }]) => ({
+              target,
+              read_only,
+              ...('bind' in mount
+                ? { type: 'bind' as const, source: mount.bind }
+                : 'volume' in mount
+                  ? { type: 'volume' as const, source: mount.volume }
+                  : { type: 'tmpfs' as const, tmpfs: mount }),
+            }),
+          ),
           ...(service.network_mode === undefined
             ? { networks: [...new Set([name, ...(networks ?? [])])] }
             : {}),

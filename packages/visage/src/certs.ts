@@ -21,7 +21,7 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
     }
   }
 
-  const certs = join(config.cache, config.nginx.mount[0], 'certs');
+  const certs = join(config.cache, config.files.nginx, 'certs');
   const cert = join(certs, 'tls.crt');
   const key = join(certs, 'tls.key');
 

@@ -134,10 +134,10 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
 });
 
 test('resolveConfig defaults to read-only filesystems unless managed secrets are required', (t) => {
-  for (const clientSecret of ['client-secret', null]) {
+  for (const publicClient of [false, true]) {
     const { config } = resolveForTest(t, {
       idp: { users: [] },
-      oauth2: { clientSecret },
+      client: { public: publicClient },
       services: { api: { image: 'example/api' } },
     });
     assert.equal(config.services.api.read_only, true);
@@ -149,10 +149,10 @@ test('resolveConfig defaults to read-only filesystems unless managed secrets are
 });
 
 test('resolveConfig adds custom secrets without replacing managed secrets', (t) => {
-  for (const clientSecret of ['client-secret', null]) {
+  for (const publicClient of [false, true]) {
     const { config } = resolveForTest(t, {
       idp: { users: [] },
-      oauth2: { clientSecret },
+      client: { public: publicClient },
       services: {
         api: { image: 'example/api', secrets: ['API_TOKEN'] },
         dex: { secrets: ['DEX_TOKEN'] },
@@ -165,7 +165,7 @@ test('resolveConfig adds custom secrets without replacing managed secrets', (t) 
     assert.deepEqual(config.services.api.secrets, ['API_TOKEN']);
     assert.equal(config.services.api.read_only, false);
     assert.deepEqual(config.services.dex.secrets, [
-      'OAUTH2_CLIENT_SECRET',
+      'VISAGE_OAUTH_CLIENT_SECRET',
       'DEX_TOKEN',
     ]);
     assert.equal(config.services.dex.read_only, false);
@@ -175,7 +175,7 @@ test('resolveConfig adds custom secrets without replacing managed secrets', (t) 
     ]);
     assert.deepEqual(config.services.oauth2_proxy.secrets, [
       'OAUTH2_PROXY_COOKIE_SECRET',
-      'OAUTH2_CLIENT_SECRET',
+      'VISAGE_OAUTH_CLIENT_SECRET',
       'PROXY_TOKEN',
     ]);
   }
@@ -1282,6 +1282,26 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
   assert.equal(config.remotes.remote.locations['/remote/'].auth.enabled, true);
 });
 
+test('resolveConfig preserves generated client secrets across repeated resolution', (t) => {
+  const options = {
+    ...resolveOptions({
+      idp: { users: [] },
+      services: { api: { client: {} } },
+    }),
+    cache: tempCache(t),
+    root: 'test-app',
+    edgeKey: 'edge-key',
+    appPort: 6173,
+  };
+  const first = resolveConfig(options);
+  const second = resolveConfig(options);
+
+  assert.deepEqual(first.app.client, options.client);
+  assert.deepEqual(first.services.api.client, options.services.api.client);
+  assert.deepEqual(second.app.client, first.app.client);
+  assert.deepEqual(second.services.api.client, first.services.api.client);
+});
+
 test('resolveConfig resolves telemetry booleans and options', (t) => {
   for (const [telemetry, enabled] of [
     [undefined, false],
@@ -1328,9 +1348,11 @@ test('resolveOptions applies public defaults', () => {
       },
     ],
   });
-  assert.deepEqual(options.oauth2, {
+  assert.match(options.client.secret, /^[A-Za-z0-9_-]{43}$/);
+  assert.notEqual(options.client.secret, resolveOptions({}).client.secret);
+  assert.deepEqual(options.client, {
     id: 'visage',
-    secret: 'visage-secret',
+    secret: options.client.secret,
     scopes: ['openid', 'offline_access'],
     public: false,
     redirectUri: 'https://localhost:9001/oauth/callback',
@@ -1464,14 +1486,14 @@ test('resolveOptions applies Dex overrides', () => {
 
 test('resolveOptions applies OAuth2 client overrides', () => {
   const options = resolveOptions({
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: 'local-secret',
+    client: {
+      id: 'local-app',
+      secret: 'local-secret',
       scopes: ['openid', 'email'],
     },
   });
 
-  assert.deepEqual(options.oauth2, {
+  assert.deepEqual(options.client, {
     id: 'local-app',
     secret: 'local-secret',
     scopes: ['openid', 'email'],
@@ -1497,19 +1519,76 @@ test('resolveOptions applies IdP overrides', () => {
 
 test('resolveOptions supports OAuth2 public PKCE clients', () => {
   const options = resolveOptions({
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: null,
+    client: {
+      id: 'local-app',
+      public: true,
       scopes: ['openid', 'email', 'profile', 'offline_access'],
     },
   });
 
-  assert.deepEqual(options.oauth2, {
+  assert.deepEqual(options.client, {
     id: 'local-app',
+    secret: options.client.secret,
     scopes: ['openid', 'email', 'profile', 'offline_access'],
     public: true,
     redirectUri: 'https://localhost:9001/oauth/callback',
     postLogoutRedirectUri: 'https://localhost:9001/oauth/start?rd=/',
+  });
+});
+
+test('resolveOptions resolves service client defaults and overrides', () => {
+  const options = resolveOptions({
+    host: 'app.local.test',
+    port: 9443,
+    idp: { users: [] },
+    services: {
+      grafana: {
+        host: 'g.localhost',
+        client: {
+          id: 'metrics',
+          secret: 'metrics-secret',
+          scopes: ['openid', 'email'],
+          redirectUri: 'https://g.localhost:9443/login/generic_oauth',
+        },
+      },
+      native: { client: {} },
+      public_app: { client: { public: true } },
+    },
+  });
+  assert.deepEqual(options.services.grafana.client, {
+    id: 'metrics',
+    secret: 'metrics-secret',
+    public: false,
+    scopes: ['openid', 'email'],
+    redirectUri: 'https://g.localhost:9443/login/generic_oauth',
+    postLogoutRedirectUri: 'https://g.localhost:9443/',
+  });
+  assert.ok(options.services.native.client);
+  assert.ok(options.services.public_app.client);
+  assert.match(options.services.native.client.secret, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(
+    options.services.public_app.client.secret,
+    /^[A-Za-z0-9_-]{43}$/,
+  );
+  assert.notEqual(
+    options.services.native.client.secret,
+    options.services.public_app.client.secret,
+  );
+  assert.deepEqual(options.services.native.client, {
+    id: 'native',
+    secret: options.services.native.client.secret,
+    public: false,
+    scopes: ['openid', 'offline_access'],
+    redirectUri: 'https://app.local.test:9443/oauth/callback',
+    postLogoutRedirectUri: 'https://app.local.test:9443/',
+  });
+  assert.deepEqual(options.services.public_app.client, {
+    id: 'public_app',
+    secret: options.services.public_app.client.secret,
+    public: true,
+    scopes: ['openid', 'offline_access'],
+    redirectUri: 'https://app.local.test:9443/oauth/callback',
+    postLogoutRedirectUri: 'https://app.local.test:9443/',
   });
 });
 

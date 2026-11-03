@@ -1,9 +1,19 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('external-idp', () => {
-  test('login', async ({ page }) => {
+  test('login with S256 PKCE', async ({ page }) => {
     const { user } = test.info().project.metadata;
+    const authorizationRequest = page.waitForRequest(
+      (request) => new URL(request.url()).pathname === '/idp/auth',
+    );
     await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const authorization = new URL((await authorizationRequest).url());
+    expect(authorization.searchParams.get('code_challenge_method')).toBe(
+      'S256',
+    );
+    expect(authorization.searchParams.get('code_challenge')).toMatch(
+      /^[A-Za-z0-9_-]{43}$/,
+    );
 
     const emailInput = page.locator('input[name="login"]');
     const passwordInput = page.locator('input[name="password"]');

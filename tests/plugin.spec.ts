@@ -2,7 +2,15 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function login(page: Page) {
   const { user } = test.info().project.metadata;
+  const authorizationRequest = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === '/dex/auth',
+  );
   await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const authorization = new URL((await authorizationRequest).url());
+  expect(authorization.searchParams.get('code_challenge_method')).toBe('S256');
+  expect(authorization.searchParams.get('code_challenge')).toMatch(
+    /^[A-Za-z0-9_-]{43}$/,
+  );
 
   await page.locator('input[name="login"]').fill(user.email);
   await page.locator('input[name="password"]').fill(user.password);

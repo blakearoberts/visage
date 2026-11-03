@@ -14,8 +14,10 @@ export function writeComposeConfig(config: VisageConfig): void {
 function renderComposeConfig(config: VisageConfig): string {
   const services = Object.fromEntries(
     Object.entries(config.services).map(
-      ([name, { host: _host, upstream: _upstream, ...service }]) =>
-        [name, service] as const,
+      ([
+        name,
+        { host: _host, upstream: _upstream, client: _client, ...service },
+      ]) => [name, service] as const,
     ),
   );
 

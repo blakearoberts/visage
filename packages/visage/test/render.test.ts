@@ -257,7 +257,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
       read_only: true,
     },
   ]);
-  assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
+  assert.deepEqual(compose.services.dex.secrets, [
+    'VISAGE_OAUTH_CLIENT_SECRET',
+  ]);
   assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
@@ -303,7 +305,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'OAUTH2_CLIENT_SECRET',
+    'VISAGE_OAUTH_CLIENT_SECRET',
   ]);
   assert.equal(compose.services.vite_loopback.image, DockerImages.socat.image);
   assert.equal(
@@ -367,15 +369,15 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
     },
-    OAUTH2_CLIENT_SECRET: {
-      environment: 'OAUTH2_CLIENT_SECRET',
+    VISAGE_OAUTH_CLIENT_SECRET: {
+      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
     },
   });
 });
 
 test('writeComposeConfig includes unused client secrets for public clients', (t) => {
   const config = resolvedConfig(t, {
-    oauth2: { clientSecret: null },
+    client: { public: true },
   });
 
   writeComposeConfig(config);
@@ -383,16 +385,18 @@ test('writeComposeConfig includes unused client secrets for public clients', (t)
   const compose = parse(readGenerated(config, config.files.compose));
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'OAUTH2_CLIENT_SECRET',
+    'VISAGE_OAUTH_CLIENT_SECRET',
   ]);
-  assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
+  assert.deepEqual(compose.services.dex.secrets, [
+    'VISAGE_OAUTH_CLIENT_SECRET',
+  ]);
   assert.equal(compose.services.dex.read_only, false);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
     },
-    OAUTH2_CLIENT_SECRET: {
-      environment: 'OAUTH2_CLIENT_SECRET',
+    VISAGE_OAUTH_CLIENT_SECRET: {
+      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
     },
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
@@ -414,7 +418,7 @@ test('writeComposeConfig declares environment-backed secrets used by services', 
   assert.deepEqual(compose.secrets, {
     API_TOKEN: { environment: 'API_TOKEN' },
     SHARED_TOKEN: { environment: 'SHARED_TOKEN' },
-    OAUTH2_CLIENT_SECRET: { environment: 'OAUTH2_CLIENT_SECRET' },
+    VISAGE_OAUTH_CLIENT_SECRET: { environment: 'VISAGE_OAUTH_CLIENT_SECRET' },
     VISAGE_EDGE_KEY: { environment: 'VISAGE_EDGE_KEY' },
     OAUTH2_PROXY_COOKIE_SECRET: { environment: 'OAUTH2_PROXY_COOKIE_SECRET' },
   });
@@ -516,11 +520,12 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
   assert.equal(compose.services.dex, undefined);
 });
 
-test('writeComposeConfig omits public hosts and upstream metadata from services', (t) => {
+test('writeComposeConfig omits public hosts, upstreams, and clients from services', (t) => {
   const config = resolvedConfig(t, {
     services: {
       api: {
         host: 'api.dev.test',
+        client: { secret: 'api-secret' },
         upstream: { host: 'backend.internal', scheme: 'https' },
       },
     },
@@ -529,6 +534,15 @@ test('writeComposeConfig omits public hosts and upstream metadata from services'
   const compose = parse(readGenerated(config, config.files.compose));
   assert.equal(compose.services.api.host, undefined);
   assert.equal(compose.services.api.upstream, undefined);
+  assert.equal(compose.services.api.client, undefined);
+  assert.ok(compose.services.dex.secrets.includes('VISAGE_api_CLIENT_SECRET'));
+  assert.deepEqual(compose.secrets.VISAGE_api_CLIENT_SECRET, {
+    environment: 'VISAGE_api_CLIENT_SECRET',
+  });
+  assert.doesNotMatch(
+    readGenerated(config, config.files.compose),
+    /api-secret/,
+  );
 });
 
 test('writeDexConfig renders default OIDC, client, and session settings', (t) => {
@@ -556,7 +570,7 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
     {
       id: 'visage',
       name: 'visage',
-      secret: '{{ file.Read "/run/secrets/OAUTH2_CLIENT_SECRET" }}',
+      secret: '{{ file.Read "/run/secrets/VISAGE_OAUTH_CLIENT_SECRET" }}',
       refreshTokenLifetime: 'session',
       postLogoutRedirectURIs: ['https://app.local.test:9443/oauth/start?rd=/'],
       redirectURIs: ['https://app.local.test:9443/oauth/callback'],
@@ -566,11 +580,47 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
   assert.deepEqual(dex.staticPasswords, []);
 });
 
+test('writeDexConfig registers confidential and public service clients', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      grafana: {
+        host: 'g.localhost',
+        client: {
+          id: 'metrics',
+          secret: 'metrics-secret',
+          redirectUri: 'https://g.localhost:9443/login/generic_oauth',
+        },
+      },
+      public_app: { client: { public: true } },
+    },
+  });
+  writeDexConfig(config);
+  const dex = parse(readGenerated(config, config.files.dex));
+  assert.deepEqual(dex.staticClients.slice(1), [
+    {
+      id: 'metrics',
+      name: 'metrics',
+      secret: '{{ file.Read "/run/secrets/VISAGE_grafana_CLIENT_SECRET" }}',
+      refreshTokenLifetime: 'session',
+      redirectURIs: ['https://g.localhost:9443/login/generic_oauth'],
+      postLogoutRedirectURIs: ['https://g.localhost:9443/'],
+    },
+    {
+      id: 'public_app',
+      name: 'public_app',
+      public: true,
+      refreshTokenLifetime: 'session',
+      redirectURIs: ['https://app.local.test:9443/oauth/callback'],
+      postLogoutRedirectURIs: ['https://app.local.test:9443/'],
+    },
+  ]);
+});
+
 test('writeDexConfig renders configured OAuth2 public client', (t) => {
   const config = resolvedConfig(t, {
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: null,
+    client: {
+      id: 'local-app',
+      public: true,
       scopes: ['openid', 'email', 'profile', 'offline_access'],
     },
   });
@@ -655,7 +705,7 @@ test('writeDexConfig uses the public IdP host and application callback', (t) => 
 test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => {
   const config = resolvedConfig(t, {
     telemetry: {},
-    oauth2: { scopes: ['openid', 'email', 'offline_access'] },
+    client: { scopes: ['openid', 'email', 'offline_access'] },
     remotes: {
       api: {
         port: 8080,
@@ -1404,6 +1454,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
   assert.equal(oauth2Proxy.proxy_prefix, '/oauth');
+  assert.equal(oauth2Proxy.code_challenge_method, 'S256');
   assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
   assert.equal(oauth2Proxy.logging_local_time, false);
   assert.equal(oauth2Proxy.oidc_issuer_url, 'https://app.local.test:9443/dex');
@@ -1419,7 +1470,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.client_secret, undefined);
   assert.equal(
     oauth2Proxy.client_secret_file,
-    '/run/secrets/OAUTH2_CLIENT_SECRET',
+    '/run/secrets/VISAGE_OAUTH_CLIENT_SECRET',
   );
   assert.equal(oauth2Proxy.cookie_secret, undefined);
   assert.equal(
@@ -1464,9 +1515,9 @@ test('writeOauth2ProxyConfig exposes telemetry metrics to the collector', (t) =>
 
 test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   const config = resolvedConfig(t, {
-    oauth2: {
-      clientId: 'local-app',
-      clientSecret: null,
+    client: {
+      id: 'local-app',
+      public: true,
       scopes: ['openid', 'email', 'profile', 'offline_access'],
     },
   });

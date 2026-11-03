@@ -38,12 +38,10 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
       : {}),
     redirect_url: config.app.client.redirectUri,
     client_id: config.app.client.id,
-    ...(config.app.client.public
-      ? {
-          code_challenge_method: 'S256',
-          client_secret_file: '/dev/null',
-        }
-      : { client_secret_file: '/run/secrets/OAUTH2_CLIENT_SECRET' }),
+    code_challenge_method: 'S256',
+    client_secret_file: config.app.client.public
+      ? '/dev/null'
+      : '/run/secrets/VISAGE_OAUTH_CLIENT_SECRET',
     ...config.app.cookie,
     cookie_secret_file: '/run/secrets/OAUTH2_PROXY_COOKIE_SECRET',
     cookie_httponly: true,

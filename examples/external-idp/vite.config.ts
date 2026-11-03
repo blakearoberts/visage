@@ -12,7 +12,7 @@ export default defineConfig({
         issuer: 'http://idp.localhost:5557/idp',
         end_session_endpoint: 'http://idp.localhost:5557/idp/logout',
       },
-      oauth2: { clientSecret: null }, // PKCE
+      client: { public: true },
       services: {
         whoami: { image: 'traefik/whoami' },
 

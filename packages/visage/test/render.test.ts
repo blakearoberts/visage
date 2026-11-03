@@ -46,7 +46,7 @@ function readGenerated(config: VisageConfig, file: string) {
 }
 
 function readGeneratedNginx(config: VisageConfig, file: string) {
-  return readGenerated(config, join(config.nginx.mount[0], file));
+  return readGenerated(config, join(config.files.nginx, file));
 }
 
 function locationBlock(rendered: string, path: string) {
@@ -120,25 +120,68 @@ test('validateDexPassword enforces password length without truncation', () => {
   }
 });
 
-test('writeComposeConfig renders named volume declarations and mounts', (t) => {
+test('writeComposeConfig declares shared named volumes from service mounts', (t) => {
   const config = resolvedConfig(t, {
-    volumes: {
-      data: {},
-      shared: { name: 'shared-data', external: true },
-    },
     services: {
-      storage: { image: 'example/storage:test', volumes: ['data:/data'] },
+      storage: {
+        image: 'example/storage:test',
+        mounts: {
+          '/data': { volume: 'data' },
+        },
+      },
+      backup: {
+        image: 'example/backup:test',
+        mounts: {
+          '/snapshot': { volume: 'data', read_only: true },
+          '/backups': { volume: 'backups.daily' },
+        },
+      },
     },
   });
 
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
-  assert.deepEqual(compose.volumes, {
-    data: {},
-    shared: { name: 'shared-data', external: true },
+  assert.deepEqual(compose.volumes, { data: {}, 'backups.daily': {} });
+  assert.deepEqual(compose.services.storage.volumes, [
+    { type: 'volume', source: 'data', target: '/data' },
+  ]);
+  assert.deepEqual(compose.services.backup.volumes, [
+    { type: 'volume', source: 'data', target: '/snapshot', read_only: true },
+    { type: 'volume', source: 'backups.daily', target: '/backups' },
+  ]);
+});
+
+test('writeComposeConfig preserves bind and tmpfs mounts without named declarations', (t) => {
+  const config = resolvedConfig(t, {
+    services: {
+      storage: {
+        image: 'example/storage:test',
+        mounts: {
+          '/etc/config.json': { bind: 'config', read_only: true },
+          '/assets': { bind: '/srv/assets' },
+          '/scratch': {},
+          '/cache': { mode: 0o1777 },
+        },
+      },
+    },
   });
-  assert.deepEqual(compose.services.storage.volumes, ['data:/data']);
+
+  writeComposeConfig(config);
+
+  const compose = parse(readGenerated(config, config.files.compose));
+  assert.deepEqual(compose.volumes, {});
+  assert.deepEqual(compose.services.storage.volumes, [
+    {
+      type: 'bind',
+      source: 'config',
+      target: '/etc/config.json',
+      read_only: true,
+    },
+    { type: 'bind', source: '/srv/assets', target: '/assets' },
+    { type: 'tmpfs', target: '/scratch', tmpfs: {} },
+    { type: 'tmpfs', target: '/cache', tmpfs: { mode: 0o1777 } },
+  ]);
 });
 
 test('writeComposeConfig renders base services and custom services', (t) => {
@@ -151,10 +194,20 @@ test('writeComposeConfig renders base services and custom services', (t) => {
           environment: {
             CUSTOM_NGINX_SETTING: 'value',
           },
-          volumes: ['./nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro'],
+          mounts: {
+            '/etc/nginx/conf.d/extra.conf': {
+              bind: './nginx-extra.conf',
+              read_only: true,
+            },
+          },
         },
         oauth2_proxy: {
-          volumes: ['./oauth2-proxy-extra.yml:/etc/oauth2-proxy/extra.yml:ro'],
+          mounts: {
+            '/etc/oauth2-proxy/extra.yml': {
+              bind: './oauth2-proxy-extra.yml',
+              read_only: true,
+            },
+          },
         },
         api: {
           image: 'example/api:test',
@@ -165,7 +218,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
           networks: ['backend'],
           environment: { API_MODE: 'test' },
           depends_on: ['nginx'],
-          volumes: ['./api.yml:/etc/api/api.yml:ro'],
+          mounts: {
+            '/etc/api/api.yml': { bind: './api.yml', read_only: true },
+          },
           upstream: {
             locations: { '/api/': {} },
           },
@@ -195,7 +250,12 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.equal(compose.services.dex.network_mode, 'service:nginx');
   assert.equal(compose.services.dex.environment.DEX_SESSIONS_ENABLED, 'true');
   assert.deepEqual(compose.services.dex.volumes, [
-    './dex.yaml:/etc/dex/dex.yaml:ro',
+    {
+      type: 'bind',
+      source: './dex.yaml',
+      target: '/etc/dex/dex.yaml',
+      read_only: true,
+    },
   ]);
   assert.deepEqual(compose.services.dex.secrets, ['OAUTH2_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
@@ -212,8 +272,15 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.equal(compose.services.nginx.depends_on, undefined);
   assert.deepEqual(compose.services.nginx.volumes, [
-    './nginx:/etc/nginx',
-    './nginx-extra.conf:/etc/nginx/conf.d/extra.conf:ro',
+    { type: 'bind', source: './nginx', target: '/etc/nginx' },
+    { type: 'tmpfs', target: '/var/cache/nginx', tmpfs: { mode: 0o1777 } },
+    { type: 'tmpfs', target: '/etc/nginx/http.d', tmpfs: { mode: 0o1777 } },
+    {
+      type: 'bind',
+      source: './nginx-extra.conf',
+      target: '/etc/nginx/conf.d/extra.conf',
+      read_only: true,
+    },
   ]);
   assert.equal(compose.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(compose.services.oauth2_proxy.depends_on, undefined);
@@ -221,8 +288,18 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.equal(compose.services.oauth2_proxy.networks, undefined);
   assert.equal(compose.services.oauth2_proxy.restart, 'always');
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
-    './oauth2-proxy.yml:/etc/oauth2-proxy/config.yml:ro',
-    './oauth2-proxy-extra.yml:/etc/oauth2-proxy/extra.yml:ro',
+    {
+      type: 'bind',
+      source: './oauth2-proxy.yml',
+      target: '/etc/oauth2-proxy/config.yml',
+      read_only: true,
+    },
+    {
+      type: 'bind',
+      source: './oauth2-proxy-extra.yml',
+      target: '/etc/oauth2-proxy/extra.yml',
+      read_only: true,
+    },
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
@@ -245,7 +322,14 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     environment: { API_MODE: 'test' },
     depends_on: ['nginx'],
     restart: 'on-failure',
-    volumes: ['./api.yml:/etc/api/api.yml:ro'],
+    volumes: [
+      {
+        type: 'bind',
+        source: './api.yml',
+        target: '/etc/api/api.yml',
+        read_only: true,
+      },
+    ],
     networks: ['api', 'backend'],
     security_opt: [],
     cap_drop: ['NET_RAW'],
@@ -410,10 +494,13 @@ test('writeComposeConfig publishes only the collector logging port', (t) => {
   assert.deepEqual(compose.services.otelcol.networks, ['otelcol']);
   assert.equal(compose.services.otelcol.restart, 'always');
   assert.equal(compose.services.otelcol.volumes.length, 1);
-  assert.match(
-    compose.services.otelcol.volumes[0],
-    /packages\/visage\/otelcol:\/etc\/otelcol-contrib:ro$/,
-  );
+  const { source, ...mount } = compose.services.otelcol.volumes[0];
+  assert.deepEqual(mount, {
+    type: 'bind',
+    target: '/etc/otelcol-contrib',
+    read_only: true,
+  });
+  assert.match(source, /packages\/visage\/otelcol$/);
 });
 
 test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
@@ -449,7 +536,7 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
 
   writeDexConfig(config);
 
-  const dex = parse(readGenerated(config, config.files.dex[0]));
+  const dex = parse(readGenerated(config, './dex.yaml'));
   assert.equal(dex.issuer, 'https://app.local.test:9443/dex');
   assert.deepEqual(dex.expiry, {
     idTokens: '1m',
@@ -490,7 +577,7 @@ test('writeDexConfig renders configured OAuth2 public client', (t) => {
 
   writeDexConfig(config);
 
-  const dex = parse(readGenerated(config, config.files.dex[0]));
+  const dex = parse(readGenerated(config, './dex.yaml'));
   assert.deepEqual(dex.staticClients, [
     {
       id: 'local-app',
@@ -522,7 +609,7 @@ test('writeDexConfig renders configured expiry and sessions', (t) => {
 
   writeDexConfig(config);
 
-  const dex = parse(readGenerated(config, config.files.dex[0]));
+  const dex = parse(readGenerated(config, './dex.yaml'));
   assert.deepEqual(dex.sessions, {
     absoluteLifetime: '8760h',
     validIfNotUsedFor: '8760h',
@@ -549,7 +636,7 @@ test('writeDexConfig uses the resolved callback URL', (t) => {
     },
   };
   writeDexConfig(resolved);
-  const dex = parse(readGenerated(config, config.files.dex[0]));
+  const dex = parse(readGenerated(config, './dex.yaml'));
   assert.deepEqual(dex.staticClients[0].redirectURIs, [callback]);
 });
 
@@ -558,7 +645,7 @@ test('writeDexConfig uses the public IdP host and application callback', (t) => 
     services: { dex: { host: 'idp.local.test' } },
   });
   writeDexConfig(config);
-  const dex = parse(readGenerated(config, config.files.dex[0]));
+  const dex = parse(readGenerated(config, './dex.yaml'));
   assert.equal(dex.issuer, 'https://idp.local.test:9443/dex');
   assert.deepEqual(dex.staticClients[0].redirectURIs, [
     'https://app.local.test:9443/oauth2/callback',
@@ -607,10 +694,10 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
     nginx,
     /load_module \/usr\/lib\/nginx\/modules\/ngx_otel_module\.so;/,
   );
-  assert.match(nginx, /include \/etc\/nginx\/http\.d\/otel\.conf;/);
+  assert.match(nginx, /include http\.d\/otel\.conf;/);
   assert.match(nginx, /listen 9443 ssl;/);
   assert.match(nginx, /server_name app\.local\.test;/);
-  assert.match(nginx, /ssl_certificate\s+\/etc\/nginx\/certs\/tls\.crt;/);
+  assert.match(nginx, /ssl_certificate\s+certs\/tls\.crt;/);
   assert.match(
     locationBlock(nginx, '/api/'),
     /otel_span_name "\$request_method \/api\/";/,
@@ -754,7 +841,7 @@ test('writeNginxAssets omits OpenTelemetry config when telemetry is disabled', (
 
   const nginx = readGeneratedNginx(config, 'nginx.conf');
   assert.doesNotMatch(nginx, /ngx_otel_module/);
-  assert.doesNotMatch(nginx, /include \/etc\/nginx\/http\.d\/otel\.conf;/);
+  assert.doesNotMatch(nginx, /include http\.d\/otel\.conf;/);
   assert.doesNotMatch(nginx, /otel_span_name/);
   assert.doesNotMatch(nginx, /otel_span_attr/);
   assert.doesNotMatch(nginx, /otel_trace/);
@@ -1058,7 +1145,7 @@ test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
     nginx,
     /load_module \/usr\/lib\/nginx\/modules\/ngx_http_js_module\.so;/,
   );
-  assert.match(nginx, /js_import edge_key from \/etc\/nginx\/edge-key\.js;/);
+  assert.match(nginx, /js_import edge_key from edge-key\.js;/);
   assert.match(nginx, /js_shared_dict_zone zone=edge_key:32k;/);
   assert.match(nginx, /js_set \$edge_key edge_key;/);
   assert.doesNotMatch(nginx, /csrf_referer_origin/);
@@ -1313,7 +1400,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
   assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
@@ -1369,7 +1456,7 @@ test('writeOauth2ProxyConfig exposes telemetry metrics to the collector', (t) =>
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
 });
@@ -1386,7 +1473,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(oauth2Proxy.client_id, 'local-app');
   assert.equal(oauth2Proxy.client_secret, undefined);
@@ -1407,7 +1494,7 @@ test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
   assert.equal(oauth2Proxy.skip_oidc_discovery, undefined);
@@ -1428,7 +1515,7 @@ test('writeOauth2ProxyConfig whitelists external IdP end-session redirects', (t)
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.deepEqual(oauth2Proxy.whitelist_domains, [
     'app.local.test',
@@ -1449,7 +1536,7 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
@@ -1476,7 +1563,7 @@ test('writeOauth2ProxyConfig renders configured cookie policy', (t) => {
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(oauth2Proxy.cookie_name, 'custom');
   assert.equal(oauth2Proxy.cookie_expire, '30m');
@@ -1494,7 +1581,7 @@ test('writeOauth2ProxyConfig retains its listener when the upstream is disabled'
   });
   writeOauth2ProxyConfig(config);
   const proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(proxy.http_address, '127.0.0.1:4180');
 });
@@ -1511,7 +1598,7 @@ test('writeOauth2ProxyConfig uses the resolved callback URL', (t) => {
   };
   writeOauth2ProxyConfig(resolved);
   const proxy = parseKeyValueConfig(
-    readGenerated(config, config.files.oauth2Proxy[0]),
+    readGenerated(config, './oauth2-proxy.yml'),
   );
   assert.equal(proxy.redirect_url, callback);
 });
@@ -1521,7 +1608,7 @@ test('writeOauth2ProxyConfig uses the public IdP host with host-only application
     services: { dex: { host: 'idp.local.test' } },
   });
   writeOauth2ProxyConfig(config);
-  const oauth2 = readGenerated(config, config.files.oauth2Proxy[0]);
+  const oauth2 = readGenerated(config, './oauth2-proxy.yml');
   assert.match(
     oauth2,
     /login_url = "https:\/\/idp\.local\.test:9443\/dex\/auth"/,

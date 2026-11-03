@@ -12,7 +12,7 @@ const LogSharedFields =
 const LogMessage = 'message={{printf "%q" .Message}}';
 
 export function writeOauth2ProxyConfig(config: VisageConfig): void {
-  const file = join(config.cache, config.files.oauth2Proxy[0]);
+  const file = join(config.cache, config.files.oauth2Proxy);
   const render = renderOauth2ProxyConfig(config);
   writeFileSync(file, render, 'utf-8');
 }

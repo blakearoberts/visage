@@ -7,7 +7,7 @@ import type { VisageConfig } from '../config';
 
 export function writeDexConfig(config: VisageConfig): void {
   const render = renderDexConfig(config);
-  const file = join(config.cache, config.files.dex[0]);
+  const file = join(config.cache, config.files.dex);
   writeFileSync(file, render, 'utf-8');
 }
 

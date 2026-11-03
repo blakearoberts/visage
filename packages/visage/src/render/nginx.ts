@@ -7,8 +7,9 @@ import { Eta } from 'eta';
 import type { VisageConfig } from '../config';
 
 const template = `
-<%_ for (const module of it.modules) { %>
-load_module <%~ module %>;
+load_module /usr/lib/nginx/modules/ngx_http_js_module.so;
+<%_ if (it.telemetry) { %>
+load_module /usr/lib/nginx/modules/ngx_otel_module.so;
 <%_ } %>
 
 pid /tmp/nginx.pid;
@@ -16,7 +17,7 @@ pid /tmp/nginx.pid;
 events {}
 
 http {
-    js_import edge_key from <%~ it.edgeKeyScript %>;
+    js_import edge_key from edge-key.js;
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 
@@ -30,7 +31,7 @@ http {
     }
 
     <%_ if (it.telemetry) { %>
-    include /etc/nginx/http.d/otel.conf;
+    include http.d/otel.conf;
     <%_ } %>
 
     # Disable IPv6 DNS lookup. Docker Desktop (com.docker.backend), doesn't
@@ -125,8 +126,8 @@ http {
             return 301 https://<%~ server.host %>:<%~ server.port %>$request_uri;
         }
 
-        ssl_certificate     <%~ server.ssl.cert %>;
-        ssl_certificate_key <%~ server.ssl.key %>;
+        ssl_certificate     certs/tls.crt;
+        ssl_certificate_key certs/tls.key;
 
         access_log /var/log/nginx/access.log access_log_format;
 
@@ -225,7 +226,7 @@ otel_span_name "$request_method";
 `;
 
 export function writeNginxAssets(config: VisageConfig): void {
-  const directory = join(config.cache, config.nginx.mount[0]);
+  const directory = join(config.cache, config.files.nginx);
   mkdirSync(join(directory, 'http.d'), { recursive: true });
   mkdirSync(join(directory, 'templates'), { recursive: true });
 
@@ -269,12 +270,10 @@ function resolveNginxConfig(config: VisageConfig) {
     origin,
     referer,
     telemetry: config.telemetry,
-    modules: config.nginx.modules,
     email: config.app.client.scopes.includes('email'),
     cookie_name: JSON.stringify(
       config.app.cookie.cookie_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
     ).slice(1, -1),
-    edgeKeyScript: join(config.nginx.mount[1], 'edge-key.js'),
     upstreams: upstreams.map(([name, upstream]) => ({
       name,
       host: upstream.host,
@@ -288,10 +287,6 @@ function resolveNginxConfig(config: VisageConfig) {
     servers: config.hosts.map((host) => ({
       host,
       port: config.app.port,
-      ssl: {
-        cert: join(config.nginx.mount[1], 'certs', 'tls.crt'),
-        key: join(config.nginx.mount[1], 'certs', 'tls.key'),
-      },
       locations: upstreams
         .filter(([, , publicHost]) => publicHost === host)
         .flatMap(([name, upstream]) =>

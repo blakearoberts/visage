@@ -10,7 +10,6 @@ export default defineConfig({
     visage({
       oauth2: { scopes: ['openid', 'email', 'offline_access'] },
       telemetry: true,
-      volumes: { 'lgtm-data': {} },
       services: {
         dex: { host: 'idp.localhost' },
         otelcol: {
@@ -19,7 +18,6 @@ export default defineConfig({
         },
         grafana: {
           build: resolve(import.meta.dirname, 'otel-lgtm'),
-          tmpfs: ['/tmp'],
           environment: {
             GF_AUTH_ANONYMOUS_ENABLED: 'false',
             GF_AUTH_PROXY_ENABLED: 'true',
@@ -37,11 +35,17 @@ export default defineConfig({
             LOKI_EXTRA_ARGS:
               '-store.retention=24h -compactor.retention-enabled=true -compactor.delete-request-store=filesystem',
           },
-          volumes: [
-            `${resolve(import.meta.dirname, 'otel-lgtm')}:/otel-lgtm/visage:ro`,
-            `${resolve(import.meta.dirname, 'otel-lgtm/dashboards')}:/otel-lgtm/visage/dashboards`,
-            'lgtm-data:/data',
-          ],
+          mounts: {
+            '/tmp': {},
+            '/otel-lgtm/visage': {
+              bind: resolve(import.meta.dirname, 'otel-lgtm'),
+              read_only: true,
+            },
+            '/otel-lgtm/visage/dashboards': {
+              bind: resolve(import.meta.dirname, 'otel-lgtm/dashboards'),
+            },
+            '/data': { volume: 'lgtm-data' },
+          },
           upstream: {
             port: 3000,
             headers: { 'X-Auth-Request-Email': '$auth_email' },

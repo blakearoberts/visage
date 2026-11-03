@@ -12,7 +12,7 @@ export function App() {
         <button
           onClick={() => {
             void mutate(() => true, undefined, { revalidate: false });
-            window.location.assign('/oauth2/sign_out');
+            window.location.assign('/oauth/sign_out');
           }}
         >
           Sign out

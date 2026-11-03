@@ -491,7 +491,7 @@
                       "spec": {
                         "direction": "backward",
                         "editorMode": "code",
-                        "expr": "{ service_name=\"oauth2_proxy\" } | url_original!=\"/oauth2/auth\"",
+                        "expr": "{ service_name=\"oauth2_proxy\" } | url_original!=\"/oauth/auth\"",
                         "queryType": "range"
                       },
                       "version": "v0"

@@ -73,7 +73,7 @@ export function SessionLockProvider({ children }: { children: ReactNode }) {
 
 function SessionLock() {
   function signBackIn() {
-    window.open(`/oauth2/start?rd=${encodeURIComponent('/?reauth')}`);
+    window.open(`/oauth/start?rd=${encodeURIComponent('/?reauth')}`);
   }
   return (
     <div

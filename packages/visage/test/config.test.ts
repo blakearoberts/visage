@@ -486,13 +486,13 @@ test('resolveConfig preserves built-in routes when service ports are overridden'
   assert.ok(proxy);
   assert.equal(proxy.host, '127.0.0.1');
   assert.equal(proxy.port, 4180);
-  assert.equal(proxy.locations['/oauth2/'].auth.enabled, false);
-  assert.equal(proxy.locations['/oauth2/'].headers.Cookie, '$http_cookie');
-  assert.equal(proxy.locations['= /oauth2/auth'].headers.Cookie, '$app_cookie');
-  assert.deepEqual(proxy.locations['= /oauth2/auth'].directives.internal, ['']);
-  assert.equal(proxy.locations['/oauth2/sign_out'].auth.enabled, true);
+  assert.equal(proxy.locations['/oauth/'].auth.enabled, false);
+  assert.equal(proxy.locations['/oauth/'].headers.Cookie, '$http_cookie');
+  assert.equal(proxy.locations['= /oauth/auth'].headers.Cookie, '$app_cookie');
+  assert.deepEqual(proxy.locations['= /oauth/auth'].directives.internal, ['']);
+  assert.equal(proxy.locations['/oauth/sign_out'].auth.enabled, true);
   assert.match(
-    proxy.locations['/oauth2/sign_out'].headers['X-Auth-Request-Redirect'],
+    proxy.locations['/oauth/sign_out'].headers['X-Auth-Request-Redirect'],
     /id_token_hint=\{id_token\}/,
   );
 });
@@ -770,7 +770,7 @@ test('resolveConfig supports external IdP end-session endpoints', (t) => {
   );
   assert.ok(config.services.oauth2_proxy.upstream);
   assert.equal(
-    config.services.oauth2_proxy.upstream.locations['/oauth2/sign_out'].headers[
+    config.services.oauth2_proxy.upstream.locations['/oauth/sign_out'].headers[
       'X-Auth-Request-Redirect'
     ],
     '"http://idp.localhost:5557/idp/logout?id_token_hint={id_token}&post_logout_redirect_uri=https%3A%2F%2Fapp.local.test%3A9443%2F"',
@@ -1021,7 +1021,7 @@ test('resolveConfig applies CSRF defaults and overrides', (t) => {
   assert.equal(config.services.dex.upstream.locations['/dex/'].csrf, false);
   assert.ok(config.services.oauth2_proxy.upstream);
   assert.equal(
-    config.services.oauth2_proxy.upstream.locations['/oauth2/'].csrf,
+    config.services.oauth2_proxy.upstream.locations['/oauth/'].csrf,
     false,
   );
 });
@@ -1227,7 +1227,7 @@ test('resolveConfig retains Dex paths and isolates the application session on pu
   assert.equal(config.idp.oidc.jwks, 'http://127.0.0.1:5556/dex/keys');
   assert.equal(
     config.app.client.redirectUri,
-    'https://app.local.test:9443/oauth2/callback',
+    'https://app.local.test:9443/oauth/callback',
   );
   assert.equal(config.app.cookie.cookie_name, '__Host-sess');
   assert.equal(config.app.cookie.cookie_domains, undefined);
@@ -1333,8 +1333,8 @@ test('resolveOptions applies public defaults', () => {
     secret: 'visage-secret',
     scopes: ['openid', 'offline_access'],
     public: false,
-    redirectUri: 'https://localhost:9001/oauth2/callback',
-    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
+    redirectUri: 'https://localhost:9001/oauth/callback',
+    postLogoutRedirectUri: 'https://localhost:9001/oauth/start?rd=/',
   });
 });
 
@@ -1476,8 +1476,8 @@ test('resolveOptions applies OAuth2 client overrides', () => {
     secret: 'local-secret',
     scopes: ['openid', 'email'],
     public: false,
-    redirectUri: 'https://localhost:9001/oauth2/callback',
-    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
+    redirectUri: 'https://localhost:9001/oauth/callback',
+    postLogoutRedirectUri: 'https://localhost:9001/oauth/start?rd=/',
   });
 });
 
@@ -1508,8 +1508,8 @@ test('resolveOptions supports OAuth2 public PKCE clients', () => {
     id: 'local-app',
     scopes: ['openid', 'email', 'profile', 'offline_access'],
     public: true,
-    redirectUri: 'https://localhost:9001/oauth2/callback',
-    postLogoutRedirectUri: 'https://localhost:9001/oauth2/start?rd=/',
+    redirectUri: 'https://localhost:9001/oauth/callback',
+    postLogoutRedirectUri: 'https://localhost:9001/oauth/start?rd=/',
   });
 });
 

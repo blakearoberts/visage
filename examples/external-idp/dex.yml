@@ -10,7 +10,7 @@ staticClients:
     name: Visage External IdP
     public: true
     redirectURIs:
-      - https://localhost:9002/oauth2/callback
+      - https://localhost:9002/oauth/callback
     postLogoutRedirectURIs:
       - https://localhost:9002/
 enablePasswordDB: true

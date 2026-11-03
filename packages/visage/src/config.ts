@@ -214,7 +214,7 @@ const BaseServiceOAuth2Proxy = {
     scheme: 'http',
     port: 4180,
     locations: {
-      '/oauth2/': {
+      '/oauth/': {
         ws: false,
         auth: { enabled: false, forward: false },
         csrf: false,
@@ -223,7 +223,7 @@ const BaseServiceOAuth2Proxy = {
           'X-Auth-Request-Redirect': '$request_uri',
         },
       } satisfies VisageProxyPolicy,
-      '= /oauth2/auth': {
+      '= /oauth/auth': {
         ws: false,
         auth: { enabled: false, forward: false },
         csrf: false,
@@ -236,14 +236,14 @@ const BaseServiceOAuth2Proxy = {
           proxy_pass_request_body: ['off'],
         },
       } satisfies VisageProxyPolicy,
-      '= /oauth2/userinfo': {
+      '= /oauth/userinfo': {
         ws: false,
         auth: { enabled: false, forward: false },
         csrf: false,
         headers: {},
         directives: { return: ['404'] },
       } satisfies VisageProxyPolicy,
-      '/oauth2/sign_out': {
+      '/oauth/sign_out': {
         ws: false,
         auth: { enabled: true, forward: false },
         csrf: false,
@@ -347,12 +347,12 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
         : { secret: oauth2.clientSecret ?? 'visage-secret' }),
       scopes: oauth2.scopes ?? (['openid', 'offline_access'] as const),
       public: oauth2.clientSecret === null,
-      redirectUri: `https://${host}:${port}/oauth2/callback`,
+      redirectUri: `https://${host}:${port}/oauth/callback`,
       postLogoutRedirectUri:
         `https://${host}:${port}` +
         (options.idp !== undefined && 'issuer' in options.idp
           ? '/'
-          : '/oauth2/start?rd=/'),
+          : '/oauth/start?rd=/'),
     } satisfies ResolvedOAuth2Client,
     services: options.services ?? {},
     remotes: {
@@ -572,10 +572,10 @@ function resolveServicesConfig(
         ...BaseServiceOAuth2Proxy.upstream,
         locations: {
           ...BaseServiceOAuth2Proxy.upstream.locations,
-          '/oauth2/sign_out': {
-            ...BaseServiceOAuth2Proxy.upstream.locations['/oauth2/sign_out'],
+          '/oauth/sign_out': {
+            ...BaseServiceOAuth2Proxy.upstream.locations['/oauth/sign_out'],
             headers: {
-              ...BaseServiceOAuth2Proxy.upstream.locations['/oauth2/sign_out']
+              ...BaseServiceOAuth2Proxy.upstream.locations['/oauth/sign_out']
                 .headers,
               'X-Auth-Request-Redirect':
                 end_session_endpoint === undefined

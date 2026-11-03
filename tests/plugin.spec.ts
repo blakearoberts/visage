@@ -77,14 +77,14 @@ test('sign-out fetch without an app session returns 401', async ({
   request,
 }) => {
   expect(
-    (await request.get('/oauth2/sign_out', { maxRedirects: 0 })).status(),
+    (await request.get('/oauth/sign_out', { maxRedirects: 0 })).status(),
   ).toBe(401);
 });
 
 test('sign-out navigation without an app or IdP session reaches login', async ({
   page,
 }) => {
-  await page.goto('/oauth2/sign_out');
+  await page.goto('/oauth/sign_out');
   await expect(page.locator('input[name="login"]')).toBeVisible();
 });
 
@@ -94,7 +94,7 @@ test('sign-out navigation with only an IdP session ends app and IdP sessions', a
 }) => {
   await login(page);
   await context.clearCookies({ name: '__Host-sess' });
-  await page.goto('/oauth2/sign_out');
+  await page.goto('/oauth/sign_out');
   await expect(page.locator('input[name="login"]')).toBeVisible();
   const names = (await page.context().cookies()).map((cookie) => cookie.name);
   expect(names).not.toContain('__Host-sess');
@@ -106,7 +106,7 @@ test('sign out after the IdP session ends clears the app session and reaches log
 }) => {
   await login(page);
   await expect(await page.request.post('/dex/logout')).toBeOK();
-  await page.goto('/oauth2/sign_out');
+  await page.goto('/oauth/sign_out');
   await expect(page.locator('input[name="login"]')).toBeVisible();
   const names = (await page.context().cookies()).map((cookie) => cookie.name);
   expect(names).not.toContain('__Host-sess');

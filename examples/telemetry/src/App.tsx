@@ -13,7 +13,7 @@ export function App() {
   }
 
   function signOut() {
-    window.location.assign('/oauth2/sign_out');
+    window.location.assign('/oauth/sign_out');
   }
 
   return (

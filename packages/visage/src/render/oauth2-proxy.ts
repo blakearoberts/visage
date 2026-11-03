@@ -23,6 +23,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     http_address: `127.0.0.1:${port}`,
     metrics_address: '0.0.0.0:4181',
     provider: 'oidc',
+    proxy_prefix: '/oauth',
     oidc_issuer_url: config.idp.oidc.issuer,
     ...(config.idp.oidc.algs === undefined
       ? {}

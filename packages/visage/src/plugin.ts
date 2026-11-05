@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 
@@ -12,13 +11,12 @@ import type { VisageOptions } from './types';
 
 export function visage(options: VisageOptions = {}): Plugin {
   const resolvedOptions = resolveOptions(options);
+  const { edgeKey } = resolvedOptions;
   let stop: (() => void) | undefined;
   const closeBundle = () => {
     stop?.();
     stop = undefined;
   };
-
-  const edgeKey = randomBytes(32).toString('base64url');
 
   return {
     name: 'visage',
@@ -69,7 +67,6 @@ export function visage(options: VisageOptions = {}): Plugin {
           appPort: address.port,
           root: vite.config.root,
           cache: join(vite.config.cacheDir, 'visage'),
-          edgeKey,
         });
         vite.resolvedUrls = {
           local: [`https://${config.app.host}:${config.app.port}/`],

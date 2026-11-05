@@ -22,7 +22,6 @@ import type { VisageOptions } from '../src/types';
 function resolvedConfig(
   t: TestContext,
   options: VisageOptions = {},
-  edgeKey = 'edge-key',
 ): VisageConfig {
   const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
   t.after(() => rmSync(cache, { recursive: true, force: true }));
@@ -36,7 +35,6 @@ function resolvedConfig(
     }),
     root: 'render-test',
     cache,
-    edgeKey,
     appPort: 6173,
   });
 }
@@ -185,55 +183,51 @@ test('writeComposeConfig preserves bind and tmpfs mounts without named declarati
 });
 
 test('writeComposeConfig renders base services and custom services', (t) => {
-  const config = resolvedConfig(
-    t,
-    {
-      services: {
-        nginx: {
-          networks: ['edge'],
-          environment: {
-            CUSTOM_NGINX_SETTING: 'value',
-          },
-          mounts: {
-            '/etc/nginx/conf.d/extra.conf': {
-              bind: './nginx-extra.conf',
-              read_only: true,
-            },
-          },
+  const config = resolvedConfig(t, {
+    services: {
+      nginx: {
+        networks: ['edge'],
+        environment: {
+          CUSTOM_NGINX_SETTING: 'value',
         },
-        oauth2_proxy: {
-          mounts: {
-            '/etc/oauth2-proxy/extra.yml': {
-              bind: './oauth2-proxy-extra.yml',
-              read_only: true,
-            },
+        mounts: {
+          '/etc/nginx/conf.d/extra.conf': {
+            bind: './nginx-extra.conf',
+            read_only: true,
           },
-        },
-        api: {
-          image: 'example/api:test',
-          command: ['serve'],
-          security_opt: [],
-          cap_drop: ['NET_RAW'],
-          read_only: false,
-          networks: ['backend'],
-          environment: { API_MODE: 'test' },
-          depends_on: ['nginx'],
-          mounts: {
-            '/etc/api/api.yml': { bind: './api.yml', read_only: true },
-          },
-          upstream: {
-            locations: { '/api/': {} },
-          },
-        },
-        db: {
-          image: 'example/db:test',
-          networks: ['backend'],
-          upstream: false,
         },
       },
+      oauth2_proxy: {
+        mounts: {
+          '/etc/oauth2-proxy/extra.yml': {
+            bind: './oauth2-proxy-extra.yml',
+            read_only: true,
+          },
+        },
+      },
+      api: {
+        image: 'example/api:test',
+        command: ['serve'],
+        security_opt: [],
+        cap_drop: ['NET_RAW'],
+        read_only: false,
+        networks: ['backend'],
+        environment: { API_MODE: 'test' },
+        depends_on: ['nginx'],
+        mounts: {
+          '/etc/api/api.yml': { bind: './api.yml', read_only: true },
+        },
+        upstream: {
+          locations: { '/api/': {} },
+        },
+      },
+      db: {
+        image: 'example/db:test',
+        networks: ['backend'],
+        upstream: false,
+      },
     },
-    'edge-key',
-  );
+  });
 
   writeComposeConfig(config);
 
@@ -1178,7 +1172,7 @@ test('writeNginxAssets preserves browser host for the application upstream', (t)
 });
 
 test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
-  const config = resolvedConfig(t, {}, 'edge-key');
+  const config = resolvedConfig(t);
 
   writeNginxAssets(config);
 

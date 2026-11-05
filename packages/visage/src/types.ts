@@ -278,6 +278,8 @@ export type VisageExternalIdpOptions = {
 export type VisageOAuth2Client = {
   /** OIDC callback URL. Defaults to `/oauth/callback` on the client host. */
   readonly redirectUri?: string;
+  /** URL to return to after signing out of the identity provider. */
+  readonly postLogoutRedirectUri?: string;
   /**
    * OAuth2 client identifier.
    *

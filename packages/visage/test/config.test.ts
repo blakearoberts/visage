@@ -33,7 +33,6 @@ function resolveForTest(
       }),
       cache,
       root: 'test-app',
-      edgeKey: 'edge-key',
       appPort: 6173,
     }),
   };
@@ -280,10 +279,13 @@ test('resolveConfig uses each bound port without changing resolved options', (t)
       ...options,
       root: 'test-app',
       cache: tempCache(t),
-      edgeKey: 'edge-key',
       appPort,
     });
     assert.equal(config.app.upstream.port, appPort);
+    assert.deepEqual(config.secrets, {
+      VISAGE_EDGE_KEY: options.edgeKey,
+      OAUTH2_PROXY_COOKIE_SECRET: options.cookieSecret,
+    });
     assert.equal(config.app.upstream.host, 'host.docker.internal');
     assert.deepEqual(Object.keys(config.app.upstream.locations), ['/']);
     assert.equal(
@@ -960,7 +962,6 @@ test('resolveConfig resolves scoped package names', (t) => {
     ...resolveOptions({}),
     cache: join(root, '.visage'),
     root,
-    edgeKey: 'edge-key',
     appPort: 6173,
   });
 
@@ -1149,7 +1150,6 @@ test('resolveConfig assembles managed services without changing resolved options
     ...options,
     root: 'test-app',
     cache: tempCache(t),
-    edgeKey: 'edge-key',
     appPort: 6173,
   });
   for (const [name, port] of [
@@ -1287,7 +1287,6 @@ test('resolveConfig preserves generated client secrets across repeated resolutio
     }),
     cache: tempCache(t),
     root: 'test-app',
-    edgeKey: 'edge-key',
     appPort: 6173,
   };
   const first = resolveConfig(options);
@@ -1501,6 +1500,7 @@ test('resolveOptions applies OAuth2 client overrides', () => {
       id: 'local-app',
       secret: 'local-secret',
       scopes: ['openid', 'email'],
+      postLogoutRedirectUri: 'https://localhost:9001/signed-out',
     },
   });
 
@@ -1510,7 +1510,7 @@ test('resolveOptions applies OAuth2 client overrides', () => {
     scopes: ['openid', 'email'],
     public: false,
     redirectUri: 'https://localhost:9001/oauth/callback',
-    postLogoutRedirectUri: 'https://localhost:9001/oauth/start?rd=/',
+    postLogoutRedirectUri: 'https://localhost:9001/signed-out',
   });
 });
 

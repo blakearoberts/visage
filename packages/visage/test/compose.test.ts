@@ -27,7 +27,6 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       }),
       cache: '',
       root: 'compose-test',
-      edgeKey: 'edge-key',
       appPort: 6173,
     }),
     package: '@blakearoberts/visage',
@@ -165,10 +164,10 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       'down',
       '--remove-orphans',
     ]);
-    assert.ok(firstSecret);
-    assert.ok(secondSecret);
-    assert.notEqual(secondSecret, 'changed-cookie-secret');
-    assert.equal(firstEdgeKey, 'edge-key');
+    assert.ok(config.secrets.OAUTH2_PROXY_COOKIE_SECRET);
+    assert.equal(firstSecret, config.secrets.OAUTH2_PROXY_COOKIE_SECRET);
+    assert.equal(secondSecret, firstSecret);
+    assert.equal(firstEdgeKey, config.secrets.VISAGE_EDGE_KEY);
     assert.equal(
       spawnSyncCalls[2]?.env?.VISAGE_worker_CLIENT_SECRET,
       'worker-secret',
@@ -185,7 +184,7 @@ test('startCompose restarts Compose with in-memory edge and cookie secrets', asy
       spawnSyncCalls[5]?.env?.VISAGE_worker_CLIENT_SECRET,
       'env-worker-secret',
     );
-    assert.equal(secondEdgeKey, 'edge-key');
+    assert.equal(secondEdgeKey, config.secrets.VISAGE_EDGE_KEY);
     assert.notEqual(secondEdgeKey, 'changed-edge-key');
 
     stop();
@@ -209,7 +208,6 @@ test('startCompose cleans up failed detached startup', async (t) => {
     ...resolveOptions({}),
     cache: '',
     root: 'compose-test',
-    edgeKey: 'edge-key',
     appPort: 6173,
   });
   const spawnSyncCalls: SpawnCall[] = [];
@@ -272,7 +270,6 @@ test('startCompose surfaces NGINX validation errors before startup', async (t) =
     ...resolveOptions({}),
     cache: '',
     root: 'compose-test',
-    edgeKey: 'edge-key',
     appPort: 6173,
   });
   const spawnSyncCalls: SpawnCall[] = [];

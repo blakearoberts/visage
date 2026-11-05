@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { openSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -26,8 +25,7 @@ export function startCompose(config: VisageConfig): () => void {
       ),
     ),
     ...process.env,
-    VISAGE_EDGE_KEY: config.edgeKey,
-    OAUTH2_PROXY_COOKIE_SECRET: randomBytes(32).toString('base64url'),
+    ...config.secrets,
   };
   const opts = { cwd: config.cache, env };
 

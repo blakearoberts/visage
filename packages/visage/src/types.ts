@@ -276,10 +276,6 @@ export type VisageExternalIdpOptions = {
  * clients; OAuth2 Proxy uses the app client.
  */
 export type VisageOAuth2Client = {
-  /** OIDC callback URL. Defaults to `/oauth/callback` on the client host. */
-  readonly redirectUri?: string;
-  /** URL to return to after signing out of the identity provider. */
-  readonly postLogoutRedirectUri?: string;
   /**
    * OAuth2 client identifier.
    *
@@ -299,6 +295,10 @@ export type VisageOAuth2Client = {
    * @defaultValue `['openid', 'offline_access']`
    */
   readonly scopes?: readonly string[];
+  /** OIDC callback URL. Defaults to `/oauth/callback` on the client host. */
+  readonly redirectUri?: string;
+  /** URL to return to after signing out of the identity provider. */
+  readonly postLogoutRedirectUri?: string;
 };
 
 /**

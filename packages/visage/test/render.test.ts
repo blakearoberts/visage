@@ -251,9 +251,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
       read_only: true,
     },
   ]);
-  assert.deepEqual(compose.services.dex.secrets, [
-    'VISAGE_OAUTH_CLIENT_SECRET',
-  ]);
+  assert.deepEqual(compose.services.dex.secrets, ['VISAGE_APP_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
@@ -299,7 +297,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'VISAGE_OAUTH_CLIENT_SECRET',
+    'VISAGE_APP_CLIENT_SECRET',
   ]);
   assert.equal(compose.services.vite_loopback.image, DockerImages.socat.image);
   assert.equal(
@@ -363,8 +361,8 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
     },
-    VISAGE_OAUTH_CLIENT_SECRET: {
-      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
+    VISAGE_APP_CLIENT_SECRET: {
+      environment: 'VISAGE_APP_CLIENT_SECRET',
     },
   });
 });
@@ -379,18 +377,16 @@ test('writeComposeConfig includes unused client secrets for public clients', (t)
   const compose = parse(readGenerated(config, config.files.compose));
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'VISAGE_OAUTH_CLIENT_SECRET',
+    'VISAGE_APP_CLIENT_SECRET',
   ]);
-  assert.deepEqual(compose.services.dex.secrets, [
-    'VISAGE_OAUTH_CLIENT_SECRET',
-  ]);
+  assert.deepEqual(compose.services.dex.secrets, ['VISAGE_APP_CLIENT_SECRET']);
   assert.equal(compose.services.dex.read_only, false);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
     },
-    VISAGE_OAUTH_CLIENT_SECRET: {
-      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
+    VISAGE_APP_CLIENT_SECRET: {
+      environment: 'VISAGE_APP_CLIENT_SECRET',
     },
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
@@ -412,7 +408,7 @@ test('writeComposeConfig declares environment-backed secrets used by services', 
   assert.deepEqual(compose.secrets, {
     API_TOKEN: { environment: 'API_TOKEN' },
     SHARED_TOKEN: { environment: 'SHARED_TOKEN' },
-    VISAGE_OAUTH_CLIENT_SECRET: { environment: 'VISAGE_OAUTH_CLIENT_SECRET' },
+    VISAGE_APP_CLIENT_SECRET: { environment: 'VISAGE_APP_CLIENT_SECRET' },
     VISAGE_EDGE_KEY: { environment: 'VISAGE_EDGE_KEY' },
     OAUTH2_PROXY_COOKIE_SECRET: { environment: 'OAUTH2_PROXY_COOKIE_SECRET' },
   });
@@ -529,9 +525,9 @@ test('writeComposeConfig omits public hosts, upstreams, and clients from service
   assert.equal(compose.services.api.host, undefined);
   assert.equal(compose.services.api.upstream, undefined);
   assert.equal(compose.services.api.client, undefined);
-  assert.ok(compose.services.dex.secrets.includes('VISAGE_api_CLIENT_SECRET'));
-  assert.deepEqual(compose.secrets.VISAGE_api_CLIENT_SECRET, {
-    environment: 'VISAGE_api_CLIENT_SECRET',
+  assert.ok(compose.services.dex.secrets.includes('VISAGE_API_CLIENT_SECRET'));
+  assert.deepEqual(compose.secrets.VISAGE_API_CLIENT_SECRET, {
+    environment: 'VISAGE_API_CLIENT_SECRET',
   });
   assert.doesNotMatch(
     readGenerated(config, config.files.compose),
@@ -564,7 +560,7 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
     {
       id: 'visage',
       name: 'visage',
-      secret: '{{ file.Read "/run/secrets/VISAGE_OAUTH_CLIENT_SECRET" }}',
+      secret: '{{ file.Read "/run/secrets/VISAGE_APP_CLIENT_SECRET" }}',
       refreshTokenLifetime: 'session',
       postLogoutRedirectURIs: ['https://app.local.test:9443/oauth/start?rd=/'],
       redirectURIs: ['https://app.local.test:9443/oauth/callback'],
@@ -594,7 +590,7 @@ test('writeDexConfig registers confidential and public service clients', (t) => 
     {
       id: 'metrics',
       name: 'metrics',
-      secret: '{{ file.Read "/run/secrets/VISAGE_grafana_CLIENT_SECRET" }}',
+      secret: '{{ file.Read "/run/secrets/VISAGE_GRAFANA_CLIENT_SECRET" }}',
       refreshTokenLifetime: 'session',
       redirectURIs: ['https://g.localhost:9443/login/generic_oauth'],
       postLogoutRedirectURIs: ['https://g.localhost:9443/'],
@@ -1457,7 +1453,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.client_secret, undefined);
   assert.equal(
     oauth2Proxy.client_secret_file,
-    '/run/secrets/VISAGE_OAUTH_CLIENT_SECRET',
+    '/run/secrets/VISAGE_APP_CLIENT_SECRET',
   );
   assert.equal(oauth2Proxy.cookie_secret, undefined);
   assert.equal(

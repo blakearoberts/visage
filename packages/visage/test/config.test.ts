@@ -164,7 +164,7 @@ test('resolveConfig adds custom secrets without replacing managed secrets', (t) 
     assert.deepEqual(config.services.api.secrets, ['API_TOKEN']);
     assert.equal(config.services.api.read_only, false);
     assert.deepEqual(config.services.dex.secrets, [
-      'VISAGE_OAUTH_CLIENT_SECRET',
+      'VISAGE_APP_CLIENT_SECRET',
       'DEX_TOKEN',
     ]);
     assert.equal(config.services.dex.read_only, false);
@@ -174,7 +174,7 @@ test('resolveConfig adds custom secrets without replacing managed secrets', (t) 
     ]);
     assert.deepEqual(config.services.oauth2_proxy.secrets, [
       'OAUTH2_PROXY_COOKIE_SECRET',
-      'VISAGE_OAUTH_CLIENT_SECRET',
+      'VISAGE_APP_CLIENT_SECRET',
       'PROXY_TOKEN',
     ]);
   }
@@ -282,10 +282,7 @@ test('resolveConfig uses each bound port without changing resolved options', (t)
       appPort,
     });
     assert.equal(config.app.upstream.port, appPort);
-    assert.deepEqual(config.secrets, {
-      VISAGE_EDGE_KEY: options.edgeKey,
-      OAUTH2_PROXY_COOKIE_SECRET: options.cookieSecret,
-    });
+    assert.deepEqual(config.secrets, options.secrets);
     assert.equal(config.app.upstream.host, 'host.docker.internal');
     assert.deepEqual(Object.keys(config.app.upstream.locations), ['/']);
     assert.equal(

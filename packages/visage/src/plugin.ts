@@ -11,7 +11,7 @@ import type { VisageOptions } from './types';
 
 export function visage(options: VisageOptions = {}): Plugin {
   const resolvedOptions = resolveOptions(options);
-  const { edgeKey } = resolvedOptions;
+  const edgeKey = resolvedOptions.secrets.VISAGE_EDGE_KEY;
   let stop: (() => void) | undefined;
   const closeBundle = () => {
     stop?.();

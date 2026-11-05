@@ -55,7 +55,7 @@ export type VisageServer = {
 
 export function createVisageServer(options: VisageOptions): VisageServer {
   const resolvedOptions = resolveOptions(options);
-  const { edgeKey } = resolvedOptions;
+  const edgeKey = resolvedOptions.secrets.VISAGE_EDGE_KEY;
   let stop: (() => void) | undefined;
   return {
     middleware: createVisageMiddleware(edgeKey),

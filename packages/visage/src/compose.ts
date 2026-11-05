@@ -18,14 +18,8 @@ export function startCompose(config: VisageConfig): () => void {
   const dir = join(config.cache, 'logs');
   const env = {
     COMPOSE_MENU: 'false',
-    VISAGE_OAUTH_CLIENT_SECRET: config.app.client.secret,
-    ...Object.fromEntries(
-      Object.entries(config.services).flatMap(([name, { client }]) =>
-        client ? [[`VISAGE_${name}_CLIENT_SECRET`, client.secret]] : [],
-      ),
-    ),
-    ...process.env,
     ...config.secrets,
+    ...process.env,
   };
   const opts = { cwd: config.cache, env };
 

@@ -676,16 +676,9 @@ test('writeDexConfig renders configured expiry and sessions', (t) => {
 });
 
 test('writeDexConfig uses the resolved callback URL', (t) => {
-  const config = resolvedConfig(t);
   const callback = 'https://auth.local.test:8443/oauth/callback';
-  const resolved = {
-    ...config,
-    app: {
-      ...config.app,
-      client: { ...config.app.client, redirectUri: callback },
-    },
-  };
-  writeDexConfig(resolved);
+  const config = resolvedConfig(t, { client: { redirectUri: callback } });
+  writeDexConfig(config);
   const dex = parse(readGenerated(config, './dex.yaml'));
   assert.deepEqual(dex.staticClients[0].redirectURIs, [callback]);
 });

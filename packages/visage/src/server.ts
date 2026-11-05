@@ -98,7 +98,7 @@ export async function startVisageServer(
   await ensureHostEntry(config);
 
   writeComposeConfig(config);
-  if ('dex' in config.idp) {
+  if (config.dex !== undefined) {
     writeDexConfig(config);
   }
   writeNginxAssets(config);

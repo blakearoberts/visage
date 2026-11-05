@@ -749,9 +749,9 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.equal(config.remotes.idp.scheme, 'http');
   assert.equal(config.remotes.idp.port, 5557);
   assert.deepEqual(config.remotes.idp.locations, {});
-  assert.equal(config.idp.oidc.issuer, 'http://idp.localhost:5557/idp');
-  assert.equal(config.idp.oidc.algs, undefined);
-  assert.equal(config.idp.oidc.end_session_endpoint, undefined);
+  assert.equal(config.oidc.issuer, 'http://idp.localhost:5557/idp');
+  assert.equal(config.oidc.algs, undefined);
+  assert.equal(config.oidc.end_session_endpoint, undefined);
 });
 
 test('resolveConfig supports external IdP end-session endpoints', (t) => {
@@ -763,9 +763,9 @@ test('resolveConfig supports external IdP end-session endpoints', (t) => {
     },
   });
 
-  assert.deepEqual(config.idp.oidc.algs, ['RS512']);
+  assert.deepEqual(config.oidc.algs, ['RS512']);
   assert.equal(
-    config.idp.oidc.end_session_endpoint,
+    config.oidc.end_session_endpoint,
     'http://idp.localhost:5557/idp/logout',
   );
   assert.ok(config.services.oauth2_proxy.upstream);
@@ -803,17 +803,14 @@ test('resolveConfig omits external IdP upstream locations for root issuer paths'
   assert.equal(config.remotes.idp.scheme, 'https');
   assert.equal(config.remotes.idp.port, 443);
   assert.deepEqual(config.remotes.idp.locations, {});
-  assert.equal(config.idp.oidc.issuer, 'https://idp.example.test');
-  assert.ok('authorization' in config.idp.oidc);
+  assert.equal(config.oidc.issuer, 'https://idp.example.test');
+  assert.ok('authorization' in config.oidc);
   assert.equal(
-    config.idp.oidc.authorization,
+    config.oidc.authorization,
     'https://idp.example.test/oauth2/v2/authorize?prompt=login',
   );
-  assert.equal(
-    config.idp.oidc.token,
-    'https://idp.example.test/oauth2/v2/token',
-  );
-  assert.equal(config.idp.oidc.jwks, 'https://idp.example.test/oauth2/v2/jwks');
+  assert.equal(config.oidc.token, 'https://idp.example.test/oauth2/v2/token');
+  assert.equal(config.oidc.jwks, 'https://idp.example.test/oauth2/v2/jwks');
 });
 
 test('resolveConfig preserves managed service defaults for partial service overrides', (t) => {
@@ -887,7 +884,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   assert.equal(config.app.port, 9443);
   assert.equal(config.cache, cache);
   assert.equal(
-    config.idp.oidc.end_session_endpoint,
+    config.oidc.end_session_endpoint,
     'https://app.local.test:9443/dex/logout',
   );
   assert.equal(config.app.upstream.scheme, 'http');
@@ -1214,17 +1211,17 @@ test('resolveConfig retains Dex paths and isolates the application session on pu
     services: { dex: { host: 'idp.local.test' } },
   });
   assert.deepEqual(config.hosts, ['app.local.test', 'idp.local.test']);
-  assert.equal(config.idp.oidc.issuer, 'https://idp.local.test:9443/dex');
+  assert.equal(config.oidc.issuer, 'https://idp.local.test:9443/dex');
   assert.equal(
-    config.idp.oidc.authorization,
+    config.oidc.authorization,
     'https://idp.local.test:9443/dex/auth',
   );
   assert.equal(
-    config.idp.oidc.end_session_endpoint,
+    config.oidc.end_session_endpoint,
     'https://idp.local.test:9443/dex/logout',
   );
-  assert.equal(config.idp.oidc.token, 'http://127.0.0.1:5556/dex/token');
-  assert.equal(config.idp.oidc.jwks, 'http://127.0.0.1:5556/dex/keys');
+  assert.equal(config.oidc.token, 'http://127.0.0.1:5556/dex/token');
+  assert.equal(config.oidc.jwks, 'http://127.0.0.1:5556/dex/keys');
   assert.equal(
     config.app.client.redirectUri,
     'https://app.local.test:9443/oauth/callback',
@@ -1314,6 +1311,119 @@ test('resolveConfig resolves telemetry booleans and options', (t) => {
   }
 });
 
+test('resolveConfig applies Dex defaults', (t) => {
+  const { config } = resolveForTest(t);
+
+  assert.ok(config.dex);
+  const { expiry, sessions, users } = config.dex;
+  assert.deepEqual(
+    { expiry, sessions, users },
+    {
+      expiry: {
+        idTokens: '1m',
+        refreshTokens: {
+          reuseInterval: '1s',
+          validIfNotUsedFor: '720h',
+          absoluteLifetime: '720h',
+        },
+      },
+      sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
+      users: [
+        {
+          email: 'user@example.com',
+          password: 'visage-password',
+          username: 'user',
+          userID: 'user@example.com',
+        },
+      ],
+    },
+  );
+});
+
+test('resolveConfig preserves Dex defaults with partial overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: {
+      expiry: { refreshTokens: { reuseInterval: '2s' } },
+      sessions: { absoluteLifetime: '1440h' },
+    },
+  });
+
+  assert.ok(config.dex);
+  assert.deepEqual(config.dex.expiry, {
+    idTokens: '1m',
+    refreshTokens: {
+      reuseInterval: '2s',
+      validIfNotUsedFor: '720h',
+      absoluteLifetime: '720h',
+    },
+  });
+  assert.deepEqual(config.dex.sessions, {
+    absoluteLifetime: '1440h',
+    validIfNotUsedFor: '720h',
+  });
+});
+
+test('resolveConfig applies Dex overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    idp: {
+      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+      expiry: {
+        idTokens: '10m',
+        authRequests: '2m',
+        refreshTokens: {
+          validIfNotUsedFor: '1h',
+          absoluteLifetime: '8h',
+          reuseInterval: '10s',
+        },
+      },
+      users: [
+        {
+          email: 'admin@example.com',
+          password: 'secret',
+        },
+        {
+          email: 'reader@example.com',
+          password: 'reader-password',
+          username: 'reader',
+          userID: 'reader-1',
+        },
+      ],
+    },
+  });
+
+  assert.ok(config.dex);
+  const { expiry, sessions, users } = config.dex;
+  assert.deepEqual(
+    { expiry, sessions, users },
+    {
+      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+      expiry: {
+        idTokens: '10m',
+        authRequests: '2m',
+        refreshTokens: {
+          validIfNotUsedFor: '1h',
+          absoluteLifetime: '8h',
+          reuseInterval: '10s',
+        },
+      },
+      users: [
+        {
+          email: 'admin@example.com',
+          password: 'secret',
+          username: 'admin',
+          userID: 'admin@example.com',
+        },
+        {
+          email: 'reader@example.com',
+          password: 'reader-password',
+          username: 'reader',
+          userID: 'reader-1',
+        },
+      ],
+    },
+  );
+});
+
 test('resolveOptions applies public defaults', () => {
   const options = resolveOptions({});
 
@@ -1328,26 +1438,7 @@ test('resolveOptions applies public defaults', () => {
     cookie_refresh: '30s',
     cookie_path: '/',
   });
-  assert.ok('dex' in options.idp);
-  assert.deepEqual(options.idp.dex, {
-    expiry: {
-      idTokens: '1m',
-      refreshTokens: {
-        reuseInterval: '1s',
-        validIfNotUsedFor: '720h',
-        absoluteLifetime: '720h',
-      },
-    },
-    sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
-    users: [
-      {
-        email: 'user@example.com',
-        password: 'visage-password',
-        username: 'user',
-        userID: 'user@example.com',
-      },
-    ],
-  });
+  assert.deepEqual(options.dex, {});
   assert.match(options.client.secret, /^[A-Za-z0-9_-]{43}$/);
   assert.notEqual(options.client.secret, resolveOptions({}).client.secret);
   assert.deepEqual(options.client, {
@@ -1357,29 +1448,6 @@ test('resolveOptions applies public defaults', () => {
     public: false,
     redirectUri: 'https://localhost:9001/oauth/callback',
     postLogoutRedirectUri: 'https://localhost:9001/oauth/start?rd=/',
-  });
-});
-
-test('resolveOptions preserves Dex defaults with partial overrides', () => {
-  const options = resolveOptions({
-    idp: {
-      expiry: { refreshTokens: { reuseInterval: '2s' } },
-      sessions: { absoluteLifetime: '1440h' },
-    },
-  });
-
-  assert.ok('dex' in options.idp);
-  assert.deepEqual(options.idp.dex.expiry, {
-    idTokens: '1m',
-    refreshTokens: {
-      reuseInterval: '2s',
-      validIfNotUsedFor: '720h',
-      absoluteLifetime: '720h',
-    },
-  });
-  assert.deepEqual(options.idp.dex.sessions, {
-    absoluteLifetime: '1440h',
-    validIfNotUsedFor: '720h',
   });
 });
 
@@ -1427,63 +1495,6 @@ test('resolveOptions applies cookie overrides', () => {
   });
 });
 
-test('resolveOptions applies Dex overrides', () => {
-  const options = resolveOptions({
-    idp: {
-      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
-      expiry: {
-        idTokens: '10m',
-        authRequests: '2m',
-        refreshTokens: {
-          validIfNotUsedFor: '1h',
-          absoluteLifetime: '8h',
-          reuseInterval: '10s',
-        },
-      },
-      users: [
-        {
-          email: 'admin@example.com',
-          password: 'secret',
-        },
-        {
-          email: 'reader@example.com',
-          password: 'reader-password',
-          username: 'reader',
-          userID: 'reader-1',
-        },
-      ],
-    },
-  });
-
-  assert.ok('dex' in options.idp);
-  assert.deepEqual(options.idp.dex, {
-    sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
-    expiry: {
-      idTokens: '10m',
-      authRequests: '2m',
-      refreshTokens: {
-        validIfNotUsedFor: '1h',
-        absoluteLifetime: '8h',
-        reuseInterval: '10s',
-      },
-    },
-    users: [
-      {
-        email: 'admin@example.com',
-        password: 'secret',
-        username: 'admin',
-        userID: 'admin@example.com',
-      },
-      {
-        email: 'reader@example.com',
-        password: 'reader-password',
-        username: 'reader',
-        userID: 'reader-1',
-      },
-    ],
-  });
-});
-
 test('resolveOptions applies OAuth2 client overrides', () => {
   const options = resolveOptions({
     client: {
@@ -1511,7 +1522,7 @@ test('resolveOptions applies IdP overrides', () => {
     },
   });
 
-  assert.deepEqual(options.idp.oidc, {
+  assert.deepEqual(options.oidc, {
     issuer: 'http://idp.localhost:5557/idp',
     algs: ['RS512'],
   });

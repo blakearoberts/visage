@@ -9,6 +9,7 @@ import type {
   VisageDexExpiry,
   VisageDexSessions,
   VisageDexUser,
+  VisageExternalIdpOptions,
   VisageOptions,
   VisageProxyPolicy,
   VisageService,
@@ -32,23 +33,6 @@ type OIDCEndpoint = {
   readonly end_session_endpoint?: string;
 };
 
-type ManualOIDCEndpoint = OIDCEndpoint & {
-  readonly authorization: string;
-  readonly token: string;
-  readonly jwks: string;
-};
-
-type ResolvedDexIdp = {
-  readonly dex: {
-    readonly expiry: VisageDexExpiry;
-    readonly sessions: VisageDexSessions;
-    readonly users: readonly VisageDexUser[];
-  };
-  readonly oidc: ManualOIDCEndpoint;
-};
-type ResolvedExternalIdp = { readonly oidc: OIDCEndpoint };
-type ResolvedIdp = ResolvedDexIdp | ResolvedExternalIdp;
-
 type ResolvedOAuth2Client = {
   readonly id: string;
   readonly secret: string;
@@ -56,6 +40,26 @@ type ResolvedOAuth2Client = {
   readonly public: boolean;
   readonly redirectUri: string;
   readonly postLogoutRedirectUri: string;
+};
+
+type ResolvedDexConfig = {
+  readonly issuer: string;
+  readonly storage: { readonly type: 'memory' };
+  readonly web: { readonly http: string };
+  readonly oauth2: { readonly skipApprovalScreen: true };
+  readonly staticClients: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly public?: true;
+    readonly secret?: string;
+    readonly refreshTokenLifetime: 'session';
+    readonly postLogoutRedirectURIs: readonly string[];
+    readonly redirectURIs: readonly string[];
+  }[];
+  readonly enablePasswordDB: true;
+  readonly expiry: VisageDexExpiry;
+  readonly sessions: VisageDexSessions;
+  readonly users: readonly Required<VisageDexUser>[];
 };
 
 type ResolvedVisageOptions = ReturnType<typeof resolveOptions>;
@@ -111,7 +115,8 @@ export type VisageConfig = {
     readonly cookie: ResolvedCookiePolicy;
     readonly upstream: ResolvedUpstream;
   };
-  readonly idp: ResolvedIdp;
+  readonly oidc: OIDCEndpoint;
+  readonly dex?: ResolvedDexConfig;
   readonly services: Readonly<Record<string, ResolvedService>>;
   readonly remotes: Readonly<Record<string, ResolvedUpstream>>;
 };
@@ -302,12 +307,21 @@ const DefaultProxyPolicy = {
 } as const satisfies ResolvedProxyPolicy;
 
 export function resolveOptions(options: VisageOptions) {
-  const { host = 'localhost', port = 9001, cookie = {}, client = {} } = options;
+  const {
+    host = 'localhost',
+    port = 9001,
+    cookie = {},
+    client = {},
+    idp = {},
+  } = options;
   const cookieName = cookie.name ?? 'sess';
   const cookiePath = cookie.path ?? '/';
   const telemetry = options.telemetry === true ? {} : options.telemetry;
-  const idp = resolveIdpOptions(host, port, options);
-  const issuer = new URL(idp.oidc.issuer);
+  const oidc = resolveOidcOptions(
+    `https://${options.services?.dex?.host ?? host}:${port}`,
+    'issuer' in idp ? idp : undefined,
+  );
+  const issuer = new URL(oidc.issuer);
   return {
     host,
     port,
@@ -332,7 +346,8 @@ export function resolveOptions(options: VisageOptions) {
         ? {}
         : { cookie_domains: cookie.domains }),
     } satisfies ResolvedCookiePolicy,
-    idp,
+    oidc,
+    dex: 'issuer' in idp ? undefined : idp,
     client: {
       id: 'visage',
       secret: randomBytes(32).toString('base64url'),
@@ -341,9 +356,7 @@ export function resolveOptions(options: VisageOptions) {
       redirectUri: `https://${host}:${port}/oauth/callback`,
       postLogoutRedirectUri:
         `https://${host}:${port}` +
-        (options.idp !== undefined && 'issuer' in options.idp
-          ? '/'
-          : '/oauth/start?rd=/'),
+        ('issuer' in idp ? '/' : '/oauth/start?rd=/'),
       ...client,
     } satisfies ResolvedOAuth2Client,
     services: Object.fromEntries(
@@ -371,86 +384,49 @@ export function resolveOptions(options: VisageOptions) {
       ),
     ),
     remotes: {
-      ...('dex' in idp
-        ? {}
-        : {
+      ...('issuer' in idp
+        ? {
             idp: {
               scheme: issuer.protocol === 'https:' ? 'https' : 'http',
               host: issuer.hostname,
-              port:
-                Number(issuer.port) ||
-                (issuer.protocol === 'https:' ? 443 : 80),
+              port: Number(issuer.port) || undefined,
               locations: {},
             },
-          }),
+          }
+        : {}),
       ...options.remotes,
     } as Record<string, VisageUpstream>,
   };
 }
 
-function resolveIdpOptions(
-  host: string,
-  port: number,
-  options: VisageOptions,
-): ResolvedIdp {
-  const { idp = {} } = options;
-  if (!('issuer' in idp)) {
-    const origin = `https://${options.services?.dex?.host ?? host}:${port}`;
+function resolveOidcOptions(
+  origin: string,
+  idp?: VisageExternalIdpOptions,
+): OIDCEndpoint {
+  if (idp === undefined) {
+    const { host, port } = BaseServiceDex.upstream;
     return {
-      dex: {
-        expiry: {
-          idTokens: '1m',
-          ...idp.expiry,
-          refreshTokens: {
-            reuseInterval: '1s',
-            validIfNotUsedFor: '720h',
-            absoluteLifetime: '720h',
-            ...idp.expiry?.refreshTokens,
-          },
-        },
-        sessions: {
-          absoluteLifetime: '720h',
-          validIfNotUsedFor: '720h',
-          ...idp.sessions,
-        },
-        users: (
-          idp.users ?? [
-            { email: 'user@example.com', password: 'visage-password' },
-          ]
-        ).map((user) => ({
-          email: user.email,
-          password: user.password,
-          username: user.username ?? user.email.split('@', 1)[0],
-          userID: user.userID ?? user.email,
-        })),
-      },
-      oidc: {
-        issuer: `${origin}/dex`,
-        authorization: `${origin}/dex/auth`,
-        token: 'http://127.0.0.1:5556/dex/token',
-        jwks: 'http://127.0.0.1:5556/dex/keys',
-        end_session_endpoint: `${origin}/dex/logout`,
-      },
-    } satisfies ResolvedDexIdp;
+      issuer: `${origin}/dex`,
+      authorization: `${origin}/dex/auth`,
+      token: `http://${host}:${port}/dex/token`,
+      jwks: `http://${host}:${port}/dex/keys`,
+      end_session_endpoint: `${origin}/dex/logout`,
+    };
   }
-  const oidc = {
-    issuer: idp.issuer,
-    ...(idp.algs === undefined ? {} : { algs: idp.algs }),
-    ...(idp.end_session_endpoint === undefined
-      ? {}
-      : { end_session_endpoint: idp.end_session_endpoint }),
-  } as const;
+  const { issuer, algs, end_session_endpoint, authorization, token, jwks } =
+    idp;
   return {
-    oidc:
-      !idp.authorization && !idp.token && !idp.jwks
-        ? oidc
-        : {
-            ...oidc,
-            authorization: idp.issuer + (idp.authorization ?? '/auth'),
-            token: idp.issuer + (idp.token ?? '/token'),
-            jwks: idp.issuer + (idp.jwks ?? '/keys'),
-          },
-  } satisfies ResolvedExternalIdp;
+    issuer,
+    ...(algs === undefined ? {} : { algs }),
+    ...(end_session_endpoint === undefined ? {} : { end_session_endpoint }),
+    ...(!authorization && !token && !jwks
+      ? {}
+      : {
+          authorization: issuer + (authorization ?? '/auth'),
+          token: issuer + (token ?? '/token'),
+          jwks: issuer + (jwks ?? '/keys'),
+        }),
+  };
 }
 
 export function resolveConfig(
@@ -500,7 +476,8 @@ export function resolveConfig(
         false,
       ),
     },
-    idp: options.idp,
+    oidc: options.oidc,
+    dex: resolveDexConfig(options, services),
     services,
     remotes: Object.fromEntries(
       Object.entries(options.remotes).map(([name, upstream]) => [
@@ -508,6 +485,67 @@ export function resolveConfig(
         resolveUpstreamConfig(name, upstream, true),
       ]),
     ),
+  };
+}
+
+function resolveDexConfig(
+  { dex, oidc, client }: ResolvedVisageOptions,
+  services: VisageConfig['services'],
+): ResolvedDexConfig | undefined {
+  if (dex === undefined) return undefined;
+  return {
+    issuer: oidc.issuer,
+    storage: { type: 'memory' },
+    web: {
+      http: `${BaseServiceDex.upstream.host}:${BaseServiceDex.upstream.port}`,
+    },
+    oauth2: { skipApprovalScreen: true },
+    staticClients: [
+      ['VISAGE_OAUTH_CLIENT_SECRET', client] as const,
+      ...Object.entries(services).map(
+        ([name, { client }]) =>
+          [`VISAGE_${name}_CLIENT_SECRET`, client] as const,
+      ),
+    ].flatMap(([secret, client]) =>
+      client
+        ? [
+            {
+              id: client.id,
+              name: client.id,
+              ...(client.public
+                ? { public: true }
+                : { secret: `{{ file.Read "/run/secrets/${secret}" }}` }),
+              refreshTokenLifetime: 'session',
+              postLogoutRedirectURIs: [client.postLogoutRedirectUri],
+              redirectURIs: [client.redirectUri],
+            },
+          ]
+        : [],
+    ),
+    enablePasswordDB: true,
+    expiry: {
+      idTokens: '1m',
+      ...dex.expiry,
+      refreshTokens: {
+        reuseInterval: '1s',
+        validIfNotUsedFor: '720h',
+        absoluteLifetime: '720h',
+        ...dex.expiry?.refreshTokens,
+      },
+    },
+    sessions: {
+      absoluteLifetime: '720h',
+      validIfNotUsedFor: '720h',
+      ...dex.sessions,
+    },
+    users: (
+      dex.users ?? [{ email: 'user@example.com', password: 'visage-password' }]
+    ).map((user) => ({
+      email: user.email,
+      password: user.password,
+      username: user.username ?? user.email.split('@', 1)[0],
+      userID: user.userID ?? user.email,
+    })),
   };
 }
 
@@ -530,12 +568,11 @@ function resolveServicesConfig(
     services: { dex = {}, nginx = {}, oauth2_proxy = {}, ...services },
     telemetry,
     client,
-    idp,
   } = options;
-  const end_session_endpoint = idp.oidc.end_session_endpoint;
+  const { end_session_endpoint } = options.oidc;
   const serviceOptions: ResolvedVisageOptions['services'] = {
     ...services,
-    ...('dex' in idp
+    ...(options.dex !== undefined
       ? {
           dex: {
             ...BaseServiceDex,

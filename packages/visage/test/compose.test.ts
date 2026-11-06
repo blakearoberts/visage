@@ -7,7 +7,6 @@ import type {
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { basename } from 'node:path';
 import { test } from 'node:test';
 
 import { resolveConfig, resolveOptions } from '../src/config';
@@ -16,189 +15,69 @@ type SpawnCall = {
   readonly command: string;
   readonly args: readonly string[];
   readonly env?: NodeJS.ProcessEnv;
-  readonly stdio?: SpawnSyncOptions['stdio'];
 };
 
-test('startCompose restarts Compose with in-memory edge and cookie secrets', async (t) => {
-  const config = {
-    ...resolveConfig({
-      ...resolveOptions({
-        services: { worker: { client: { secret: 'worker-secret' } } },
-      }),
-      cache: '',
-      root: 'compose-test',
-      edgeKey: 'edge-key',
-      appPort: 6173,
+test('startCompose reuses generated secrets and honors environment overrides', async (t) => {
+  const { startCompose } = await import('../src/compose');
+  const config = resolveConfig({
+    ...resolveOptions({
+      services: { worker: { client: { secret: 'worker-secret' } } },
     }),
-    package: '@blakearoberts/visage',
+    cache: '',
+    root: 'compose-test',
+    appPort: 6173,
+  });
+  const previousSecrets = {
+    VISAGE_APP_CLIENT_SECRET: process.env.VISAGE_APP_CLIENT_SECRET,
+    VISAGE_WORKER_CLIENT_SECRET: process.env.VISAGE_WORKER_CLIENT_SECRET,
+    OAUTH2_PROXY_COOKIE_SECRET: process.env.OAUTH2_PROXY_COOKIE_SECRET,
+    VISAGE_EDGE_KEY: process.env.VISAGE_EDGE_KEY,
   };
-  const previousClientSecrets = {
-    VISAGE_OAUTH_CLIENT_SECRET: process.env.VISAGE_OAUTH_CLIENT_SECRET,
-    VISAGE_worker_CLIENT_SECRET: process.env.VISAGE_worker_CLIENT_SECRET,
-  };
-  delete process.env.VISAGE_OAUTH_CLIENT_SECRET;
-  delete process.env.VISAGE_worker_CLIENT_SECRET;
+  for (const name of Object.keys(previousSecrets)) delete process.env[name];
   t.after(() => {
-    for (const [name, value] of Object.entries(previousClientSecrets)) {
+    for (const [name, value] of Object.entries(previousSecrets)) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
   });
-  const previousCookieSecret = process.env.OAUTH2_PROXY_COOKIE_SECRET;
-  const previousEdgeKey = process.env.VISAGE_EDGE_KEY;
-  delete process.env.OAUTH2_PROXY_COOKIE_SECRET;
-  delete process.env.VISAGE_EDGE_KEY;
-  t.after(() => {
-    if (previousCookieSecret === undefined) {
-      delete process.env.OAUTH2_PROXY_COOKIE_SECRET;
-    } else {
-      process.env.OAUTH2_PROXY_COOKIE_SECRET = previousCookieSecret;
-    }
-    if (previousEdgeKey === undefined) {
-      delete process.env.VISAGE_EDGE_KEY;
-    } else {
-      process.env.VISAGE_EDGE_KEY = previousEdgeKey;
-    }
-  });
 
-  const spawnSyncCalls: SpawnCall[] = [];
-  const spawnCalls: SpawnCall[] = [];
+  const environments: (NodeJS.ProcessEnv | undefined)[] = [];
   const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
-    command: string,
+    _command: string,
     args?: readonly string[],
     options?: SpawnSyncOptions,
   ) => {
-    spawnSyncCalls.push({
-      command,
-      args: args ?? [],
-      env: options?.env,
-      stdio: options?.stdio,
-    });
-    return {
-      pid: 0,
-      output: [],
-      stdout: Buffer.alloc(0),
-      stderr: Buffer.alloc(0),
-      status: 0,
-      signal: null,
-    } as SpawnSyncReturns<Buffer>;
+    if (args?.includes('up')) environments.push(options?.env);
+    return { status: 0 };
   }) as typeof childProcess.spawnSync);
-  const spawnMock = t.mock.method(childProcess, 'spawn', ((
-    command: string,
-    args?: readonly string[],
-    options?: SpawnOptions,
-  ) => {
-    spawnCalls.push({ command, args: args ?? [], env: options?.env });
-    return {} as ReturnType<typeof childProcess.spawn>;
-  }) as typeof childProcess.spawn);
+  const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
   syncBuiltinESMExports();
-
-  const { startCompose } = await import('../src/compose');
-  const openSyncCalls: string[] = [];
-  const openSyncMock = t.mock.method(fs, 'openSync', (path: fs.PathLike) => {
-    openSyncCalls.push(String(path));
-    return 2;
-  });
-  syncBuiltinESMExports();
-  let stop: (() => void) | undefined;
 
   try {
     startCompose(config);
-    const firstSecret = spawnSyncCalls[2]?.env?.OAUTH2_PROXY_COOKIE_SECRET;
-    const firstEdgeKey = spawnSyncCalls[2]?.env?.VISAGE_EDGE_KEY;
 
-    process.env.OAUTH2_PROXY_COOKIE_SECRET = 'changed-cookie-secret';
-    process.env.VISAGE_EDGE_KEY = 'changed-edge-key';
-    process.env.VISAGE_OAUTH_CLIENT_SECRET = 'env-app-secret';
-    process.env.VISAGE_worker_CLIENT_SECRET = 'env-worker-secret';
-    stop = startCompose(config);
-    const secondSecret = spawnSyncCalls[5]?.env?.OAUTH2_PROXY_COOKIE_SECRET;
-    const secondEdgeKey = spawnSyncCalls[5]?.env?.VISAGE_EDGE_KEY;
+    process.env.VISAGE_APP_CLIENT_SECRET = 'env-app-secret';
+    process.env.VISAGE_WORKER_CLIENT_SECRET = 'env-worker-secret';
+    startCompose(config);
 
-    assert.equal(spawnSyncCalls.length, 6);
-    assert.equal(spawnSyncCalls[0]?.command, 'docker');
-    assert.ok(spawnSyncCalls[0]?.args.includes('--file=./compose.yaml'));
-    assert.ok(
-      spawnSyncCalls[0]?.args.includes(
-        '--project-name=blakearoberts-visage-visage',
-      ),
-    );
-    assert.deepEqual(
-      spawnSyncCalls.map((call) =>
-        call.args.find(
-          (arg) => arg === 'down' || arg === 'run' || arg === 'up',
-        ),
-      ),
-      ['down', 'run', 'up', 'down', 'run', 'up'],
-    );
-    assert.equal(spawnCalls.length, 0);
-    assert.deepEqual(
-      openSyncCalls.map((file) => basename(file)),
-      [
-        'compose.log',
-        'compose.log',
-        'compose.log',
-        'compose.log',
-        'compose.log',
-        'compose.log',
-      ],
-    );
-    assert.deepEqual(spawnSyncCalls[1]?.stdio, ['ignore', 2, 2]);
-    assert.deepEqual(spawnSyncCalls[1]?.args.slice(-8), [
-      'run',
-      '--build',
-      '--quiet-build',
-      '--rm',
-      '--no-deps',
-      'nginx',
-      'nginx',
-      '-t',
-    ]);
-    assert.deepEqual(spawnSyncCalls[2]?.args.slice(-4), [
-      'up',
-      '--detach',
-      '--force-recreate',
-      '--remove-orphans',
-    ]);
-    assert.equal(spawnSyncCalls[3]?.command, 'docker');
-    assert.deepEqual(spawnSyncCalls[3]?.args.slice(-2), [
-      'down',
-      '--remove-orphans',
-    ]);
-    assert.ok(firstSecret);
-    assert.ok(secondSecret);
-    assert.notEqual(secondSecret, 'changed-cookie-secret');
-    assert.equal(firstEdgeKey, 'edge-key');
+    const [first, second] = environments;
+    assert.ok(config.secrets.OAUTH2_PROXY_COOKIE_SECRET);
     assert.equal(
-      spawnSyncCalls[2]?.env?.VISAGE_worker_CLIENT_SECRET,
-      'worker-secret',
+      first?.OAUTH2_PROXY_COOKIE_SECRET,
+      config.secrets.OAUTH2_PROXY_COOKIE_SECRET,
     );
     assert.equal(
-      spawnSyncCalls[2]?.env?.VISAGE_OAUTH_CLIENT_SECRET,
-      config.app.client.secret,
+      second?.OAUTH2_PROXY_COOKIE_SECRET,
+      first?.OAUTH2_PROXY_COOKIE_SECRET,
     );
-    assert.equal(
-      spawnSyncCalls[5]?.env?.VISAGE_OAUTH_CLIENT_SECRET,
-      'env-app-secret',
-    );
-    assert.equal(
-      spawnSyncCalls[5]?.env?.VISAGE_worker_CLIENT_SECRET,
-      'env-worker-secret',
-    );
-    assert.equal(secondEdgeKey, 'edge-key');
-    assert.notEqual(secondEdgeKey, 'changed-edge-key');
-
-    stop();
-    stop = undefined;
-    assert.equal(spawnSyncCalls.length, 7);
-    assert.deepEqual(spawnSyncCalls[6]?.args.slice(-2), [
-      'down',
-      '--remove-orphans',
-    ]);
+    assert.equal(first?.VISAGE_EDGE_KEY, config.secrets.VISAGE_EDGE_KEY);
+    assert.equal(second?.VISAGE_EDGE_KEY, config.secrets.VISAGE_EDGE_KEY);
+    assert.equal(first?.VISAGE_APP_CLIENT_SECRET, config.app.client.secret);
+    assert.equal(first?.VISAGE_WORKER_CLIENT_SECRET, 'worker-secret');
+    assert.equal(second?.VISAGE_APP_CLIENT_SECRET, 'env-app-secret');
+    assert.equal(second?.VISAGE_WORKER_CLIENT_SECRET, 'env-worker-secret');
   } finally {
-    stop?.();
     openSyncMock.mock.restore();
-    spawnMock.mock.restore();
     spawnSyncMock.mock.restore();
     syncBuiltinESMExports();
   }
@@ -209,7 +88,6 @@ test('startCompose cleans up failed detached startup', async (t) => {
     ...resolveOptions({}),
     cache: '',
     root: 'compose-test',
-    edgeKey: 'edge-key',
     appPort: 6173,
   });
   const spawnSyncCalls: SpawnCall[] = [];
@@ -272,7 +150,6 @@ test('startCompose surfaces NGINX validation errors before startup', async (t) =
     ...resolveOptions({}),
     cache: '',
     root: 'compose-test',
-    edgeKey: 'edge-key',
     appPort: 6173,
   });
   const spawnSyncCalls: SpawnCall[] = [];

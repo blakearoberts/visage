@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
 import { chmodSync, mkdirSync, rmSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -56,7 +55,7 @@ export type VisageServer = {
 
 export function createVisageServer(options: VisageOptions): VisageServer {
   const resolvedOptions = resolveOptions(options);
-  const edgeKey = randomBytes(32).toString('base64url');
+  const edgeKey = resolvedOptions.secrets.VISAGE_EDGE_KEY;
   let stop: (() => void) | undefined;
   return {
     middleware: createVisageMiddleware(edgeKey),
@@ -75,7 +74,6 @@ export function createVisageServer(options: VisageOptions): VisageServer {
         appPort: address.port,
         root,
         cache: join(root, '.visage'),
-        edgeKey,
       });
       stop ??= await startVisageServer(config);
     },
@@ -98,7 +96,7 @@ export async function startVisageServer(
   await ensureHostEntry(config);
 
   writeComposeConfig(config);
-  if ('dex' in config.idp) {
+  if (config.dex !== undefined) {
     writeDexConfig(config);
   }
   writeNginxAssets(config);

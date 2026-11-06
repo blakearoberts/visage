@@ -1,5 +1,5 @@
 import { spawnSync, type StdioOptions } from 'node:child_process';
-import { chmodSync, mkdirSync, openSync, rmSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, openSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { VisageConfig } from './config';
@@ -38,6 +38,13 @@ export async function ensureCerts(config: VisageConfig): Promise<void> {
   }
   chmodSync(cert, 0o600);
   chmodSync(key, 0o600);
+
+  const caRoot = spawnSync(mkcert, ['-CAROOT'], { encoding: 'utf8' });
+  if (caRoot.error) throw caRoot.error;
+  if (caRoot.status !== 0) throw new Error('Failed to locate CA');
+  const ca = join(certs, 'ca.crt');
+  copyFileSync(join(caRoot.stdout.trim(), 'rootCA.pem'), ca);
+  chmodSync(ca, 0o644);
 }
 
 function resolveMkcert(): string {

@@ -8,7 +8,6 @@ export default defineConfig({
   plugins: [
     react(),
     visage({
-      client: { scopes: ['openid', 'email', 'offline_access'] },
       telemetry: true,
       services: {
         dex: { host: 'idp.localhost' },
@@ -17,14 +16,32 @@ export default defineConfig({
           environment: { OTEL_EXPORTER_OTLP_ENDPOINT: 'grafana:4317' },
         },
         grafana: {
+          host: 'g.localhost',
+          client: {
+            scopes: ['openid', 'email', 'offline_access'],
+            redirectUri: 'https://g.localhost:9001/login/generic_oauth',
+          },
           build: resolve(import.meta.dirname, 'otel-lgtm'),
           environment: {
             GF_AUTH_ANONYMOUS_ENABLED: 'false',
-            GF_AUTH_PROXY_ENABLED: 'true',
-            GF_AUTH_PROXY_HEADER_NAME: 'X-Auth-Request-Email',
-            GF_AUTH_PROXY_HEADER_PROPERTY: 'email',
-            GF_SERVER_ROOT_URL: 'https://localhost:9001/grafana/',
-            GF_SERVER_SERVE_FROM_SUB_PATH: 'true',
+            GF_AUTH_DISABLE_LOGIN_FORM: 'true',
+            GF_AUTH_GENERIC_OAUTH_ENABLED: 'true',
+            GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: 'true',
+            GF_AUTH_GENERIC_OAUTH_CLIENT_ID: 'grafana',
+            GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+              '$$__file{/run/secrets/VISAGE_GRAFANA_CLIENT_SECRET}',
+            GF_AUTH_GENERIC_OAUTH_SCOPES: 'openid email offline_access',
+            GF_AUTH_GENERIC_OAUTH_AUTH_URL:
+              'https://idp.localhost:9001/dex/auth',
+            GF_AUTH_GENERIC_OAUTH_TOKEN_URL:
+              'https://idp.localhost:9001/dex/token',
+            GF_AUTH_GENERIC_OAUTH_API_URL:
+              'https://idp.localhost:9001/dex/userinfo',
+            GF_AUTH_GENERIC_OAUTH_USE_PKCE: 'true',
+            GF_AUTH_GENERIC_OAUTH_USE_REFRESH_TOKEN: 'true',
+            GF_AUTH_GENERIC_OAUTH_TLS_CLIENT_CA: '/etc/ssl/certs/visage.pem',
+            GF_SECURITY_COOKIE_SECURE: 'true',
+            GF_SERVER_ROOT_URL: 'https://g.localhost:9001/',
             GF_USERS_AUTO_ASSIGN_ORG_ROLE: 'Editor',
             GF_PATHS_PROVISIONING: '/otel-lgtm/visage/provisioning',
             GF_PATHS_PERMITTED_PROVISIONING_PATHS:
@@ -36,22 +53,32 @@ export default defineConfig({
               '-store.retention=24h -compactor.retention-enabled=true -compactor.delete-request-store=filesystem',
           },
           mounts: {
-            '/tmp': {},
+            '/data': { volume: 'lgtm-data' },
+            '/etc/ssl/certs/visage.pem': {
+              bind: resolve(
+                import.meta.dirname,
+                'node_modules/.vite/visage/nginx/certs/ca.crt',
+              ),
+              read_only: true,
+            },
+            '/otel-lgtm/grafana/data/plugins-bundled': {},
             '/otel-lgtm/visage': {
               bind: resolve(import.meta.dirname, 'otel-lgtm'),
               read_only: true,
             },
             '/otel-lgtm/visage/dashboards': {
               bind: resolve(import.meta.dirname, 'otel-lgtm/dashboards'),
+              read_only: false,
             },
-            '/data': { volume: 'lgtm-data' },
+            '/tmp': {},
           },
           upstream: {
             port: 3000,
-            headers: { 'X-Auth-Request-Email': '$auth_email' },
+            auth: { enabled: false },
+            headers: { Cookie: '$http_cookie' },
             locations: {
-              '/grafana/api/live/': { ws: true },
-              '/grafana/': {},
+              '/api/live/': { ws: true },
+              '/': {},
             },
           },
         },

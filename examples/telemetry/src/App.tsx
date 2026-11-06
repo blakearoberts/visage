@@ -37,13 +37,17 @@ export function App() {
           Visage dashboard
           <ul>
             <li>
-              <a href='/grafana/d/visage?dtab=Browser'>Browser</a>
+              <a href='https://g.localhost:9001/d/visage?dtab=Browser'>
+                Browser
+              </a>
             </li>
             <li>
-              <a href='/grafana/d/visage?dtab=Ingress'>Ingress</a>
+              <a href='https://g.localhost:9001/d/visage?dtab=Ingress'>
+                Ingress
+              </a>
             </li>
             <li>
-              <a href='/grafana/d/visage?dtab=OAuth'>OAuth</a>
+              <a href='https://g.localhost:9001/d/visage?dtab=OAuth'>OAuth</a>
             </li>
           </ul>
         </div>
@@ -51,13 +55,19 @@ export function App() {
           Grafana Drilldown
           <ul>
             <li>
-              <a href='/grafana/a/grafana-lokiexplore-app'>Logs</a>
+              <a href='https://g.localhost:9001/a/grafana-lokiexplore-app'>
+                Logs
+              </a>
             </li>
             <li>
-              <a href='/grafana/a/grafana-metricsdrilldown-app'>Metrics</a>
+              <a href='https://g.localhost:9001/a/grafana-metricsdrilldown-app'>
+                Metrics
+              </a>
             </li>
             <li>
-              <a href='/grafana/a/grafana-exploretraces-app'>Traces</a>
+              <a href='https://g.localhost:9001/a/grafana-exploretraces-app'>
+                Traces
+              </a>
             </li>
           </ul>
         </div>

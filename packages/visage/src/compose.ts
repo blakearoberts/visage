@@ -1,5 +1,4 @@
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
 import { openSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -19,15 +18,8 @@ export function startCompose(config: VisageConfig): () => void {
   const dir = join(config.cache, 'logs');
   const env = {
     COMPOSE_MENU: 'false',
-    VISAGE_OAUTH_CLIENT_SECRET: config.app.client.secret,
-    ...Object.fromEntries(
-      Object.entries(config.services).flatMap(([name, { client }]) =>
-        client ? [[`VISAGE_${name}_CLIENT_SECRET`, client.secret]] : [],
-      ),
-    ),
+    ...config.secrets,
     ...process.env,
-    VISAGE_EDGE_KEY: config.edgeKey,
-    OAUTH2_PROXY_COOKIE_SECRET: randomBytes(32).toString('base64url'),
   };
   const opts = { cwd: config.cache, env };
 

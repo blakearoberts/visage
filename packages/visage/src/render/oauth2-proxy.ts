@@ -24,16 +24,16 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     metrics_address: '0.0.0.0:4181',
     provider: 'oidc',
     proxy_prefix: '/oauth',
-    oidc_issuer_url: config.idp.oidc.issuer,
-    ...(config.idp.oidc.algs === undefined
+    oidc_issuer_url: config.oidc.issuer,
+    ...(config.oidc.algs === undefined
       ? {}
-      : { oidc_enabled_signing_algs: config.idp.oidc.algs }),
-    ...('authorization' in config.idp.oidc
+      : { oidc_enabled_signing_algs: config.oidc.algs }),
+    ...('authorization' in config.oidc
       ? {
           skip_oidc_discovery: true,
-          login_url: config.idp.oidc.authorization,
-          redeem_url: config.idp.oidc.token,
-          oidc_jwks_url: config.idp.oidc.jwks,
+          login_url: config.oidc.authorization,
+          redeem_url: config.oidc.token,
+          oidc_jwks_url: config.oidc.jwks,
         }
       : {}),
     redirect_url: config.app.client.redirectUri,
@@ -41,7 +41,7 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
     code_challenge_method: 'S256',
     client_secret_file: config.app.client.public
       ? '/dev/null'
-      : '/run/secrets/VISAGE_OAUTH_CLIENT_SECRET',
+      : '/run/secrets/VISAGE_APP_CLIENT_SECRET',
     ...config.app.cookie,
     cookie_secret_file: '/run/secrets/OAUTH2_PROXY_COOKIE_SECRET',
     cookie_httponly: true,
@@ -57,8 +57,8 @@ function renderOauth2ProxyConfig(config: VisageConfig): string {
       ...new Set([
         config.app.host,
         `${config.app.host}:${config.app.port}`,
-        ...(config.idp.oidc.end_session_endpoint
-          ? [new URL(config.idp.oidc.end_session_endpoint).host]
+        ...(config.oidc.end_session_endpoint
+          ? [new URL(config.oidc.end_session_endpoint).host]
           : []),
       ]),
     ] satisfies string[],

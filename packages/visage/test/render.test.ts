@@ -22,7 +22,6 @@ import type { VisageOptions } from '../src/types';
 function resolvedConfig(
   t: TestContext,
   options: VisageOptions = {},
-  edgeKey = 'edge-key',
 ): VisageConfig {
   const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
   t.after(() => rmSync(cache, { recursive: true, force: true }));
@@ -36,7 +35,6 @@ function resolvedConfig(
     }),
     root: 'render-test',
     cache,
-    edgeKey,
     appPort: 6173,
   });
 }
@@ -185,55 +183,51 @@ test('writeComposeConfig preserves bind and tmpfs mounts without named declarati
 });
 
 test('writeComposeConfig renders base services and custom services', (t) => {
-  const config = resolvedConfig(
-    t,
-    {
-      services: {
-        nginx: {
-          networks: ['edge'],
-          environment: {
-            CUSTOM_NGINX_SETTING: 'value',
-          },
-          mounts: {
-            '/etc/nginx/conf.d/extra.conf': {
-              bind: './nginx-extra.conf',
-              read_only: true,
-            },
-          },
+  const config = resolvedConfig(t, {
+    services: {
+      nginx: {
+        networks: ['edge'],
+        environment: {
+          CUSTOM_NGINX_SETTING: 'value',
         },
-        oauth2_proxy: {
-          mounts: {
-            '/etc/oauth2-proxy/extra.yml': {
-              bind: './oauth2-proxy-extra.yml',
-              read_only: true,
-            },
+        mounts: {
+          '/etc/nginx/conf.d/extra.conf': {
+            bind: './nginx-extra.conf',
+            read_only: true,
           },
-        },
-        api: {
-          image: 'example/api:test',
-          command: ['serve'],
-          security_opt: [],
-          cap_drop: ['NET_RAW'],
-          read_only: false,
-          networks: ['backend'],
-          environment: { API_MODE: 'test' },
-          depends_on: ['nginx'],
-          mounts: {
-            '/etc/api/api.yml': { bind: './api.yml', read_only: true },
-          },
-          upstream: {
-            locations: { '/api/': {} },
-          },
-        },
-        db: {
-          image: 'example/db:test',
-          networks: ['backend'],
-          upstream: false,
         },
       },
+      oauth2_proxy: {
+        mounts: {
+          '/etc/oauth2-proxy/extra.yml': {
+            bind: './oauth2-proxy-extra.yml',
+            read_only: true,
+          },
+        },
+      },
+      api: {
+        image: 'example/api:test',
+        command: ['serve'],
+        security_opt: [],
+        cap_drop: ['NET_RAW'],
+        read_only: false,
+        networks: ['backend'],
+        environment: { API_MODE: 'test' },
+        depends_on: ['nginx'],
+        mounts: {
+          '/etc/api/api.yml': { bind: './api.yml', read_only: true },
+        },
+        upstream: {
+          locations: { '/api/': {} },
+        },
+      },
+      db: {
+        image: 'example/db:test',
+        networks: ['backend'],
+        upstream: false,
+      },
     },
-    'edge-key',
-  );
+  });
 
   writeComposeConfig(config);
 
@@ -257,9 +251,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
       read_only: true,
     },
   ]);
-  assert.deepEqual(compose.services.dex.secrets, [
-    'VISAGE_OAUTH_CLIENT_SECRET',
-  ]);
+  assert.deepEqual(compose.services.dex.secrets, ['VISAGE_APP_CLIENT_SECRET']);
   assert.equal(compose.services.nginx.restart, 'always');
   assert.deepEqual(compose.services.nginx.environment, {
     OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
@@ -305,7 +297,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'VISAGE_OAUTH_CLIENT_SECRET',
+    'VISAGE_APP_CLIENT_SECRET',
   ]);
   assert.equal(compose.services.vite_loopback.image, DockerImages.socat.image);
   assert.equal(
@@ -360,7 +352,11 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     nginx: {},
     edge: {},
   });
-  assert.deepEqual(compose.services.nginx.networks, ['nginx', 'edge', 'api']);
+  assert.deepEqual(compose.services.nginx.networks, {
+    nginx: {},
+    edge: {},
+    api: { aliases: ['app.local.test'] },
+  });
   assert.deepEqual(compose.services.db.networks, ['db', 'backend']);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
@@ -369,8 +365,8 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
     },
-    VISAGE_OAUTH_CLIENT_SECRET: {
-      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
+    VISAGE_APP_CLIENT_SECRET: {
+      environment: 'VISAGE_APP_CLIENT_SECRET',
     },
   });
 });
@@ -385,18 +381,16 @@ test('writeComposeConfig includes unused client secrets for public clients', (t)
   const compose = parse(readGenerated(config, config.files.compose));
   assert.deepEqual(compose.services.oauth2_proxy.secrets, [
     'OAUTH2_PROXY_COOKIE_SECRET',
-    'VISAGE_OAUTH_CLIENT_SECRET',
+    'VISAGE_APP_CLIENT_SECRET',
   ]);
-  assert.deepEqual(compose.services.dex.secrets, [
-    'VISAGE_OAUTH_CLIENT_SECRET',
-  ]);
+  assert.deepEqual(compose.services.dex.secrets, ['VISAGE_APP_CLIENT_SECRET']);
   assert.equal(compose.services.dex.read_only, false);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
       environment: 'OAUTH2_PROXY_COOKIE_SECRET',
     },
-    VISAGE_OAUTH_CLIENT_SECRET: {
-      environment: 'VISAGE_OAUTH_CLIENT_SECRET',
+    VISAGE_APP_CLIENT_SECRET: {
+      environment: 'VISAGE_APP_CLIENT_SECRET',
     },
     VISAGE_EDGE_KEY: {
       environment: 'VISAGE_EDGE_KEY',
@@ -407,18 +401,30 @@ test('writeComposeConfig includes unused client secrets for public clients', (t)
 test('writeComposeConfig declares environment-backed secrets used by services', (t) => {
   const config = resolvedConfig(t, {
     services: {
-      api: { image: 'example/api', secrets: ['API_TOKEN', 'SHARED_TOKEN'] },
+      api: {
+        image: 'example/api',
+        client: {},
+        secrets: ['API_TOKEN', 'SHARED_TOKEN'],
+      },
       worker: { image: 'example/worker', secrets: ['SHARED_TOKEN'] },
+      browser: { image: 'example/browser', client: { public: true } },
     },
   });
   writeComposeConfig(config);
   const compose = parse(readGenerated(config, config.files.compose));
-  assert.deepEqual(compose.services.api.secrets, ['API_TOKEN', 'SHARED_TOKEN']);
+  assert.deepEqual(compose.services.api.secrets, [
+    'API_TOKEN',
+    'SHARED_TOKEN',
+    'VISAGE_API_CLIENT_SECRET',
+  ]);
   assert.deepEqual(compose.services.worker.secrets, ['SHARED_TOKEN']);
+  assert.equal(compose.services.browser.secrets, undefined);
+  assert.equal(compose.services.browser.read_only, true);
   assert.deepEqual(compose.secrets, {
     API_TOKEN: { environment: 'API_TOKEN' },
     SHARED_TOKEN: { environment: 'SHARED_TOKEN' },
-    VISAGE_OAUTH_CLIENT_SECRET: { environment: 'VISAGE_OAUTH_CLIENT_SECRET' },
+    VISAGE_API_CLIENT_SECRET: { environment: 'VISAGE_API_CLIENT_SECRET' },
+    VISAGE_APP_CLIENT_SECRET: { environment: 'VISAGE_APP_CLIENT_SECRET' },
     VISAGE_EDGE_KEY: { environment: 'VISAGE_EDGE_KEY' },
     OAUTH2_PROXY_COOKIE_SECRET: { environment: 'OAUTH2_PROXY_COOKIE_SECRET' },
   });
@@ -512,12 +518,14 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
     },
+    services: { whoami: { image: 'traefik/whoami' } },
   });
 
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
   assert.equal(compose.services.dex, undefined);
+  assert.deepEqual(compose.services.nginx.networks, { nginx: {}, whoami: {} });
 });
 
 test('writeComposeConfig omits public hosts, upstreams, and clients from services', (t) => {
@@ -535,14 +543,6 @@ test('writeComposeConfig omits public hosts, upstreams, and clients from service
   assert.equal(compose.services.api.host, undefined);
   assert.equal(compose.services.api.upstream, undefined);
   assert.equal(compose.services.api.client, undefined);
-  assert.ok(compose.services.dex.secrets.includes('VISAGE_api_CLIENT_SECRET'));
-  assert.deepEqual(compose.secrets.VISAGE_api_CLIENT_SECRET, {
-    environment: 'VISAGE_api_CLIENT_SECRET',
-  });
-  assert.doesNotMatch(
-    readGenerated(config, config.files.compose),
-    /api-secret/,
-  );
 });
 
 test('writeDexConfig renders default OIDC, client, and session settings', (t) => {
@@ -563,6 +563,7 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
   assert.deepEqual(dex.sessions, {
     absoluteLifetime: '720h',
     validIfNotUsedFor: '720h',
+    ssoSharedWithDefault: 'all',
   });
   assert.deepEqual(dex.storage, { type: 'memory' });
   assert.deepEqual(dex.web, { http: '127.0.0.1:5556' });
@@ -570,7 +571,7 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
     {
       id: 'visage',
       name: 'visage',
-      secret: '{{ file.Read "/run/secrets/VISAGE_OAUTH_CLIENT_SECRET" }}',
+      secret: '{{ file.Read "/run/secrets/VISAGE_APP_CLIENT_SECRET" }}',
       refreshTokenLifetime: 'session',
       postLogoutRedirectURIs: ['https://app.local.test:9443/oauth/start?rd=/'],
       redirectURIs: ['https://app.local.test:9443/oauth/callback'],
@@ -600,7 +601,7 @@ test('writeDexConfig registers confidential and public service clients', (t) => 
     {
       id: 'metrics',
       name: 'metrics',
-      secret: '{{ file.Read "/run/secrets/VISAGE_grafana_CLIENT_SECRET" }}',
+      secret: '{{ file.Read "/run/secrets/VISAGE_GRAFANA_CLIENT_SECRET" }}',
       refreshTokenLifetime: 'session',
       redirectURIs: ['https://g.localhost:9443/login/generic_oauth'],
       postLogoutRedirectURIs: ['https://g.localhost:9443/'],
@@ -643,7 +644,11 @@ test('writeDexConfig renders configured OAuth2 public client', (t) => {
 test('writeDexConfig renders configured expiry and sessions', (t) => {
   const config = resolvedConfig(t, {
     idp: {
-      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+      sessions: {
+        absoluteLifetime: '8760h',
+        validIfNotUsedFor: '8760h',
+        ssoSharedWithDefault: 'all',
+      },
       expiry: {
         idTokens: '10m',
         signingKeys: '6h',
@@ -663,6 +668,7 @@ test('writeDexConfig renders configured expiry and sessions', (t) => {
   assert.deepEqual(dex.sessions, {
     absoluteLifetime: '8760h',
     validIfNotUsedFor: '8760h',
+    ssoSharedWithDefault: 'all',
   });
   assert.deepEqual(dex.expiry, {
     idTokens: '10m',
@@ -676,16 +682,9 @@ test('writeDexConfig renders configured expiry and sessions', (t) => {
 });
 
 test('writeDexConfig uses the resolved callback URL', (t) => {
-  const config = resolvedConfig(t);
   const callback = 'https://auth.local.test:8443/oauth/callback';
-  const resolved = {
-    ...config,
-    app: {
-      ...config.app,
-      client: { ...config.app.client, redirectUri: callback },
-    },
-  };
-  writeDexConfig(resolved);
+  const config = resolvedConfig(t, { client: { redirectUri: callback } });
+  writeDexConfig(config);
   const dex = parse(readGenerated(config, './dex.yaml'));
   assert.deepEqual(dex.staticClients[0].redirectURIs, [callback]);
 });
@@ -1185,7 +1184,7 @@ test('writeNginxAssets preserves browser host for the application upstream', (t)
 });
 
 test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
-  const config = resolvedConfig(t, {}, 'edge-key');
+  const config = resolvedConfig(t);
 
   writeNginxAssets(config);
 
@@ -1470,7 +1469,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   assert.equal(oauth2Proxy.client_secret, undefined);
   assert.equal(
     oauth2Proxy.client_secret_file,
-    '/run/secrets/VISAGE_OAUTH_CLIENT_SECRET',
+    '/run/secrets/VISAGE_APP_CLIENT_SECRET',
   );
   assert.equal(oauth2Proxy.cookie_secret, undefined);
   assert.equal(

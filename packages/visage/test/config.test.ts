@@ -388,7 +388,6 @@ test('resolveConfig derives upstreams from services', (t) => {
   const { upstream: apiUpstream, ...apiService } = config.services.api;
   assert.ok(apiUpstream);
   assert.deepEqual(apiService, {
-    volumes: [],
     image: 'example/api:test',
     restart: 'on-failure',
     security_opt: ['no-new-privileges:true'],
@@ -1099,7 +1098,6 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
   const { upstream: apiUpstream, ...apiService } = config.services.api;
   assert.ok(apiUpstream);
   assert.deepEqual(apiService, {
-    volumes: [],
     image: 'example/api:test',
     command: ['serve'],
     restart: 'on-failure',
@@ -1323,7 +1321,11 @@ test('resolveConfig applies Dex defaults', (t) => {
           absoluteLifetime: '720h',
         },
       },
-      sessions: { absoluteLifetime: '720h', validIfNotUsedFor: '720h' },
+      sessions: {
+        absoluteLifetime: '720h',
+        validIfNotUsedFor: '720h',
+        ssoSharedWithDefault: 'all',
+      },
       users: [
         {
           email: 'user@example.com',
@@ -1356,6 +1358,7 @@ test('resolveConfig preserves Dex defaults with partial overrides', (t) => {
   assert.deepEqual(config.dex.sessions, {
     absoluteLifetime: '1440h',
     validIfNotUsedFor: '720h',
+    ssoSharedWithDefault: 'all',
   });
 });
 
@@ -1392,7 +1395,11 @@ test('resolveConfig applies Dex overrides', (t) => {
   assert.deepEqual(
     { expiry, sessions, users },
     {
-      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+      sessions: {
+        absoluteLifetime: '8760h',
+        validIfNotUsedFor: '8760h',
+        ssoSharedWithDefault: 'all',
+      },
       expiry: {
         idTokens: '10m',
         authRequests: '2m',

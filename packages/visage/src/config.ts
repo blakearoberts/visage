@@ -92,7 +92,7 @@ type ResolvedUpstream = {
 };
 
 type ResolvedService = Omit<VisageService, 'mounts'> & {
-  readonly volumes: readonly {
+  readonly volumes?: readonly {
     readonly type: 'bind' | 'volume' | 'tmpfs';
     readonly target: string;
     readonly source?: string;
@@ -357,6 +357,14 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
                     postLogoutRedirectUri: `https://${service.host ?? host}:${port}/`,
                     ...client,
                   } satisfies VisageOAuth2Client,
+                  ...(client.public
+                    ? {}
+                    : {
+                        secrets: [
+                          ...(service.secrets ?? []),
+                          `VISAGE_${name.toUpperCase()}_CLIENT_SECRET`,
+                        ],
+                      }),
                 }),
           },
         ] as const,
@@ -549,6 +557,7 @@ function resolveDexConfig(
     sessions: {
       absoluteLifetime: '720h',
       validIfNotUsedFor: '720h',
+      ssoSharedWithDefault: 'all',
       ...dex.sessions,
     },
     users: (
@@ -578,22 +587,18 @@ function resolveServicesConfig(
   options: ResolvedVisageOptions,
 ): Record<string, ResolvedService> {
   const {
-    services: { dex = {}, nginx = {}, oauth2_proxy = {}, ...services },
+    oidc: { end_session_endpoint },
+    services: { dex = {}, nginx = {}, oauth2_proxy = {} },
     telemetry,
-    client,
   } = options;
-  const { end_session_endpoint } = options.oidc;
-  const serviceOptions: ResolvedVisageOptions['services'] = {
-    ...services,
+  const services: ResolvedVisageOptions['services'] = {
+    ...options.services,
     ...(options.dex !== undefined
       ? {
           dex: {
             ...BaseServiceDex,
             ...dex,
-            mounts: {
-              ...BaseServiceDex.mounts,
-              ...dex.mounts,
-            },
+            mounts: { ...BaseServiceDex.mounts, ...dex.mounts },
             secrets: [
               ...BaseServiceDex.secrets,
               ...Object.entries(options.services).flatMap(
@@ -621,10 +626,7 @@ function resolveServicesConfig(
         OTEL_SERVICE_NAMESPACE: packageName,
         ...nginx.environment,
       },
-      mounts: {
-        ...BaseServiceNginx.mounts,
-        ...nginx.mounts,
-      },
+      mounts: { ...BaseServiceNginx.mounts, ...nginx.mounts },
       secrets: [...BaseServiceNginx.secrets, ...(nginx.secrets ?? [])],
       extra_hosts: [
         ...['host.docker.internal:host-gateway'],
@@ -634,10 +636,7 @@ function resolveServicesConfig(
     oauth2_proxy: {
       ...BaseServiceOAuth2Proxy,
       ...oauth2_proxy,
-      mounts: {
-        ...BaseServiceOAuth2Proxy.mounts,
-        ...oauth2_proxy.mounts,
-      },
+      mounts: { ...BaseServiceOAuth2Proxy.mounts, ...oauth2_proxy.mounts },
       secrets: [
         ...BaseServiceOAuth2Proxy.secrets,
         ...(oauth2_proxy.secrets ?? []),
@@ -658,7 +657,9 @@ function resolveServicesConfig(
                       end_session_endpoint +
                         (end_session_endpoint.includes('?') ? '&' : '?') +
                         'id_token_hint={id_token}&post_logout_redirect_uri=' +
-                        encodeURIComponent(client.postLogoutRedirectUri),
+                        encodeURIComponent(
+                          options.client.postLogoutRedirectUri,
+                        ),
                     ),
             },
           } satisfies VisageProxyPolicy,
@@ -673,10 +674,10 @@ function resolveServicesConfig(
               telemetry.fluentd === undefined
                 ? []
                 : [`${telemetry.fluentd}:24224`],
-            ...(services.otelcol ?? {}),
+            ...(options.services.otelcol ?? {}),
             environment: {
               ...BaseServiceOTelCollector.environment,
-              ...(services.otelcol?.environment ?? {}),
+              ...(options.services.otelcol?.environment ?? {}),
             },
           },
         }
@@ -691,11 +692,11 @@ function resolveServicesConfig(
       profiles: ['linux'],
       restart: 'always',
       upstream: false,
-      ...services.vite_loopback,
+      ...options.services.vite_loopback,
     },
   };
   return Object.fromEntries(
-    Object.entries(serviceOptions).map(
+    Object.entries(services).map(
       ([name, { upstream, networks, mounts, ...service }]) => [
         name,
         {
@@ -717,17 +718,21 @@ function resolveServicesConfig(
               }
             : {}),
           ...service,
-          volumes: Object.entries(mounts ?? {}).map(
-            ([target, { read_only, ...mount }]) => ({
-              target,
-              read_only,
-              ...('bind' in mount
-                ? { type: 'bind' as const, source: mount.bind }
-                : 'volume' in mount
-                  ? { type: 'volume' as const, source: mount.volume }
-                  : { type: 'tmpfs' as const, tmpfs: mount }),
-            }),
-          ),
+          ...(mounts === undefined
+            ? {}
+            : {
+                volumes: Object.entries(mounts ?? {}).map(
+                  ([target, { read_only, ...mount }]) => ({
+                    target,
+                    read_only,
+                    ...('bind' in mount
+                      ? { type: 'bind' as const, source: mount.bind }
+                      : 'volume' in mount
+                        ? { type: 'volume' as const, source: mount.volume }
+                        : { type: 'tmpfs' as const, tmpfs: mount }),
+                  }),
+                ),
+              }),
           ...(service.network_mode === undefined
             ? { networks: [...new Set([name, ...(networks ?? [])])] }
             : {}),

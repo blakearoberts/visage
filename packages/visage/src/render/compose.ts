@@ -21,6 +21,17 @@ function renderComposeConfig(config: VisageConfig): string {
     ),
   );
 
+  const dex = config.dex ? new URL(config.dex.issuer).hostname : undefined;
+  const nginxNetworks = Object.fromEntries([
+    ...(services.nginx.networks ?? []).map((name) => [name, {}]),
+    ...Object.entries(config.services)
+      .filter(
+        ([, service]) =>
+          service.network_mode === undefined && service.upstream !== undefined,
+      )
+      .map(([name]) => [name, dex === undefined ? {} : { aliases: [dex] }]),
+  ]);
+
   return stringify({
     networks: Object.fromEntries(
       Object.values(config.services).flatMap((service) =>
@@ -31,7 +42,7 @@ function renderComposeConfig(config: VisageConfig): string {
       Object.values(config.services)
         .flatMap(({ volumes }) => volumes)
         .flatMap((volume) =>
-          volume.type === 'volume' ? [[volume.source, {}]] : [],
+          volume && volume.type === 'volume' ? [[volume.source, {}]] : [],
         ),
     ),
     secrets: Object.fromEntries(
@@ -42,21 +53,7 @@ function renderComposeConfig(config: VisageConfig): string {
     ),
     services: {
       ...services,
-      nginx: {
-        ...services.nginx,
-        networks: [
-          ...new Set([
-            ...(services.nginx.networks ?? []),
-            ...Object.entries(config.services)
-              .filter(
-                ([, service]) =>
-                  service.network_mode === undefined &&
-                  service.upstream !== undefined,
-              )
-              .map(([name]) => name),
-          ]),
-        ],
-      },
+      nginx: { ...services.nginx, networks: nginxNetworks },
     },
   });
 }

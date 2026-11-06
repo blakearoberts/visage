@@ -352,7 +352,11 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     nginx: {},
     edge: {},
   });
-  assert.deepEqual(compose.services.nginx.networks, ['nginx', 'edge', 'api']);
+  assert.deepEqual(compose.services.nginx.networks, {
+    nginx: {},
+    edge: {},
+    api: { aliases: ['app.local.test'] },
+  });
   assert.deepEqual(compose.services.db.networks, ['db', 'backend']);
   assert.deepEqual(compose.secrets, {
     OAUTH2_PROXY_COOKIE_SECRET: {
@@ -397,17 +401,29 @@ test('writeComposeConfig includes unused client secrets for public clients', (t)
 test('writeComposeConfig declares environment-backed secrets used by services', (t) => {
   const config = resolvedConfig(t, {
     services: {
-      api: { image: 'example/api', secrets: ['API_TOKEN', 'SHARED_TOKEN'] },
+      api: {
+        image: 'example/api',
+        client: {},
+        secrets: ['API_TOKEN', 'SHARED_TOKEN'],
+      },
       worker: { image: 'example/worker', secrets: ['SHARED_TOKEN'] },
+      browser: { image: 'example/browser', client: { public: true } },
     },
   });
   writeComposeConfig(config);
   const compose = parse(readGenerated(config, config.files.compose));
-  assert.deepEqual(compose.services.api.secrets, ['API_TOKEN', 'SHARED_TOKEN']);
+  assert.deepEqual(compose.services.api.secrets, [
+    'API_TOKEN',
+    'SHARED_TOKEN',
+    'VISAGE_API_CLIENT_SECRET',
+  ]);
   assert.deepEqual(compose.services.worker.secrets, ['SHARED_TOKEN']);
+  assert.equal(compose.services.browser.secrets, undefined);
+  assert.equal(compose.services.browser.read_only, true);
   assert.deepEqual(compose.secrets, {
     API_TOKEN: { environment: 'API_TOKEN' },
     SHARED_TOKEN: { environment: 'SHARED_TOKEN' },
+    VISAGE_API_CLIENT_SECRET: { environment: 'VISAGE_API_CLIENT_SECRET' },
     VISAGE_APP_CLIENT_SECRET: { environment: 'VISAGE_APP_CLIENT_SECRET' },
     VISAGE_EDGE_KEY: { environment: 'VISAGE_EDGE_KEY' },
     OAUTH2_PROXY_COOKIE_SECRET: { environment: 'OAUTH2_PROXY_COOKIE_SECRET' },
@@ -502,12 +518,14 @@ test('writeComposeConfig omits managed Dex service for external IdPs', (t) => {
     idp: {
       issuer: 'http://idp.localhost:5557/idp',
     },
+    services: { whoami: { image: 'traefik/whoami' } },
   });
 
   writeComposeConfig(config);
 
   const compose = parse(readGenerated(config, config.files.compose));
   assert.equal(compose.services.dex, undefined);
+  assert.deepEqual(compose.services.nginx.networks, { nginx: {}, whoami: {} });
 });
 
 test('writeComposeConfig omits public hosts, upstreams, and clients from services', (t) => {
@@ -525,14 +543,6 @@ test('writeComposeConfig omits public hosts, upstreams, and clients from service
   assert.equal(compose.services.api.host, undefined);
   assert.equal(compose.services.api.upstream, undefined);
   assert.equal(compose.services.api.client, undefined);
-  assert.ok(compose.services.dex.secrets.includes('VISAGE_API_CLIENT_SECRET'));
-  assert.deepEqual(compose.secrets.VISAGE_API_CLIENT_SECRET, {
-    environment: 'VISAGE_API_CLIENT_SECRET',
-  });
-  assert.doesNotMatch(
-    readGenerated(config, config.files.compose),
-    /api-secret/,
-  );
 });
 
 test('writeDexConfig renders default OIDC, client, and session settings', (t) => {
@@ -553,6 +563,7 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
   assert.deepEqual(dex.sessions, {
     absoluteLifetime: '720h',
     validIfNotUsedFor: '720h',
+    ssoSharedWithDefault: 'all',
   });
   assert.deepEqual(dex.storage, { type: 'memory' });
   assert.deepEqual(dex.web, { http: '127.0.0.1:5556' });
@@ -633,7 +644,11 @@ test('writeDexConfig renders configured OAuth2 public client', (t) => {
 test('writeDexConfig renders configured expiry and sessions', (t) => {
   const config = resolvedConfig(t, {
     idp: {
-      sessions: { absoluteLifetime: '8760h', validIfNotUsedFor: '8760h' },
+      sessions: {
+        absoluteLifetime: '8760h',
+        validIfNotUsedFor: '8760h',
+        ssoSharedWithDefault: 'all',
+      },
       expiry: {
         idTokens: '10m',
         signingKeys: '6h',
@@ -653,6 +668,7 @@ test('writeDexConfig renders configured expiry and sessions', (t) => {
   assert.deepEqual(dex.sessions, {
     absoluteLifetime: '8760h',
     validIfNotUsedFor: '8760h',
+    ssoSharedWithDefault: 'all',
   });
   assert.deepEqual(dex.expiry, {
     idTokens: '10m',

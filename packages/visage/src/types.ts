@@ -196,6 +196,10 @@ export type VisageDexSessions = {
    * @defaultValue `'720h'`
    */
   readonly validIfNotUsedFor?: string;
+  /**
+   * @defaultValue `'all'`
+   */
+  readonly ssoSharedWithDefault?: 'all' | 'none';
 };
 
 /**

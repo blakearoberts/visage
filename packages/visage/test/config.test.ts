@@ -1445,7 +1445,7 @@ test('resolveOptions applies public defaults', () => {
   assert.match(options.client.secret, /^[A-Za-z0-9_-]{43}$/);
   assert.notEqual(options.client.secret, resolveOptions({}).client.secret);
   assert.deepEqual(options.client, {
-    id: 'visage',
+    id: 'https://localhost:9001',
     secret: options.client.secret,
     scopes: ['openid', 'offline_access'],
     public: false,
@@ -1567,9 +1567,10 @@ test('resolveOptions resolves service client defaults and overrides', () => {
         },
       },
       native: { client: {} },
-      public_app: { client: { public: true } },
+      public_app: { host: 'public.local.test', client: { public: true } },
     },
   });
+  assert.equal(options.client.id, 'https://app.local.test:9443');
   assert.deepEqual(options.services.grafana.client, {
     id: 'metrics',
     secret: 'metrics-secret',
@@ -1590,7 +1591,7 @@ test('resolveOptions resolves service client defaults and overrides', () => {
     options.services.public_app.client.secret,
   );
   assert.deepEqual(options.services.native.client, {
-    id: 'native',
+    id: 'https://app.local.test:9443',
     secret: options.services.native.client.secret,
     public: false,
     scopes: ['openid', 'offline_access'],
@@ -1598,12 +1599,12 @@ test('resolveOptions resolves service client defaults and overrides', () => {
     postLogoutRedirectUri: 'https://app.local.test:9443/',
   });
   assert.deepEqual(options.services.public_app.client, {
-    id: 'public_app',
+    id: 'https://public.local.test:9443',
     secret: options.services.public_app.client.secret,
     public: true,
     scopes: ['openid', 'offline_access'],
-    redirectUri: 'https://app.local.test:9443/oauth/callback',
-    postLogoutRedirectUri: 'https://app.local.test:9443/',
+    redirectUri: 'https://public.local.test:9443/oauth/callback',
+    postLogoutRedirectUri: 'https://public.local.test:9443/',
   });
 });
 

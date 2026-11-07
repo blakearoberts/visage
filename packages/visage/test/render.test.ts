@@ -569,8 +569,8 @@ test('writeDexConfig renders default OIDC, client, and session settings', (t) =>
   assert.deepEqual(dex.web, { http: '127.0.0.1:5556' });
   assert.deepEqual(dex.staticClients, [
     {
-      id: 'visage',
-      name: 'visage',
+      id: 'https://app.local.test:9443',
+      name: 'https://app.local.test:9443',
       secret: '{{ file.Read "/run/secrets/VISAGE_APP_CLIENT_SECRET" }}',
       refreshTokenLifetime: 'session',
       postLogoutRedirectURIs: ['https://app.local.test:9443/oauth/start?rd=/'],
@@ -607,8 +607,8 @@ test('writeDexConfig registers confidential and public service clients', (t) => 
       postLogoutRedirectURIs: ['https://g.localhost:9443/'],
     },
     {
-      id: 'public_app',
-      name: 'public_app',
+      id: 'https://app.local.test:9443',
+      name: 'https://app.local.test:9443',
       public: true,
       refreshTokenLifetime: 'session',
       redirectURIs: ['https://app.local.test:9443/oauth/callback'],
@@ -1465,7 +1465,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
     oauth2Proxy.redirect_url,
     'https://app.local.test:9443/oauth/callback',
   );
-  assert.equal(oauth2Proxy.client_id, 'visage');
+  assert.equal(oauth2Proxy.client_id, 'https://app.local.test:9443');
   assert.equal(oauth2Proxy.client_secret, undefined);
   assert.equal(
     oauth2Proxy.client_secret_file,

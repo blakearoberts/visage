@@ -6,7 +6,7 @@ web:
 oauth2:
   skipApprovalScreen: true
 staticClients:
-  - id: visage
+  - id: https://localhost:9002
     name: Visage External IdP
     public: true
     redirectURIs:

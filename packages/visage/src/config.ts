@@ -329,7 +329,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   );
   const issuer = new URL(oidc.issuer);
   const client = {
-    id: 'visage',
+    id: `https://${host}:${port}`,
     secret: randomBytes(32).toString('base64url'),
     scopes: ['openid', 'offline_access'],
     public: false,
@@ -349,7 +349,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
               ? {}
               : {
                   client: {
-                    id: name,
+                    id: `https://${service.host ?? host}:${port}`,
                     secret: randomBytes(32).toString('base64url'),
                     scopes: ['openid', 'offline_access'],
                     public: false,

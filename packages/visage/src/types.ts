@@ -283,7 +283,7 @@ export type VisageOAuth2Client = {
   /**
    * OAuth2 client identifier.
    *
-   * @defaultValue `'visage'` for the app, or the service name.
+   * @defaultValue The public origin of the app or service.
    */
   readonly id?: string;
   /**

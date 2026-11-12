@@ -14,7 +14,12 @@ teardown('stop server example', async () => {
   await expect(() => {
     const containers = spawnSync(
       'docker',
-      ['compose', '--project-name=ssr-visage', 'ps', '--format={{.Name}}'],
+      [
+        'compose',
+        '--project-name=blakearoberts-visage-example-ssr-visage',
+        'ps',
+        '--format={{.Name}}',
+      ],
       { encoding: 'utf8' },
     )
       .stdout.split(/\r?\n/)

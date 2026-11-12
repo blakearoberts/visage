@@ -4,10 +4,9 @@ import useSWR from 'swr';
 function useSsrIdentity(identity: Record<string, unknown>) {
   return useMemo(
     () =>
-      Object.entries(identity).map(([name, value]): [string, string] => [
-        name,
-        String(value),
-      ]),
+      Object.entries(identity)
+        .filter(([, value]) => value !== undefined)
+        .map(([name, value]): [string, string] => [name, String(value)]),
     [],
   );
 }

@@ -1,5 +1,6 @@
 {
-  "name": "visage-workspace",
+  "name": "@blakearoberts/visage-workspace",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "workspaces": [

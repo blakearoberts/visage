@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 test.describe('external-idp', () => {
   test('login with S256 PKCE', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
     const { user } = test.info().project.metadata;
     const authorizationRequest = page.waitForRequest(
       (request) => new URL(request.url()).pathname === '/idp/auth',
@@ -32,6 +34,7 @@ test.describe('external-idp', () => {
     await expect(page.locator('[data-test-id="csr-identity"]')).toContainText(
       'Hostname',
     );
+    expect(errors).toEqual([]);
   });
 
   test('reject direct host requests to the app server', async ({ request }) => {

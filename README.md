@@ -152,3 +152,8 @@ and other click-jacking controls remain application policy.
 - [ ] Support subject-token exchange with client attribution and audience trust
       (RFC 8693 without actor-based delegation) using Dex as the default
       authorization server acting as an STS.
+- [ ] Support
+      [joint session and API grant authorization](docs/joint-authorization.md)
+      via public-client ACF + PKCE in Web Workers, requiring both a DPoP-bound
+      API token and a matching edge RP session for sensitive or mutating
+      requests.

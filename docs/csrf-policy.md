@@ -25,11 +25,10 @@ The CSRF policy is, for any cookie-authenticated request:
 
 ## Sec-Fetch-* Headers
 
-The following table demonstrates the conditions by which a request is permitted
-when presenting valid/complete `Sec-Fetch-*` headers. If the headers are
-supplied, but do not match any row, the request is denied. In this case, NGINX
-returns 403, and the request does not reach oauth2-proxy or any prospective
-upstream server.
+The following table demonstrates when a request presenting valid and complete
+`Sec-Fetch-*` headers is permitted. If the headers exist, but do not match any
+row, the request is denied; NGINX returns 403; and, the request does not reach
+oauth2-proxy or any upstream server.
 
 | `Sec-Fetch-Site` | `Sec-Fetch-Mode` | `Sec-Fetch-Dest` | Method |
 | ---------------- | ---------------- | ---------------- | ------ |
@@ -40,11 +39,10 @@ upstream server.
 
 ## Origin/Referer Fallback
 
-The following table demonstrates the conditions by which a request is permitted
-when the request does not present recognized `Sec-Fetch-*` headers. If a
-request's details do not match any row, the request is denied. In this case,
-NGINX returns 403, and the request does not reach oauth2-proxy or any
-prospective upstream server.
+The following table demonstrates when a request without valid and complete
+`Sec-Fetch-*` headers is permitted. If a request's details do not match any row,
+the request is denied; NGINX returns 403; and, the request does not reach
+oauth2-proxy or any upstream server.
 
 | Method    | Origin | Referer |
 | --------- | ------ | ------- |

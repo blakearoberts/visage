@@ -7,14 +7,14 @@ setup('start external idp example', async () => {
     'run',
     'start:idp',
     '--workspace',
-    'examples/external-idp',
+    '@blakearoberts/visage-example-external-idp',
   ]);
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('Failed to start external IdP');
 
   const child = spawn(
     'npm',
-    ['run', 'dev', '--workspace', 'examples/external-idp'],
+    ['run', 'dev', '--workspace', '@blakearoberts/visage-example-external-idp'],
     { detached: true, stdio: ['ignore', 'inherit', 'inherit'] },
   );
   child.unref();

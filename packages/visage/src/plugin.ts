@@ -74,7 +74,7 @@ export function visage(options: VisageOptions = {}): Plugin {
         };
 
         stop = await startVisageServer(config);
-        process.once('SIGINT', closeBundle);
+        process.on('SIGINT', closeBundle);
         vite.httpServer?.once('close', closeBundle);
         return result;
       };

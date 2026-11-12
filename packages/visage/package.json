@@ -48,6 +48,7 @@
   "scripts": {
     "build": "rollup -c",
     "test": "node --import tsx --test test/*.test.ts",
+    "test:e2e": "playwright test",
     "typecheck": "tsc"
   },
   "dependencies": {

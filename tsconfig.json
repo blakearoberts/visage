@@ -1,7 +1,6 @@
 {
   "files": [],
   "references": [
-    { "path": "./tsconfig.node.json" },
     { "path": "./packages/visage/tsconfig.json" },
     { "path": "./packages/visage-react/tsconfig.json" },
     { "path": "./examples/external-idp/tsconfig.json" },

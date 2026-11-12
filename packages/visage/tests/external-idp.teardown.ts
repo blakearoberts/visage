@@ -35,7 +35,7 @@ teardown('stop external idp example', async () => {
     'run',
     'stop:idp',
     '--workspace',
-    'examples/external-idp',
+    '@blakearoberts/visage-example-external-idp',
   ]);
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error('Failed to stop external IdP');

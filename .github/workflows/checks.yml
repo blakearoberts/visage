@@ -62,7 +62,7 @@ jobs:
         with:
           name: e2e-logs
           path: |
-            test-results
+            packages/visage/test-results
             examples/simple/node_modules/.vite/visage/logs/**
             examples/ssr/.visage/logs/**
             examples/external-idp/node_modules/.vite/visage/logs/**

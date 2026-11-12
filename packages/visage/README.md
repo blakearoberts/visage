@@ -87,7 +87,7 @@ visage({ host: 'localhost', port: 9001 });
 
 Services are Docker Compose services managed by the Vite dev-server lifecycle.
 Additional services automatically configure an upstream with the same name,
-host, and `/{name}/` location.
+host, and `/{name}/` location. Services with a public `host` default to `/`.
 
 ```ts
 visage({

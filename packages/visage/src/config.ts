@@ -79,15 +79,15 @@ type ResolvedProxyPolicy = {
     readonly forward: false | 'id' | 'access';
   };
   readonly csrf: boolean;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly directives: Readonly<Record<string, readonly string[]>>;
+  readonly headers: { readonly [name: string]: string };
+  readonly directives: { readonly [name: string]: readonly string[] };
 };
 
 type ResolvedUpstream = {
   readonly scheme: 'http' | 'https';
   readonly host: string;
   readonly port: number;
-  readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
+  readonly locations: { readonly [path: string]: ResolvedProxyPolicy };
   readonly http?: string;
 };
 
@@ -125,8 +125,8 @@ export type VisageConfig = {
   };
   readonly oidc: OIDCEndpoint;
   readonly dex?: ResolvedDexConfig;
-  readonly services: Readonly<Record<string, ResolvedService>>;
-  readonly remotes: Readonly<Record<string, ResolvedUpstream>>;
+  readonly services: { readonly [name: string]: ResolvedService };
+  readonly remotes: { readonly [name: string]: ResolvedUpstream };
 };
 
 export const VisageEdgeKeyHeader = 'X-Visage-Edge-Key';
@@ -136,7 +136,7 @@ export const DockerImages = parse(
     new URL('../docker-compose.images.yml', import.meta.url),
     'utf8',
   ),
-).services as Record<string, { image: string }>;
+).services as { readonly [name: string]: { readonly image: string } };
 
 const BaseAppUpstream = {
   host: 'host.docker.internal',
@@ -171,6 +171,7 @@ const BaseServiceDex = {
     host: '127.0.0.1',
     scheme: 'http',
     port: 5556,
+    locations: { '/': false, '/dex/': true },
     auth: { enabled: false, forward: false },
     csrf: false,
     headers: { Cookie: 'dex_session=$cookie_dex_session' },
@@ -224,6 +225,8 @@ const BaseServiceOAuth2Proxy = {
     scheme: 'http',
     port: 4180,
     locations: {
+      '/': false,
+      '/oauth2_proxy/': false,
       '/oauth/': {
         ws: false,
         auth: { enabled: false, forward: false },
@@ -282,6 +285,8 @@ const BaseServiceOTelCollector = {
   upstream: {
     port: 4318,
     locations: {
+      '/': false,
+      '/otelcol/': false,
       '/t/': {
         auth: { enabled: true },
         directives: { rewrite: '^/t/(.*)$ /$1 break' },
@@ -417,7 +422,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
               scheme: issuer.protocol === 'https:' ? 'https' : 'http',
               host: issuer.hostname,
               port: Number(issuer.port) || undefined,
-              locations: {},
+              locations: { '/idp/': false },
             },
           }
         : {}),
@@ -479,6 +484,7 @@ export function resolveConfig(
       'app',
       { ...BaseAppUpstream, port: options.appPort },
       false,
+      options.host,
     ),
   };
   return {
@@ -585,7 +591,7 @@ function resolveServicesConfig(
   packageName: string,
   appPort: number,
   options: ResolvedVisageOptions,
-): Record<string, ResolvedService> {
+): { readonly [name: string]: ResolvedService } {
   const {
     oidc: { end_session_endpoint },
     services: { dex = {}, nginx = {}, oauth2_proxy = {} },
@@ -612,7 +618,10 @@ function resolveServicesConfig(
             upstream:
               dex.upstream === false
                 ? false
-                : { ...BaseServiceDex.upstream, ...dex.upstream },
+                : {
+                    ...BaseServiceDex.upstream,
+                    ...(typeof dex.upstream === 'object' ? dex.upstream : {}),
+                  },
             environment: { ...BaseServiceDex.environment, ...dex.environment },
           },
         }
@@ -738,7 +747,14 @@ function resolveServicesConfig(
             : {}),
           ...(upstream === false
             ? {}
-            : { upstream: resolveUpstreamConfig(name, upstream ?? {}, false) }),
+            : {
+                upstream: resolveUpstreamConfig(
+                  name,
+                  upstream,
+                  false,
+                  service.host,
+                ),
+              }),
         } satisfies ResolvedService,
       ],
     ),
@@ -747,9 +763,11 @@ function resolveServicesConfig(
 
 function resolveUpstreamConfig(
   name: string,
-  upstream: VisageUpstream,
+  options: VisageUpstream | true | undefined,
   external: boolean,
+  publicHost?: string,
 ): ResolvedUpstream {
+  const upstream = typeof options === 'object' ? options : {};
   const scheme = upstream.scheme ?? (external ? 'https' : 'http');
   const host = upstream.host ?? name;
   return {
@@ -758,10 +776,15 @@ function resolveUpstreamConfig(
     host,
     port: upstream.port ?? (scheme === 'https' ? 443 : 80),
     locations: Object.fromEntries(
-      Object.entries(upstream.locations ?? { [`/${name}/`]: {} }).map(
-        ([path, policy]) => {
-          const auth = { ...upstream.auth, ...policy.auth };
-          return [
+      Object.entries({
+        [publicHost === undefined ? `/${name}/` : '/']: true,
+        ...upstream.locations,
+      }).flatMap(([path, location]) => {
+        if (location === false) return [];
+        const policy = location === true ? {} : location;
+        const auth = { ...upstream.auth, ...policy.auth };
+        return [
+          [
             path,
             resolveUpstreamLocationConfig({
               ...policy,
@@ -783,9 +806,9 @@ function resolveUpstreamConfig(
               },
               directives: { ...upstream.directives, ...policy.directives },
             }),
-          ];
-        },
-      ),
+          ],
+        ];
+      }),
     ),
   };
 }

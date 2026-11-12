@@ -76,10 +76,7 @@ export default defineConfig({
             port: 3000,
             auth: { enabled: false },
             headers: { Cookie: '$http_cookie' },
-            locations: {
-              '/api/live/': { ws: true },
-              '/': {},
-            },
+            locations: { '/api/live/': { ws: true } },
           },
         },
         whoami: { image: 'traefik/whoami' },

@@ -1437,7 +1437,8 @@ test('writeNginxAssets separates service public hosts from backend TLS names', (
     upstreamBlock(nginx, 'api'),
     /server backend\.internal:443 resolve;/,
   );
-  const api = locationBlock(nginx, '/api/');
+  const [, , server] = nginx.split('\n    server {');
+  const api = locationBlock(server, '/');
   assert.match(api, /proxy_ssl_name\s+backend\.internal;/);
   assert.match(api, /proxy_ssl_verify\s+on;/);
   assert.match(api, /auth_request\s+\/oauth\/auth;/);

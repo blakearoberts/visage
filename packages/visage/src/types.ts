@@ -406,12 +406,8 @@ export type VisageService = {
   readonly restart?: 'always' | 'no' | 'on-failure' | 'unless-stopped';
   /** Mounts keyed by container target. Matching volume names share storage. */
   readonly mounts?: Readonly<Record<string, VisageMount>>;
-  /**
-   * Optional upstream override for this service. Omit this to create a default
-   * upstream from the service name. Set to false to disable automatic upstream
-   * creation.
-   */
-  readonly upstream?: VisageUpstream | false;
+  /** Upstream override for this service. */
+  readonly upstream?: VisageUpstream | boolean;
 };
 
 /**
@@ -439,9 +435,12 @@ export type VisageUpstream = VisageProxyPolicy & {
   /**
    * Path-location policies for this upstream, keyed by NGINX location path.
    *
-   * @defaultValue `/{upstreamName}/`
+   * `true` uses the upstream defaults; `false` omits the location.
+   * The default location is included unless explicitly set to `false`.
+   *
+   * @defaultValue `/` for services with a hostname; `/{upstreamName}/` otherwise.
    */
-  readonly locations?: { readonly [path: string]: VisageProxyPolicy };
+  readonly locations?: { readonly [path: string]: VisageProxyPolicy | boolean };
   /** Additional raw NGINX http context. */
   readonly http?: string;
 };

@@ -514,7 +514,10 @@ test('resolveConfig uses service upstream configuration for custom and built-in 
     assert.equal(upstream.host, 'service.internal');
     assert.equal(upstream.port, 8080);
     assert.equal(upstream.scheme, 'http');
-    assert.deepEqual(Object.keys(upstream.locations), ['/custom/']);
+    assert.deepEqual(Object.keys(upstream.locations), [
+      `/${name}/`,
+      '/custom/',
+    ]);
     assert.equal(upstream.locations['/custom/'].auth.enabled, false);
     assert.equal(upstream.locations['/custom/'].headers['X-Example'], 'value');
   }
@@ -624,12 +627,39 @@ test('resolveConfig gives the application root its identity and WebSocket defaul
   assert.equal(config.remotes.vite, undefined);
 });
 
-test('resolveConfig respects explicit empty service locations', (t) => {
+test('resolveConfig treats true locations as default policies and omits false locations', (t) => {
+  const upstream = {
+    ws: true,
+    headers: { 'X-Example': 'value' },
+    locations: { '/enabled/': true, '/object/': {}, '/disabled/': false },
+  };
+  const { config } = resolveForTest(t, {
+    services: { api: { upstream } },
+    remotes: { remote: upstream },
+  });
+  assert.ok(config.services.api.upstream);
+  for (const resolved of [
+    config.services.api.upstream,
+    config.remotes.remote,
+  ]) {
+    assert.deepEqual(
+      resolved.locations['/enabled/'],
+      resolved.locations['/object/'],
+    );
+    assert.equal(resolved.locations['/enabled/'].ws, true);
+    assert.equal(resolved.locations['/enabled/'].headers['X-Example'], 'value');
+    assert.equal(resolved.locations['/disabled/'], undefined);
+  }
+});
+
+test('resolveConfig includes the default for explicit empty service locations', (t) => {
   const { config } = resolveForTest(t, {
     services: { api: { image: 'example/api', upstream: { locations: {} } } },
   });
   assert.ok(config.services.api.upstream);
-  assert.deepEqual(config.services.api.upstream.locations, {});
+  assert.deepEqual(Object.keys(config.services.api.upstream.locations), [
+    '/api/',
+  ]);
 });
 
 test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) => {
@@ -1256,11 +1286,8 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
   assert.equal(config.services.worker.host, 'worker.dev.test');
   assert.equal(config.services.worker.upstream, undefined);
   assert.ok(config.services.api.upstream);
-  assert.equal(
-    config.services.api.upstream.locations['/api/'].auth.enabled,
-    true,
-  );
-  assert.equal(config.services.api.upstream.locations['/api/'].csrf, true);
+  assert.equal(config.services.api.upstream.locations['/'].auth.enabled, true);
+  assert.equal(config.services.api.upstream.locations['/'].csrf, true);
   assert.equal(config.services.api.upstream.host, 'backend.internal');
   assert.ok(config.services.custom.upstream);
   assert.equal(
@@ -1268,6 +1295,7 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
     false,
   );
   assert.deepEqual(Object.keys(config.services.custom.upstream.locations), [
+    '/',
     '/custom/',
   ]);
   assert.equal(config.remotes.remote.host, 'remote.internal');
@@ -1621,4 +1649,17 @@ test('resolveOptions preserves service overrides without assembling managed serv
   });
   assert.deepEqual(options.services, services);
   assert.equal(options.remotes.vite, undefined);
+});
+
+test('resolveConfig treats a true service upstream like an empty override', (t) => {
+  for (const host of [undefined, 'api.dev.test']) {
+    const { config } = resolveForTest(t, {
+      services: { api: { host, upstream: true } },
+    });
+    assert.ok(config.services.api.upstream);
+    assert.deepEqual(Object.keys(config.services.api.upstream.locations), [
+      host === undefined ? '/api/' : '/',
+    ]);
+    assert.equal(config.services.api.upstream.host, 'api');
+  }
 });

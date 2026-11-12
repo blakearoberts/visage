@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 test.describe('server', () => {
   test('login', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
     const { user } = test.info().project.metadata;
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
@@ -15,10 +17,13 @@ test.describe('server', () => {
     await passwordInput.fill(user.password);
     await loginButton.click();
 
-    await expect(page.locator('[data-test-id="ssr-identity"]')).not.toBeEmpty();
+    await expect(page.locator('[data-test-id="ssr-identity"]')).toContainText(
+      user.email,
+    );
     await expect(page.locator('[data-test-id="csr-identity"]')).toContainText(
       'Hostname',
     );
+    expect(errors).toEqual([]);
   });
 
   test('reject direct host requests to the app server', async ({ request }) => {

@@ -16,7 +16,7 @@ teardown('stop external idp example', async () => {
       'docker',
       [
         'compose',
-        '--project-name=external-idp-visage',
+        '--project-name=blakearoberts-visage-example-external-idp-visage',
         'ps',
         '--format={{.Name}}',
       ],

@@ -14,7 +14,12 @@ teardown('stop visage plugin', async () => {
   await expect(() => {
     const containers = spawnSync(
       'docker',
-      ['compose', '--project-name=simple-visage', 'ps', '--format={{.Name}}'],
+      [
+        'compose',
+        '--project-name=blakearoberts-visage-example-simple-visage',
+        'ps',
+        '--format={{.Name}}',
+      ],
       { encoding: 'utf8' },
     )
       .stdout.split(/\r?\n/)

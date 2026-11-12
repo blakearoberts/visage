@@ -9,6 +9,7 @@ const server = app.listen(6175, '127.0.0.1');
 
 const visage = createVisageServer({
   port: 9003,
+  client: { scopes: ['openid', 'offline_access', 'email'] },
   services: { whoami: { image: 'traefik/whoami' } },
 });
 app.use(visage.middleware);

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function login(page: Page) {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   const { user } = test.info().project.metadata;
   const authorizationRequest = page.waitForRequest(
     (request) => new URL(request.url()).pathname === '/dex/auth',
@@ -19,6 +21,7 @@ async function login(page: Page) {
   await expect(page.locator('[data-test-id="csr-identity"]')).toContainText(
     'Hostname',
   );
+  expect(errors).toEqual([]);
 }
 
 test('reject direct host requests to the app server', async ({ request }) => {

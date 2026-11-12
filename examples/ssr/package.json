@@ -1,5 +1,6 @@
 {
-  "name": "ssr",
+  "name": "@blakearoberts/visage-example-ssr",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {

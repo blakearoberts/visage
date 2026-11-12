@@ -130,73 +130,12 @@ test('startCompose cleans up failed detached startup', async (t) => {
           (arg) => arg === 'down' || arg === 'run' || arg === 'up',
         ),
       ),
-      ['down', 'run', 'up', 'down'],
+      ['down', 'up', 'down'],
     );
-    assert.deepEqual(spawnSyncCalls[3]?.args.slice(-2), [
+    assert.deepEqual(spawnSyncCalls[2]?.args.slice(-2), [
       'down',
       '--remove-orphans',
     ]);
-    assert.equal(spawnCalls.length, 0);
-  } finally {
-    openSyncMock.mock.restore();
-    spawnMock.mock.restore();
-    spawnSyncMock.mock.restore();
-    syncBuiltinESMExports();
-  }
-});
-
-test('startCompose surfaces NGINX validation errors before startup', async (t) => {
-  const config = resolveConfig({
-    ...resolveOptions({}),
-    cache: '',
-    root: 'compose-test',
-    appPort: 6173,
-  });
-  const spawnSyncCalls: SpawnCall[] = [];
-  const spawnCalls: SpawnCall[] = [];
-  const spawnSyncMock = t.mock.method(childProcess, 'spawnSync', ((
-    command: string,
-    args?: readonly string[],
-    options?: SpawnSyncOptions,
-  ) => {
-    spawnSyncCalls.push({ command, args: args ?? [], env: options?.env });
-    const isValidation = args?.includes('run') === true;
-    return {
-      pid: 0,
-      output: [],
-      stdout: '',
-      stderr: isValidation ? 'nginx: configuration test failed\n' : '',
-      status: isValidation ? 1 : 0,
-      signal: null,
-    } as SpawnSyncReturns<string>;
-  }) as typeof childProcess.spawnSync);
-  const spawnMock = t.mock.method(childProcess, 'spawn', ((
-    command: string,
-    args?: readonly string[],
-    options?: SpawnOptions,
-  ) => {
-    spawnCalls.push({ command, args: args ?? [], env: options?.env });
-    return {} as ReturnType<typeof childProcess.spawn>;
-  }) as typeof childProcess.spawn);
-  syncBuiltinESMExports();
-
-  const { startCompose } = await import('../src/compose');
-  const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
-  syncBuiltinESMExports();
-  try {
-    assert.throws(() => startCompose(config), {
-      name: 'Error',
-      message: 'Failed to validate NGINX configuration',
-    });
-
-    assert.deepEqual(
-      spawnSyncCalls.map((call) =>
-        call.args.find(
-          (arg) => arg === 'down' || arg === 'run' || arg === 'up',
-        ),
-      ),
-      ['down', 'run'],
-    );
     assert.equal(spawnCalls.length, 0);
   } finally {
     openSyncMock.mock.restore();

@@ -1239,6 +1239,7 @@ test('resolveConfig preserves Dex defaults with upstream overrides', (t) => {
   });
   const dex = config.services.dex.upstream;
   assert.ok(dex);
+  assert.deepEqual(Object.keys(dex.locations), ['/dex/']);
   const login = dex.locations['/dex/'];
   assert.equal(dex.host, '127.0.0.1');
   assert.equal(dex.port, 5556);
@@ -1254,22 +1255,19 @@ test('resolveConfig preserves Dex defaults with upstream overrides', (t) => {
   assert.match(dex.http, /~\^POST:\/dex\/auth\//);
 });
 
-test('resolveConfig retains Dex paths and isolates the application session on public hosts', (t) => {
+test('resolveConfig removes the Dex prefix and isolates the application session on public hosts', (t) => {
   const { config } = resolveForTest(t, {
     services: { dex: { host: 'idp.local.test' } },
   });
   assert.deepEqual(config.hosts, ['app.local.test', 'idp.local.test']);
-  assert.equal(config.oidc.issuer, 'https://idp.local.test:9443/dex');
-  assert.equal(
-    config.oidc.authorization,
-    'https://idp.local.test:9443/dex/auth',
-  );
+  assert.equal(config.oidc.issuer, 'https://idp.local.test:9443');
+  assert.equal(config.oidc.authorization, 'https://idp.local.test:9443/auth');
   assert.equal(
     config.oidc.end_session_endpoint,
-    'https://idp.local.test:9443/dex/logout',
+    'https://idp.local.test:9443/logout',
   );
-  assert.equal(config.oidc.token, 'http://127.0.0.1:5556/dex/token');
-  assert.equal(config.oidc.jwks, 'http://127.0.0.1:5556/dex/keys');
+  assert.equal(config.oidc.token, 'http://127.0.0.1:5556/token');
+  assert.equal(config.oidc.jwks, 'http://127.0.0.1:5556/keys');
   assert.equal(
     config.app.client.redirectUri,
     'https://app.local.test:9443/oauth/callback',
@@ -1277,13 +1275,10 @@ test('resolveConfig retains Dex paths and isolates the application session on pu
   assert.equal(config.app.cookie.cookie_name, '__Host-sess');
   assert.equal(config.app.cookie.cookie_domains, undefined);
   assert.ok(config.services.dex.upstream);
-  assert.deepEqual(Object.keys(config.services.dex.upstream.locations), [
-    '/dex/',
-  ]);
-  assert.equal(
-    config.services.dex.upstream.locations['/dex/'].auth.enabled,
-    false,
-  );
+  assert.deepEqual(Object.keys(config.services.dex.upstream.locations), ['/']);
+  assert.equal(config.services.dex.upstream.locations['/'].auth.enabled, false);
+  assert.ok(config.services.dex.upstream.http);
+  assert.match(config.services.dex.upstream.http, /~\^POST:\/auth\//);
 });
 
 test('resolveConfig preserves backend addresses, paths, and independent authentication on service hosts', (t) => {

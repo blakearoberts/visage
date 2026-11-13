@@ -704,7 +704,7 @@ test('writeDexConfig uses the public IdP host and application callback', (t) => 
   });
   writeDexConfig(config);
   const dex = parse(readGenerated(config, './dex.yaml'));
-  assert.equal(dex.issuer, 'https://idp.local.test:9443/dex');
+  assert.equal(dex.issuer, 'https://idp.local.test:9443');
   assert.deepEqual(dex.staticClients[0].redirectURIs, [
     'https://app.local.test:9443/oauth/callback',
   ]);
@@ -1419,7 +1419,7 @@ test('writeNginxAssets isolates Dex public-host routes from application authenti
   assert.match(app, /location = \/oauth\/auth/);
   assert.doesNotMatch(app, /location \/dex\//);
   assert.match(idp, /server_name idp\.local\.test;/);
-  assert.match(idp, /location \/dex\//);
+  assert.match(idp, /location \/ \{/);
   assert.match(idp, /proxy_pass http:\/\/dex;/);
   assert.match(
     idp,
@@ -1433,7 +1433,7 @@ test('writeNginxAssets isolates Dex public-host routes from application authenti
   assert.match(locationBlock(idp, '@auth_401'), /return 401;/);
   assert.match(
     locationBlock(nginx, '/oauth/sign_out'),
-    /idp\.local\.test:9443\/dex\/logout/,
+    /idp\.local\.test:9443\/logout/,
   );
 });
 
@@ -1677,10 +1677,7 @@ test('writeOauth2ProxyConfig uses the public IdP host with host-only application
   });
   writeOauth2ProxyConfig(config);
   const oauth2 = readGenerated(config, './oauth2-proxy.yml');
-  assert.match(
-    oauth2,
-    /login_url = "https:\/\/idp\.local\.test:9443\/dex\/auth"/,
-  );
+  assert.match(oauth2, /login_url = "https:\/\/idp\.local\.test:9443\/auth"/);
   assert.match(
     oauth2,
     /whitelist_domains = \["app\.local\.test", "app\.local\.test:9443", "idp\.local\.test:9443"\]/,

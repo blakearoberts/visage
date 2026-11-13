@@ -173,17 +173,10 @@ const BaseServiceDex = {
     headers: { Cookie: 'dex_session=$cookie_dex_session' },
     auth: { enabled: false, forward: false },
     csrf: false,
-    locations: { '/': false, '/dex/': true },
     directives: {
       limit_req: ['zone=dex_password burst=5 nodelay'],
       limit_req_status: ['429'],
     },
-    http: `
-      map "$request_method:$uri" $dex_password_limit_key {
-          default "";
-          ~^POST:/dex/auth/[^/]+/login$ $binary_remote_addr;
-      }
-      limit_req_zone $dex_password_limit_key zone=dex_password:1m rate=1r/s;`,
   },
 } as const satisfies VisageService;
 
@@ -323,6 +316,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const oidc = resolveOidcOptions(
     `https://${options.services?.dex?.host ?? host}:${port}`,
     'issuer' in idp ? idp : undefined,
+    options.services?.dex?.host === undefined ? '/dex' : '',
   );
   const issuer = new URL(oidc.issuer);
   const client = {
@@ -425,16 +419,17 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
 
 function resolveOidcOptions(
   origin: string,
-  idp?: VisageExternalIdpOptions,
+  idp: VisageExternalIdpOptions | undefined,
+  prefix: string,
 ): OIDCEndpoint {
   if (idp === undefined) {
     const { host, port } = BaseServiceDex.upstream;
     return {
-      issuer: `${origin}/dex`,
-      authorization: `${origin}/dex/auth`,
-      token: `http://${host}:${port}/dex/token`,
-      jwks: `http://${host}:${port}/dex/keys`,
-      end_session_endpoint: `${origin}/dex/logout`,
+      issuer: `${origin}${prefix}`,
+      authorization: `${origin}${prefix}/auth`,
+      token: `http://${host}:${port}${prefix}/token`,
+      jwks: `http://${host}:${port}${prefix}/keys`,
+      end_session_endpoint: `${origin}${prefix}/logout`,
     };
   }
   const { issuer, algs, end_session_endpoint, authorization, token, jwks } =
@@ -596,6 +591,7 @@ function resolveServicesConfig(
     services: { dex = {}, nginx = {}, oauth2_proxy = {} },
     telemetry,
   } = options;
+  const dexPrefix = dex.host === undefined ? '/dex' : '';
   const services: ResolvedVisageOptions['services'] = {
     ...options.services,
     ...(options.dex !== undefined
@@ -619,6 +615,13 @@ function resolveServicesConfig(
                 ? false
                 : {
                     ...BaseServiceDex.upstream,
+                    locations: { '/': false, [dexPrefix + '/']: true },
+                    http: `
+                      map "$request_method:$uri" $dex_password_limit_key {
+                          default "";
+                          ~^POST:${dexPrefix}/auth/[^/]+/login$ $binary_remote_addr;
+                      }
+                      limit_req_zone $dex_password_limit_key zone=dex_password:1m rate=1r/s;`,
                     ...(typeof dex.upstream === 'object' ? dex.upstream : {}),
                   },
             environment: { ...BaseServiceDex.environment, ...dex.environment },

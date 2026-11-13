@@ -1,4 +1,4 @@
-FROM nginx:1.31.7-alpine
+FROM nginx:1.31.8-alpine
 
 ARG OTEL_MODULE_VERSION=0.1.2
 

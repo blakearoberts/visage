@@ -74,7 +74,6 @@ export default defineConfig({
           },
           upstream: {
             port: 3000,
-            auth: { enabled: false },
             headers: { Cookie: '$http_cookie' },
             ws: true,
           },

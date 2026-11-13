@@ -1316,8 +1316,8 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
   assert.equal(config.services.worker.host, 'worker.dev.test');
   assert.equal(config.services.worker.upstream, undefined);
   assert.ok(config.services.api.upstream);
-  assert.equal(config.services.api.upstream.locations['/'].auth.enabled, true);
-  assert.equal(config.services.api.upstream.locations['/'].csrf, true);
+  assert.equal(config.services.api.upstream.locations['/'].auth.enabled, false);
+  assert.equal(config.services.api.upstream.locations['/'].csrf, false);
   assert.equal(config.services.api.upstream.host, 'backend.internal');
   assert.ok(config.services.custom.upstream);
   assert.equal(
@@ -1723,4 +1723,37 @@ test('resolveConfig disables all locations without disabling the upstream', (t) 
     assert.deepEqual(upstream.locations, {});
     assert.equal(upstream.port, upstream.scheme === 'https' ? 443 : 80);
   }
+});
+
+test('resolveConfig preserves explicit authentication overrides on public-host services', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      hosted: {
+        host: 'hosted.dev.test',
+        upstream: {
+          auth: { forward: true },
+          locations: { '/protected/': { auth: { enabled: true } } },
+        },
+      },
+      protected: {
+        host: 'protected.dev.test',
+        upstream: {
+          auth: { enabled: true },
+          locations: { '/public/': { auth: { enabled: false } } },
+        },
+      },
+    },
+  });
+  assert.ok(config.services.hosted.upstream);
+  const hosted = config.services.hosted.upstream.locations;
+  assert.deepEqual(hosted['/'].auth, { enabled: false, forward: 'id' });
+  assert.equal(hosted['/'].csrf, false);
+  assert.equal(hosted['/protected/'].auth.enabled, true);
+  assert.equal(hosted['/protected/'].csrf, true);
+  assert.ok(config.services.protected.upstream);
+  const protectedLocations = config.services.protected.upstream.locations;
+  assert.equal(protectedLocations['/'].auth.enabled, true);
+  assert.equal(protectedLocations['/'].csrf, true);
+  assert.equal(protectedLocations['/public/'].auth.enabled, false);
+  assert.equal(protectedLocations['/public/'].csrf, false);
 });

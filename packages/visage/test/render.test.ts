@@ -1449,7 +1449,7 @@ test('writeNginxAssets separates service public hosts from backend TLS names', (
   const api = locationBlock(server, '/');
   assert.match(api, /proxy_ssl_name\s+backend\.internal;/);
   assert.match(api, /proxy_ssl_verify\s+on;/);
-  assert.match(api, /auth_request\s+\/oauth\/auth;/);
+  assert.doesNotMatch(api, /auth_request\s+\/oauth\/auth;/);
 });
 
 test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret', (t) => {

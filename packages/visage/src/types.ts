@@ -467,7 +467,7 @@ export type VisageProxyPolicy = {
     /**
      * Whether requests to this location require OAuth2 authentication.
      *
-     * @defaultValue `true`
+     * @defaultValue `true` for the app host, `false` otherwise.
      */
     readonly enabled?: boolean;
     /**

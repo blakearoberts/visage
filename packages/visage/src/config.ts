@@ -752,6 +752,11 @@ function resolveServicesConfig(
                     name,
                     {
                       ...upstream,
+                      auth: {
+                        ...upstream.auth,
+                        enabled:
+                          upstream.auth?.enabled ?? service.host === undefined,
+                      },
                       prefix:
                         upstream.prefix ??
                         (service.host === undefined ? `/${name}` : ''),

@@ -1757,3 +1757,48 @@ test('resolveConfig preserves explicit authentication overrides on public-host s
   assert.equal(protectedLocations['/public/'].auth.enabled, false);
   assert.equal(protectedLocations['/public/'].csrf, false);
 });
+
+test('resolveConfig mounts the Visage CA for public-host services and preserves mount overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      hosted: { host: 'hosted.dev.test' },
+      disabled: { host: 'disabled.dev.test', upstream: false },
+      custom: {
+        host: 'custom.dev.test',
+        mounts: {
+          '/etc/ssl/certs/visage.pem': {
+            bind: '/custom/ca.pem',
+            read_only: false,
+          },
+          '/data': { volume: 'custom-data' },
+        },
+      },
+      ordinary: {},
+    },
+  });
+  for (const name of ['hosted', 'disabled']) {
+    assert.deepEqual(config.services[name].volumes, [
+      {
+        type: 'bind',
+        target: '/etc/ssl/certs/visage.pem',
+        source: join(config.cache, 'nginx/certs/ca.crt'),
+        read_only: true,
+      },
+    ]);
+  }
+  assert.deepEqual(config.services.custom.volumes, [
+    {
+      type: 'bind',
+      target: '/etc/ssl/certs/visage.pem',
+      source: '/custom/ca.pem',
+      read_only: false,
+    },
+    {
+      type: 'volume',
+      target: '/data',
+      source: 'custom-data',
+      read_only: undefined,
+    },
+  ]);
+  assert.equal(config.services.ordinary.volumes, undefined);
+});

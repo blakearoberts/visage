@@ -55,13 +55,6 @@ export default defineConfig({
           },
           mounts: {
             '/data': { volume: 'lgtm-data' },
-            '/etc/ssl/certs/visage.pem': {
-              bind: resolve(
-                import.meta.dirname,
-                'node_modules/.vite/visage/nginx/certs/ca.crt',
-              ),
-              read_only: true,
-            },
             '/otel-lgtm/grafana/data/plugins-bundled': {},
             '/otel-lgtm/visage': {
               bind: resolve(import.meta.dirname, 'otel-lgtm'),

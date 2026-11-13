@@ -11,6 +11,7 @@ import type {
   VisageDexSessions,
   VisageDexUser,
   VisageExternalIdpOptions,
+  VisageMount,
   VisageOAuth2Client,
   VisageOptions,
   VisageProxyPolicy,
@@ -588,7 +589,7 @@ function resolvePackage(root: string): string {
 function resolveServicesConfig(
   packageName: string,
   appPort: number,
-  options: ResolvedVisageOptions,
+  options: ResolvedVisageOptions & { readonly cache: string },
 ): { readonly [name: string]: ResolvedService } {
   const {
     oidc: { end_session_endpoint },
@@ -727,20 +728,32 @@ function resolveServicesConfig(
                 }
               : {}),
             ...service,
-            ...(mounts === undefined
+            ...(mounts === undefined && service.host === undefined
               ? {}
               : {
-                  volumes: Object.entries(mounts ?? {}).map(
-                    ([target, { read_only, ...mount }]) => ({
-                      target,
-                      read_only,
-                      ...('bind' in mount
-                        ? { type: 'bind' as const, source: mount.bind }
-                        : 'volume' in mount
-                          ? { type: 'volume' as const, source: mount.volume }
-                          : { type: 'tmpfs' as const, tmpfs: mount }),
-                    }),
-                  ),
+                  volumes: Object.entries<VisageMount>({
+                    ...(service.host === undefined
+                      ? {}
+                      : {
+                          '/etc/ssl/certs/visage.pem': {
+                            bind: resolve(
+                              options.cache,
+                              NginxBindSource,
+                              'certs/ca.crt',
+                            ),
+                            read_only: true,
+                          },
+                        }),
+                    ...mounts,
+                  }).map(([target, { read_only, ...mount }]) => ({
+                    target,
+                    read_only,
+                    ...('bind' in mount
+                      ? { type: 'bind' as const, source: mount.bind }
+                      : 'volume' in mount
+                        ? { type: 'volume' as const, source: mount.volume }
+                        : { type: 'tmpfs' as const, tmpfs: mount }),
+                  })),
                 }),
             ...(service.network_mode === undefined
               ? { networks: [...new Set([name, ...(networks ?? [])])] }

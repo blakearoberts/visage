@@ -544,6 +544,14 @@ test('writeComposeConfig omits public hosts, upstreams, and clients from service
   assert.equal(compose.services.api.host, undefined);
   assert.equal(compose.services.api.upstream, undefined);
   assert.equal(compose.services.api.client, undefined);
+  assert.deepEqual(compose.services.api.volumes, [
+    {
+      type: 'bind',
+      source: join(config.cache, 'nginx/certs/ca.crt'),
+      target: '/etc/ssl/certs/visage.pem',
+      read_only: true,
+    },
+  ]);
 });
 
 test('writeDexConfig renders default OIDC, client, and session settings', (t) => {

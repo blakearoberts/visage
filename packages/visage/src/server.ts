@@ -68,12 +68,9 @@ export function createVisageServer(options: VisageOptions): VisageServer {
         throw new Error('Failed to resolve port');
       }
 
-      const root = process.cwd();
       const config = resolveConfig({
         ...resolvedOptions,
         appPort: address.port,
-        root,
-        cache: join(root, '.visage'),
       });
       stop ??= await startVisageServer(config);
     },

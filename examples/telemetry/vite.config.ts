@@ -1,8 +1,6 @@
-import { resolve } from 'node:path';
-
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import visage from '@blakearoberts/visage';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [
@@ -22,7 +20,7 @@ export default defineConfig({
             scopes: ['openid', 'email', 'offline_access'],
             redirectUri: 'https://g.localhost:9001/login/generic_oauth',
           },
-          build: resolve(import.meta.dirname, 'otel-lgtm'),
+          build: './otel-lgtm',
           environment: {
             TEMPO_EXTRA_ARGS:
               '--config.file=/otel-lgtm/visage/tempo-config.yaml',
@@ -33,17 +31,12 @@ export default defineConfig({
           mounts: {
             '/data': { volume: 'lgtm-data' },
             '/otel-lgtm/grafana/conf/custom.ini': {
-              bind: resolve(import.meta.dirname, 'otel-lgtm/grafana.ini'),
+              bind: './otel-lgtm/grafana.ini',
               read_only: true,
             },
             '/otel-lgtm/grafana/data/plugins-bundled': {},
-            '/otel-lgtm/visage': {
-              bind: resolve(import.meta.dirname, 'otel-lgtm'),
-              read_only: true,
-            },
-            '/otel-lgtm/visage/dashboards': {
-              bind: resolve(import.meta.dirname, 'otel-lgtm/dashboards'),
-            },
+            '/otel-lgtm/visage': { bind: './otel-lgtm', read_only: true },
+            '/otel-lgtm/visage/dashboards': { bind: './otel-lgtm/dashboards' },
             '/tmp': {},
           },
           upstream: {

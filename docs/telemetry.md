@@ -48,8 +48,7 @@ When telemetry is enabled:
 
 Compose lifecycle output is written to `logs/compose.log`. With telemetry
 disabled, container output is followed into `logs/container.log` without
-redaction. Logs live under `<Vite cacheDir>/visage` in plugin mode or
-`<cwd>/.visage` in server mode.
+redaction. Logs live under `<dir>/.visage`.
 
 When telemetry is enabled:
 

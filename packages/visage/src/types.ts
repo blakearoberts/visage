@@ -3,6 +3,13 @@
  */
 export type VisageOptions = {
   /**
+   * Project directory for relative bind sources, local build contexts, package
+   * identity, and generated files in `.visage`.
+   * Defaults to Vite's project root in the plugin, or the working directory in
+   * the standalone server. Relative values resolve from the working directory.
+   */
+  readonly dir?: string;
+  /**
    * Browser-facing hostname for the local Visage HTTPS origin.
    *
    * @defaultValue `'localhost'`

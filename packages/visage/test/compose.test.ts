@@ -23,8 +23,7 @@ test('startCompose reuses generated secrets and honors environment overrides', a
     ...resolveOptions({
       services: { worker: { client: { secret: 'worker-secret' } } },
     }),
-    cache: '',
-    root: 'compose-test',
+    dir: 'compose-test',
     appPort: 6173,
   });
   const previousSecrets = {
@@ -86,8 +85,7 @@ test('startCompose reuses generated secrets and honors environment overrides', a
 test('startCompose cleans up failed detached startup', async (t) => {
   const config = resolveConfig({
     ...resolveOptions({}),
-    cache: '',
-    root: 'compose-test',
+    dir: 'compose-test',
     appPort: 6173,
   });
   const spawnSyncCalls: SpawnCall[] = [];

@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -23,18 +29,22 @@ function resolvedConfig(
   t: TestContext,
   options: VisageOptions = {},
 ): VisageConfig {
-  const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
-  t.after(() => rmSync(cache, { recursive: true, force: true }));
+  const dir = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
+  mkdirSync(join(dir, '.visage'));
+  writeFileSync(
+    join(dir, 'package.json'),
+    JSON.stringify({ name: 'render-test' }),
+  );
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   return resolveConfig({
     ...resolveOptions({
+      dir,
       host: 'app.local.test',
       port: 9443,
       idp: { users: [] },
       ...options,
     }),
-    root: 'render-test',
-    cache,
     appPort: 6173,
   });
 }
@@ -172,7 +182,7 @@ test('writeComposeConfig preserves bind and tmpfs mounts without named declarati
   assert.deepEqual(compose.services.storage.volumes, [
     {
       type: 'bind',
-      source: 'config',
+      source: join(config.cache, '../config'),
       target: '/etc/config.json',
       read_only: true,
     },
@@ -247,7 +257,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.dex.volumes, [
     {
       type: 'bind',
-      source: './dex.yaml',
+      source: join(config.cache, 'dex.yaml'),
       target: '/etc/dex/dex.yaml',
       read_only: true,
     },
@@ -267,12 +277,12 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.equal(compose.services.nginx.depends_on, undefined);
   assert.deepEqual(compose.services.nginx.volumes, [
-    { type: 'bind', source: './nginx', target: '/etc/nginx' },
+    { type: 'bind', source: join(config.cache, 'nginx'), target: '/etc/nginx' },
     { type: 'tmpfs', target: '/var/cache/nginx', tmpfs: { mode: 0o1777 } },
     { type: 'tmpfs', target: '/etc/nginx/http.d', tmpfs: { mode: 0o1777 } },
     {
       type: 'bind',
-      source: './nginx-extra.conf',
+      source: join(config.cache, '../nginx-extra.conf'),
       target: '/etc/nginx/conf.d/extra.conf',
       read_only: true,
     },
@@ -285,13 +295,13 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     {
       type: 'bind',
-      source: './oauth2-proxy.yml',
+      source: join(config.cache, 'oauth2-proxy.yml'),
       target: '/etc/oauth2-proxy/config.yml',
       read_only: true,
     },
     {
       type: 'bind',
-      source: './oauth2-proxy-extra.yml',
+      source: join(config.cache, '../oauth2-proxy-extra.yml'),
       target: '/etc/oauth2-proxy/extra.yml',
       read_only: true,
     },
@@ -320,7 +330,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     volumes: [
       {
         type: 'bind',
-        source: './api.yml',
+        source: join(config.cache, '../api.yml'),
         target: '/etc/api/api.yml',
         read_only: true,
       },

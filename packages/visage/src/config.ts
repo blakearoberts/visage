@@ -57,6 +57,7 @@ type ResolvedDexConfig = {
 };
 
 type ResolvedVisageOptions = {
+  readonly dir: string;
   readonly host: string;
   readonly port: number;
   readonly telemetry: false | { readonly fluentd: string };
@@ -309,6 +310,7 @@ const DefaultProxyPolicy = {
 } as const satisfies ResolvedProxyPolicy;
 
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
+  const dir = resolve(options.dir ?? process.cwd());
   const { host = 'localhost', port = 9001, cookie = {}, idp = {} } = options;
   const cookieName = cookie.name ?? 'sess';
   const cookiePath = cookie.path ?? '/';
@@ -336,6 +338,21 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
           name,
           {
             ...service,
+            ...(service.build === undefined
+              ? {}
+              : { build: resolve(dir, service.build) }),
+            ...(service.mounts === undefined
+              ? {}
+              : {
+                  mounts: Object.fromEntries(
+                    Object.entries(service.mounts).map(([target, mount]) => [
+                      target,
+                      'bind' in mount
+                        ? { ...mount, bind: resolve(dir, mount.bind) }
+                        : mount,
+                    ]),
+                  ),
+                }),
             ...(client === undefined
               ? {}
               : {
@@ -362,6 +379,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     ),
   );
   return {
+    dir,
     host,
     port,
     secrets: {
@@ -450,13 +468,15 @@ function resolveOidcOptions(
 
 export function resolveConfig(
   options: ResolvedVisageOptions & {
-    readonly root: string;
-    readonly cache: string;
     readonly appPort: number;
   },
 ): VisageConfig {
-  const packageName = resolvePackage(options.root);
-  const services = resolveServicesConfig(packageName, options.appPort, options);
+  const cache = join(options.dir, '.visage');
+  const packageName = resolvePackage(options.dir);
+  const services = resolveServicesConfig(packageName, options.appPort, {
+    ...options,
+    cache,
+  });
   for (const name of Object.keys(options.remotes)) {
     if (Object.hasOwn(services, name)) {
       throw new Error('Remote and service names must be distinct');
@@ -485,7 +505,7 @@ export function resolveConfig(
     package: packageName,
     telemetry: Boolean(options.telemetry),
     secrets: options.secrets,
-    cache: options.cache,
+    cache,
     files: {
       compose: './compose.yaml',
       dex: DexBindSource,
@@ -752,7 +772,10 @@ function resolveServicesConfig(
                     target,
                     read_only,
                     ...('bind' in mount
-                      ? { type: 'bind' as const, source: mount.bind }
+                      ? {
+                          type: 'bind' as const,
+                          source: resolve(options.cache, mount.bind),
+                        }
                       : 'volume' in mount
                         ? { type: 'volume' as const, source: mount.volume }
                         : { type: 'tmpfs' as const, tmpfs: mount }),

@@ -18,6 +18,7 @@ export default defineConfig({
         grafana: {
           host: 'g.localhost',
           client: {
+            id: 'grafana',
             scopes: ['openid', 'email', 'offline_access'],
             redirectUri: 'https://g.localhost:9001/login/generic_oauth',
           },
@@ -68,7 +69,6 @@ export default defineConfig({
             },
             '/otel-lgtm/visage/dashboards': {
               bind: resolve(import.meta.dirname, 'otel-lgtm/dashboards'),
-              read_only: false,
             },
             '/tmp': {},
           },
@@ -76,7 +76,7 @@ export default defineConfig({
             port: 3000,
             auth: { enabled: false },
             headers: { Cookie: '$http_cookie' },
-            locations: { '/api/live/': { ws: true } },
+            ws: true,
           },
         },
         whoami: { image: 'traefik/whoami' },

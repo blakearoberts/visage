@@ -73,12 +73,15 @@ visage({
 
 ### Remotes
 
-Remotes are upstreams without a Visage managed Docker container process. Remotes
-automatically configure an upstream with the same host and `/{name}/` location.
+Services are Docker Compose services managed by the Vite dev-server lifecycle.
+Services automatically create upstream locations on the app host at `/{name}`
+which Visage removes before proxying the request to the service host.
 
 ```ts
 visage({
-  remotes: { api: { host: 'api.remote.test' } },
+  remotes: {
+    api: { host: 'api.remote.test' },
+  },
 });
 ```
 

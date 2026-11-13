@@ -433,14 +433,25 @@ export type VisageUpstream = VisageProxyPolicy & {
    */
   readonly port?: number;
   /**
-   * Path-location policies for this upstream, keyed by NGINX location path.
+   * Path prefix prepended to all upstream locations. The prefix is removed from
+   * requests passed to the upstream host.
+   *
+   * @defaultValue `/{name}`
+   */
+  readonly prefix?: string;
+  /**
+   * Per-path configuration on {@link VisageUpstream.host}.
    *
    * `true` uses the upstream defaults; `false` omits the location.
    * The default location is included unless explicitly set to `false`.
    *
-   * @defaultValue `/` for services with a hostname; `/{upstreamName}/` otherwise.
+   * @defaultValue `{ '/': true }`
    */
-  readonly locations?: { readonly [path: string]: VisageProxyPolicy | boolean };
+  readonly locations?:
+    | {
+        readonly [path: string]: VisageProxyPolicy | boolean;
+      }
+    | false;
   /** Additional raw NGINX http context. */
   readonly http?: string;
 };

@@ -322,7 +322,9 @@ test('resolveConfig applies upstream headers to every location', (t) => {
           'X-Service': 'api',
           'X-Scope': 'upstream',
         },
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {},
           '/admin/': {
             headers: {
@@ -364,7 +366,8 @@ test('resolveConfig derives upstreams from services', (t) => {
         upstream: {
           host: 'api.local.test',
           port: 9000,
-          locations: { '/api/': { auth: { forward: 'access' } } },
+          prefix: '',
+          locations: { '/': false, '/api/': { auth: { forward: 'access' } } },
         },
       },
       whoami: {
@@ -504,7 +507,8 @@ test('resolveConfig uses service upstream configuration for custom and built-in 
             host: 'service.internal',
             headers: { 'X-Example': 'value' },
             port: 8080,
-            locations: { '/custom/': { auth: { enabled: false } } },
+            prefix: '',
+            locations: { '/': false, '/custom/': { auth: { enabled: false } } },
           },
         },
       },
@@ -514,10 +518,7 @@ test('resolveConfig uses service upstream configuration for custom and built-in 
     assert.equal(upstream.host, 'service.internal');
     assert.equal(upstream.port, 8080);
     assert.equal(upstream.scheme, 'http');
-    assert.deepEqual(Object.keys(upstream.locations), [
-      `/${name}/`,
-      '/custom/',
-    ]);
+    assert.deepEqual(Object.keys(upstream.locations), ['/custom/']);
     assert.equal(upstream.locations['/custom/'].auth.enabled, false);
     assert.equal(upstream.locations['/custom/'].headers['X-Example'], 'value');
   }
@@ -534,7 +535,9 @@ test('resolveConfig derives service forwarding and WebSocket settings after loca
           ws: true,
           headers: { 'X-Service': 'api', 'X-Layer': 'service' },
           directives: { proxy_connect_timeout: '20s' },
+          prefix: '',
           locations: {
+            '/': false,
             '/api/': {
               auth: { forward: false },
               ws: false,
@@ -573,7 +576,9 @@ test('resolveConfig inherits upstream proxy policy and permits location override
         csrf: false,
         ws: true,
         directives: { proxy_read_timeout: '20s' },
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {},
           '/public/': {
             auth: { enabled: false, forward: false },
@@ -631,7 +636,13 @@ test('resolveConfig treats true locations as default policies and omits false lo
   const upstream = {
     ws: true,
     headers: { 'X-Example': 'value' },
-    locations: { '/enabled/': true, '/object/': {}, '/disabled/': false },
+    prefix: '',
+    locations: {
+      '/': false,
+      '/enabled/': true,
+      '/object/': {},
+      '/disabled/': false,
+    },
   };
   const { config } = resolveForTest(t, {
     services: { api: { upstream } },
@@ -666,7 +677,9 @@ test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) 
   const { config } = resolveForTest(t, {
     remotes: {
       api: {
+        prefix: '',
         locations: {
+          '/': false,
           '/live/': { ws: true },
           '/plain/': {},
           '/disabled/': { ws: false },
@@ -890,7 +903,9 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
       api: {
         host: 'api',
         port: 8080,
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {
             auth: { forward: 'access' },
             headers: {
@@ -955,6 +970,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   });
   assert.equal(config.remotes.metrics.locations['/metrics/'].csrf, true);
   assert.deepEqual(config.remotes.metrics.locations['/metrics/'].directives, {
+    rewrite: ['^/metrics/(.*)$ /$1 break'],
     proxy_buffer_size: ['8k'],
     proxy_connect_timeout: ['5s'],
     proxy_read_timeout: ['5s'],
@@ -1000,13 +1016,15 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
       api: {
         image: 'example/api:test',
         upstream: {
-          locations: { '/api/': { auth: { forward: true } } },
+          prefix: '',
+          locations: { '/': false, '/api/': { auth: { forward: true } } },
         },
       },
     },
     remotes: {
       external: {
-        locations: { '/external/': { auth: { forward: true } } },
+        prefix: '',
+        locations: { '/': false, '/external/': { auth: { forward: true } } },
       },
     },
   });
@@ -1026,7 +1044,9 @@ test('resolveConfig applies CSRF defaults and overrides', (t) => {
   const { config } = resolveForTest(t, {
     remotes: {
       api: {
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {},
           '/browser/': { csrf: true },
           '/webhook/': { auth: { enabled: false } },
@@ -1066,7 +1086,8 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
         command: ['serve'],
         upstream: {
           host: 'backend',
-          locations: { '/api/': {} },
+          prefix: '',
+          locations: { '/': false, '/api/': {} },
         },
       },
     },
@@ -1074,7 +1095,9 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
       external: {
         host: 'external',
         port: 3000,
+        prefix: '',
         locations: {
+          '/': false,
           '/app/': {
             auth: { forward: 'access' },
             headers: {
@@ -1270,11 +1293,18 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
       worker: { host: 'worker.dev.test', upstream: false },
       custom: {
         host: 'custom.dev.test',
-        upstream: { locations: { '/custom/': { auth: { enabled: false } } } },
+        upstream: {
+          prefix: '',
+          locations: { '/custom/': { auth: { enabled: false } } },
+        },
       },
     },
     remotes: {
-      remote: { host: 'remote.internal', locations: { '/remote/': {} } },
+      remote: {
+        host: 'remote.internal',
+        prefix: '',
+        locations: { '/': false, '/remote/': {} },
+      },
     },
   });
   assert.deepEqual(config.hosts, [
@@ -1661,5 +1691,36 @@ test('resolveConfig treats a true service upstream like an empty override', (t) 
       host === undefined ? '/api/' : '/',
     ]);
     assert.equal(config.services.api.upstream.host, 'api');
+  }
+});
+
+test('resolveConfig can disable the prefixed default location', (t) => {
+  const { config } = resolveForTest(t, {
+    remotes: { api: { locations: { '/': false, '/health': true } } },
+  });
+  assert.deepEqual(Object.keys(config.remotes.api.locations), ['/api/health']);
+  assert.deepEqual(
+    config.remotes.api.locations['/api/health'].directives.rewrite,
+    ['^/api/(.*)$ /$1 break'],
+  );
+});
+
+test('resolveConfig disables all locations without disabling the upstream', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      api: { upstream: { locations: false } },
+      hosted: { host: 'hosted.dev.test', upstream: { locations: false } },
+    },
+    remotes: { remote: { locations: false } },
+  });
+  assert.ok(config.services.api.upstream);
+  assert.ok(config.services.hosted.upstream);
+  for (const upstream of [
+    config.services.api.upstream,
+    config.services.hosted.upstream,
+    config.remotes.remote,
+  ]) {
+    assert.deepEqual(upstream.locations, {});
+    assert.equal(upstream.port, upstream.scheme === 'https' ? 443 : 80);
   }
 });

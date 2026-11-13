@@ -218,7 +218,8 @@ test('writeComposeConfig renders base services and custom services', (t) => {
           '/etc/api/api.yml': { bind: './api.yml', read_only: true },
         },
         upstream: {
-          locations: { '/api/': {} },
+          prefix: '',
+          locations: { '/': false, '/api/': {} },
         },
       },
       db: {
@@ -708,7 +709,9 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
     remotes: {
       api: {
         port: 8080,
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {
             headers: {
               'X-Auth-Request-Groups': '$auth_groups',
@@ -926,9 +929,8 @@ test('writeNginxAssets redirects only document navigation auth failures', (t) =>
   const config = resolvedConfig(t, {
     remotes: {
       api: {
-        locations: {
-          '/api/': {},
-        },
+        prefix: '',
+        locations: { '/': false, '/api/': {} },
       },
     },
   });
@@ -958,7 +960,9 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
     telemetry: {},
     remotes: {
       api: {
+        prefix: '',
         locations: {
+          '/': false,
           '/live/': { ws: true },
           '/plain/': {},
           '/disabled/': { ws: false },
@@ -1257,13 +1261,15 @@ test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t
       api: {
         image: 'example/api:test',
         upstream: {
-          locations: { '/api/': { auth: { forward: true } } },
+          prefix: '',
+          locations: { '/': false, '/api/': { auth: { forward: true } } },
         },
       },
     },
     remotes: {
       external: {
-        locations: { '/external/': { auth: { forward: true } } },
+        prefix: '',
+        locations: { '/': false, '/external/': { auth: { forward: true } } },
       },
     },
   });
@@ -1292,7 +1298,9 @@ test('writeNginxAssets supports explicit access-token forwarding', (t) => {
     remotes: {
       api: {
         port: 8080,
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {
             auth: { forward: 'access' },
           },

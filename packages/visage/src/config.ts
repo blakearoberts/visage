@@ -141,19 +141,16 @@ export const DockerImages = parse(
 const BaseAppUpstream = {
   host: 'host.docker.internal',
   scheme: 'http',
-  headers: { [VisageEdgeKeyHeader]: '$edge_key' },
-  locations: {
-    '/': {
-      ws: true,
-      auth: { enabled: true, forward: false },
-      csrf: true,
-      headers: {
-        Host: '$host',
-        'X-Auth-Request-User': '$auth_user',
-        'X-Auth-Request-Email': '$auth_email',
-      },
-    },
+  prefix: '',
+  headers: {
+    Host: '$host',
+    [VisageEdgeKeyHeader]: '$edge_key',
+    'X-Auth-Request-User': '$auth_user',
+    'X-Auth-Request-Email': '$auth_email',
   },
+  auth: { enabled: true, forward: false },
+  csrf: true,
+  ws: true,
 } as const satisfies VisageUpstream;
 
 const DexBindSource = './dex.yaml';
@@ -171,10 +168,11 @@ const BaseServiceDex = {
     host: '127.0.0.1',
     scheme: 'http',
     port: 5556,
-    locations: { '/': false, '/dex/': true },
+    prefix: '',
+    headers: { Cookie: 'dex_session=$cookie_dex_session' },
     auth: { enabled: false, forward: false },
     csrf: false,
-    headers: { Cookie: 'dex_session=$cookie_dex_session' },
+    locations: { '/': false, '/dex/': true },
     directives: {
       limit_req: ['zone=dex_password burst=5 nodelay'],
       limit_req_status: ['429'],
@@ -224,9 +222,9 @@ const BaseServiceOAuth2Proxy = {
     host: '127.0.0.1',
     scheme: 'http',
     port: 4180,
+    prefix: '',
     locations: {
       '/': false,
-      '/oauth2_proxy/': false,
       '/oauth/': {
         ws: false,
         auth: { enabled: false, forward: false },
@@ -284,21 +282,14 @@ const BaseServiceOTelCollector = {
   },
   upstream: {
     port: 4318,
-    locations: {
-      '/': false,
-      '/otelcol/': false,
-      '/t/': {
-        auth: { enabled: true },
-        directives: { rewrite: '^/t/(.*)$ /$1 break' },
-      },
-    },
+    prefix: '/t',
   },
 } as const satisfies VisageService;
 
 const DefaultProxyPolicy = {
-  ws: false,
   auth: { enabled: true, forward: false },
   csrf: true,
+  ws: false,
   headers: {
     Host: '$host',
 
@@ -422,7 +413,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
               scheme: issuer.protocol === 'https:' ? 'https' : 'http',
               host: issuer.hostname,
               port: Number(issuer.port) || undefined,
-              locations: { '/idp/': false },
+              locations: false,
             },
           }
         : {}),
@@ -483,8 +474,7 @@ export function resolveConfig(
     upstream: resolveUpstreamConfig(
       'app',
       { ...BaseAppUpstream, port: options.appPort },
-      false,
-      options.host,
+      'id',
     ),
   };
   return {
@@ -513,7 +503,15 @@ export function resolveConfig(
     remotes: Object.fromEntries(
       Object.entries(options.remotes).map(([name, upstream]) => [
         name,
-        resolveUpstreamConfig(name, upstream, true),
+        resolveUpstreamConfig(
+          name,
+          {
+            ...upstream,
+            scheme: upstream.scheme ?? 'https',
+            headers: { Host: upstream.host ?? name, ...upstream.headers },
+          },
+          'access',
+        ),
       ]),
     ),
   };
@@ -706,69 +704,75 @@ function resolveServicesConfig(
   };
   return Object.fromEntries(
     Object.entries(services).map(
-      ([name, { upstream, networks, mounts, ...service }]) => [
-        name,
-        {
-          restart: 'on-failure',
-          security_opt: ['no-new-privileges:true'],
-          cap_drop: ['ALL'],
-          read_only: !service.secrets?.length,
-          ...(telemetry && telemetry.fluentd !== undefined
-            ? {
-                logging: {
-                  driver: 'fluentd',
-                  options: {
-                    'fluentd-address': telemetry.fluentd,
-                    'fluentd-async': 'true',
-                    'cache-disabled': 'true',
-                    tag: `${packageName}/${name}|{{.ImageName}}`,
+      ([name, { upstream: override, networks, mounts, ...service }]) => {
+        const upstream = typeof override === 'object' ? override : {};
+        return [
+          name,
+          {
+            restart: 'on-failure',
+            security_opt: ['no-new-privileges:true'],
+            cap_drop: ['ALL'],
+            read_only: !service.secrets?.length,
+            ...(telemetry && telemetry.fluentd !== undefined
+              ? {
+                  logging: {
+                    driver: 'fluentd',
+                    options: {
+                      'fluentd-address': telemetry.fluentd,
+                      'fluentd-async': 'true',
+                      'cache-disabled': 'true',
+                      tag: `${packageName}/${name}|{{.ImageName}}`,
+                    },
                   },
-                },
-              }
-            : {}),
-          ...service,
-          ...(mounts === undefined
-            ? {}
-            : {
-                volumes: Object.entries(mounts ?? {}).map(
-                  ([target, { read_only, ...mount }]) => ({
-                    target,
-                    read_only,
-                    ...('bind' in mount
-                      ? { type: 'bind' as const, source: mount.bind }
-                      : 'volume' in mount
-                        ? { type: 'volume' as const, source: mount.volume }
-                        : { type: 'tmpfs' as const, tmpfs: mount }),
-                  }),
-                ),
-              }),
-          ...(service.network_mode === undefined
-            ? { networks: [...new Set([name, ...(networks ?? [])])] }
-            : {}),
-          ...(upstream === false
-            ? {}
-            : {
-                upstream: resolveUpstreamConfig(
-                  name,
-                  upstream,
-                  false,
-                  service.host,
-                ),
-              }),
-        } satisfies ResolvedService,
-      ],
+                }
+              : {}),
+            ...service,
+            ...(mounts === undefined
+              ? {}
+              : {
+                  volumes: Object.entries(mounts ?? {}).map(
+                    ([target, { read_only, ...mount }]) => ({
+                      target,
+                      read_only,
+                      ...('bind' in mount
+                        ? { type: 'bind' as const, source: mount.bind }
+                        : 'volume' in mount
+                          ? { type: 'volume' as const, source: mount.volume }
+                          : { type: 'tmpfs' as const, tmpfs: mount }),
+                    }),
+                  ),
+                }),
+            ...(service.network_mode === undefined
+              ? { networks: [...new Set([name, ...(networks ?? [])])] }
+              : {}),
+            ...(override === false
+              ? {}
+              : {
+                  upstream: resolveUpstreamConfig(
+                    name,
+                    {
+                      ...upstream,
+                      prefix:
+                        upstream.prefix ??
+                        (service.host === undefined ? `/${name}` : ''),
+                    },
+                    'id',
+                  ),
+                }),
+          } satisfies ResolvedService,
+        ];
+      },
     ),
   );
 }
 
 function resolveUpstreamConfig(
   name: string,
-  options: VisageUpstream | true | undefined,
-  external: boolean,
-  publicHost?: string,
+  upstream: VisageUpstream,
+  defaultForward: 'id' | 'access',
 ): ResolvedUpstream {
-  const upstream = typeof options === 'object' ? options : {};
-  const scheme = upstream.scheme ?? (external ? 'https' : 'http');
+  const prefix = upstream.prefix ?? `/${name}`;
+  const scheme = upstream.scheme ?? 'http';
   const host = upstream.host ?? name;
   return {
     ...upstream,
@@ -776,16 +780,20 @@ function resolveUpstreamConfig(
     host,
     port: upstream.port ?? (scheme === 'https' ? 443 : 80),
     locations: Object.fromEntries(
-      Object.entries({
-        [publicHost === undefined ? `/${name}/` : '/']: true,
-        ...upstream.locations,
-      }).flatMap(([path, location]) => {
-        if (location === false) return [];
-        const policy = location === true ? {} : location;
-        const auth = { ...upstream.auth, ...policy.auth };
-        return [
-          [
-            path,
+      Object.entries<VisageProxyPolicy | boolean>(
+        upstream.locations === false
+          ? ({} as const)
+          : ({ '/': true, ...upstream.locations } as const),
+      )
+        .flatMap(([location, policy]) =>
+          policy === false
+            ? []
+            : [[location, policy === true ? {} : policy] as const],
+        )
+        .map(([location, policy]) => {
+          const auth = { ...upstream.auth, ...policy.auth };
+          return [
+            prefix + location,
             resolveUpstreamLocationConfig({
               ...policy,
               ws: policy.ws ?? upstream.ws,
@@ -794,21 +802,21 @@ function resolveUpstreamConfig(
                 enabled: auth.enabled ?? true,
                 forward:
                   auth.forward === true
-                    ? external
-                      ? 'access'
-                      : 'id'
+                    ? defaultForward
                     : (auth.forward ?? false),
               },
               headers: {
-                ...(external ? { Host: host } : {}),
                 ...upstream.headers,
                 ...policy.headers,
               },
-              directives: { ...upstream.directives, ...policy.directives },
+              directives: {
+                ...(prefix ? { rewrite: `^${prefix}/(.*)$ /$1 break` } : {}),
+                ...upstream.directives,
+                ...policy.directives,
+              },
             }),
-          ],
-        ];
-      }),
+          ];
+        }),
     ),
   };
 }

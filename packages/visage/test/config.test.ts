@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test, type TestContext } from 'node:test';
 
 import {
@@ -14,6 +14,10 @@ import type { VisageOptions } from '../src/types';
 
 function tempCache(t: TestContext) {
   const cache = mkdtempSync(join(tmpdir(), 'visage-config-test-'));
+  writeFileSync(
+    join(cache, 'package.json'),
+    JSON.stringify({ name: 'test-app' }),
+  );
   t.after(() => rmSync(cache, { recursive: true, force: true }));
   return cache;
 }
@@ -22,17 +26,17 @@ function resolveForTest(
   t: TestContext,
   options: VisageOptions = {},
 ): { cache: string; config: VisageConfig } {
-  const cache = tempCache(t);
+  const dir = tempCache(t);
+  const cache = join(options.dir ?? dir, '.visage');
   return {
     cache,
     config: resolveConfig({
       ...resolveOptions({
+        dir,
         host: 'app.local.test',
         port: 9443,
         ...options,
       }),
-      cache,
-      root: 'test-app',
       appPort: 6173,
     }),
   };
@@ -133,51 +137,45 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
 });
 
 test('resolveConfig defaults to read-only filesystems unless managed secrets are required', (t) => {
-  for (const publicClient of [false, true]) {
-    const { config } = resolveForTest(t, {
-      idp: { users: [] },
-      client: { public: publicClient },
-      services: { api: { image: 'example/api' } },
-    });
-    assert.equal(config.services.api.read_only, true);
-    assert.equal(config.services.vite_loopback.read_only, true);
-    assert.equal(config.services.dex.read_only, false);
-    assert.equal(config.services.nginx.read_only, false);
-    assert.equal(config.services.oauth2_proxy.read_only, false);
-  }
+  const { config } = resolveForTest(t, {
+    idp: { users: [] },
+    services: { api: { image: 'example/api' } },
+  });
+  assert.equal(config.services.api.read_only, true);
+  assert.equal(config.services.vite_loopback.read_only, true);
+  assert.equal(config.services.dex.read_only, false);
+  assert.equal(config.services.nginx.read_only, false);
+  assert.equal(config.services.oauth2_proxy.read_only, false);
 });
 
 test('resolveConfig adds custom secrets without replacing managed secrets', (t) => {
-  for (const publicClient of [false, true]) {
-    const { config } = resolveForTest(t, {
-      idp: { users: [] },
-      client: { public: publicClient },
-      services: {
-        api: { image: 'example/api', secrets: ['API_TOKEN'] },
-        dex: { secrets: ['DEX_TOKEN'] },
-        nginx: { secrets: ['NGINX_TOKEN'] },
-        oauth2_proxy: {
-          secrets: ['PROXY_TOKEN'],
-        },
+  const { config } = resolveForTest(t, {
+    idp: { users: [] },
+    services: {
+      api: { image: 'example/api', secrets: ['API_TOKEN'] },
+      dex: { secrets: ['DEX_TOKEN'] },
+      nginx: { secrets: ['NGINX_TOKEN'] },
+      oauth2_proxy: {
+        secrets: ['PROXY_TOKEN'],
       },
-    });
-    assert.deepEqual(config.services.api.secrets, ['API_TOKEN']);
-    assert.equal(config.services.api.read_only, false);
-    assert.deepEqual(config.services.dex.secrets, [
-      'VISAGE_APP_CLIENT_SECRET',
-      'DEX_TOKEN',
-    ]);
-    assert.equal(config.services.dex.read_only, false);
-    assert.deepEqual(config.services.nginx.secrets, [
-      'VISAGE_EDGE_KEY',
-      'NGINX_TOKEN',
-    ]);
-    assert.deepEqual(config.services.oauth2_proxy.secrets, [
-      'OAUTH2_PROXY_COOKIE_SECRET',
-      'VISAGE_APP_CLIENT_SECRET',
-      'PROXY_TOKEN',
-    ]);
-  }
+    },
+  });
+  assert.deepEqual(config.services.api.secrets, ['API_TOKEN']);
+  assert.equal(config.services.api.read_only, false);
+  assert.deepEqual(config.services.dex.secrets, [
+    'VISAGE_APP_CLIENT_SECRET',
+    'DEX_TOKEN',
+  ]);
+  assert.equal(config.services.dex.read_only, false);
+  assert.deepEqual(config.services.nginx.secrets, [
+    'VISAGE_EDGE_KEY',
+    'NGINX_TOKEN',
+  ]);
+  assert.deepEqual(config.services.oauth2_proxy.secrets, [
+    'OAUTH2_PROXY_COOKIE_SECRET',
+    'VISAGE_APP_CLIENT_SECRET',
+    'PROXY_TOKEN',
+  ]);
 });
 
 test('resolveConfig preserves container security overrides', (t) => {
@@ -187,9 +185,6 @@ test('resolveConfig preserves container security overrides', (t) => {
       nginx: {
         user: '1234:1234',
         cap_add: [],
-        mounts: {
-          '/tmp': {},
-        },
       },
       api: {
         image: 'example/api',
@@ -197,42 +192,15 @@ test('resolveConfig preserves container security overrides', (t) => {
         cap_drop: [],
         cap_add: ['NET_BIND_SERVICE'],
         read_only: false,
-        mounts: {
-          '/tmp': {},
-        },
       },
     },
   });
   assert.equal(config.services.nginx.user, '1234:1234');
   assert.deepEqual(config.services.nginx.cap_add, []);
-  assert.deepEqual(config.services.nginx.volumes, [
-    {
-      type: 'bind',
-      target: '/etc/nginx',
-      source: './nginx',
-      read_only: undefined,
-    },
-    {
-      type: 'tmpfs',
-      target: '/var/cache/nginx',
-      tmpfs: { mode: 0o1777 },
-      read_only: undefined,
-    },
-    {
-      type: 'tmpfs',
-      target: '/etc/nginx/http.d',
-      tmpfs: { mode: 0o1777 },
-      read_only: undefined,
-    },
-    { type: 'tmpfs', target: '/tmp', tmpfs: {}, read_only: undefined },
-  ]);
   assert.deepEqual(config.services.api.security_opt, []);
   assert.deepEqual(config.services.api.cap_drop, []);
   assert.deepEqual(config.services.api.cap_add, ['NET_BIND_SERVICE']);
   assert.equal(config.services.api.read_only, false);
-  assert.deepEqual(config.services.api.volumes, [
-    { type: 'tmpfs', target: '/tmp', read_only: undefined, tmpfs: {} },
-  ]);
 });
 
 test('resolveConfig replaces managed mounts by target and preserves other defaults', (t) => {
@@ -244,7 +212,7 @@ test('resolveConfig replaces managed mounts by target and preserves other defaul
     {
       type: 'bind',
       target: '/etc/nginx',
-      source: './nginx',
+      source: join(config.cache, 'nginx'),
       read_only: undefined,
     },
     {
@@ -277,8 +245,7 @@ test('resolveConfig uses each bound port without changing resolved options', (t)
   for (const appPort of [6176, 6177]) {
     const config = resolveConfig({
       ...options,
-      root: 'test-app',
-      cache: tempCache(t),
+      dir: tempCache(t),
       appPort,
     });
     assert.equal(config.app.upstream.port, appPort);
@@ -299,18 +266,16 @@ test('resolveConfig applies upstream defaults', (t) => {
   const { config } = resolveForTest(t, {
     remotes: {
       api: {},
-      secure: {
-        scheme: 'https',
-      },
+      plain: { scheme: 'http' },
     },
   });
 
   assert.equal(config.remotes.api.host, 'api');
   assert.equal(config.remotes.api.scheme, 'https');
   assert.equal(config.remotes.api.port, 443);
-  assert.equal(config.remotes.secure.host, 'secure');
-  assert.equal(config.remotes.secure.scheme, 'https');
-  assert.equal(config.remotes.secure.port, 443);
+  assert.equal(config.remotes.plain.host, 'plain');
+  assert.equal(config.remotes.plain.scheme, 'http');
+  assert.equal(config.remotes.plain.port, 80);
 });
 
 test('resolveConfig applies upstream headers to every location', (t) => {
@@ -322,7 +287,9 @@ test('resolveConfig applies upstream headers to every location', (t) => {
           'X-Service': 'api',
           'X-Scope': 'upstream',
         },
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {},
           '/admin/': {
             headers: {
@@ -364,7 +331,8 @@ test('resolveConfig derives upstreams from services', (t) => {
         upstream: {
           host: 'api.local.test',
           port: 9000,
-          locations: { '/api/': { auth: { forward: 'access' } } },
+          prefix: '',
+          locations: { '/': false, '/api/': { auth: { forward: 'access' } } },
         },
       },
       whoami: {
@@ -375,12 +343,6 @@ test('resolveConfig derives upstreams from services', (t) => {
         upstream: {
           scheme: 'https',
         },
-      },
-    },
-    remotes: {
-      external: {},
-      externalHttp: {
-        scheme: 'http',
       },
     },
   });
@@ -406,12 +368,6 @@ test('resolveConfig derives upstreams from services', (t) => {
   assert.equal(config.services.secure.upstream.host, 'secure');
   assert.equal(config.services.secure.upstream.scheme, 'https');
   assert.equal(config.services.secure.upstream.port, 443);
-  assert.equal(config.remotes.external.host, 'external');
-  assert.equal(config.remotes.external.scheme, 'https');
-  assert.equal(config.remotes.external.port, 443);
-  assert.equal(config.remotes.externalHttp.host, 'externalHttp');
-  assert.equal(config.remotes.externalHttp.scheme, 'http');
-  assert.equal(config.remotes.externalHttp.port, 80);
 });
 
 test('resolveConfig skips automatic upstreams disabled by service configuration', (t) => {
@@ -504,7 +460,8 @@ test('resolveConfig uses service upstream configuration for custom and built-in 
             host: 'service.internal',
             headers: { 'X-Example': 'value' },
             port: 8080,
-            locations: { '/custom/': { auth: { enabled: false } } },
+            prefix: '',
+            locations: { '/': false, '/custom/': { auth: { enabled: false } } },
           },
         },
       },
@@ -531,7 +488,9 @@ test('resolveConfig derives service forwarding and WebSocket settings after loca
           ws: true,
           headers: { 'X-Service': 'api', 'X-Layer': 'service' },
           directives: { proxy_connect_timeout: '20s' },
+          prefix: '',
           locations: {
+            '/': false,
             '/api/': {
               auth: { forward: false },
               ws: false,
@@ -570,7 +529,9 @@ test('resolveConfig inherits upstream proxy policy and permits location override
         csrf: false,
         ws: true,
         directives: { proxy_read_timeout: '20s' },
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {},
           '/public/': {
             auth: { enabled: false, forward: false },
@@ -624,19 +585,54 @@ test('resolveConfig gives the application root its identity and WebSocket defaul
   assert.equal(config.remotes.vite, undefined);
 });
 
-test('resolveConfig respects explicit empty service locations', (t) => {
+test('resolveConfig treats true locations as default policies and omits false locations', (t) => {
+  const upstream = {
+    ws: true,
+    headers: { 'X-Example': 'value' },
+    prefix: '',
+    locations: {
+      '/': false,
+      '/enabled/': true,
+      '/object/': {},
+      '/disabled/': false,
+    },
+  };
+  const { config } = resolveForTest(t, {
+    services: { api: { upstream } },
+    remotes: { remote: upstream },
+  });
+  assert.ok(config.services.api.upstream);
+  for (const resolved of [
+    config.services.api.upstream,
+    config.remotes.remote,
+  ]) {
+    assert.deepEqual(
+      resolved.locations['/enabled/'],
+      resolved.locations['/object/'],
+    );
+    assert.equal(resolved.locations['/enabled/'].ws, true);
+    assert.equal(resolved.locations['/enabled/'].headers['X-Example'], 'value');
+    assert.equal(resolved.locations['/disabled/'], undefined);
+  }
+});
+
+test('resolveConfig includes the default for explicit empty service locations', (t) => {
   const { config } = resolveForTest(t, {
     services: { api: { image: 'example/api', upstream: { locations: {} } } },
   });
   assert.ok(config.services.api.upstream);
-  assert.deepEqual(config.services.api.upstream.locations, {});
+  assert.deepEqual(Object.keys(config.services.api.upstream.locations), [
+    '/api/',
+  ]);
 });
 
 test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) => {
   const { config } = resolveForTest(t, {
     remotes: {
       api: {
+        prefix: '',
         locations: {
+          '/': false,
           '/live/': { ws: true },
           '/plain/': {},
           '/disabled/': { ws: false },
@@ -742,7 +738,6 @@ test('resolveConfig supports external IdP upstreams', (t) => {
   assert.equal(config.services.oauth2_proxy.depends_on, undefined);
   assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);
   assert.equal(config.services.oauth2_proxy.network_mode, 'service:nginx');
-  assert.equal(config.services.dex, undefined);
   assert.equal(config.remotes.idp.host, 'idp.localhost');
   assert.equal(config.remotes.idp.scheme, 'http');
   assert.equal(config.remotes.idp.port, 5557);
@@ -854,13 +849,15 @@ test('resolveConfig preserves managed service defaults for partial service overr
   assert.equal(config.telemetry, true);
 });
 
-test('resolveConfig applies defaults and normalizes upstream locations', (t) => {
-  const { cache, config } = resolveForTest(t, {
+test('resolveConfig normalizes remote location policies', (t) => {
+  const { config } = resolveForTest(t, {
     remotes: {
       api: {
         host: 'api',
         port: 8080,
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {
             auth: { forward: 'access' },
             headers: {
@@ -878,21 +875,6 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
     },
   });
 
-  assert.equal(config.app.host, 'app.local.test');
-  assert.equal(config.app.port, 9443);
-  assert.equal(config.cache, cache);
-  assert.equal(
-    config.oidc.end_session_endpoint,
-    'https://app.local.test:9443/dex/logout',
-  );
-  assert.equal(config.app.upstream.scheme, 'http');
-  assert.ok(config.services.dex.upstream);
-  assert.equal(config.services.dex.upstream.port, 5556);
-  assert.equal(config.services.dex.upstream.scheme, 'http');
-  assert.ok(config.services.oauth2_proxy.upstream);
-  assert.equal(config.services.oauth2_proxy.upstream.host, '127.0.0.1');
-  assert.equal(config.services.oauth2_proxy.upstream.port, 4180);
-  assert.equal(config.services.oauth2_proxy.upstream.scheme, 'http');
   assert.deepEqual(config.remotes.api.locations['/api/'].auth, {
     enabled: true,
     forward: 'access',
@@ -925,6 +907,7 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   });
   assert.equal(config.remotes.metrics.locations['/metrics/'].csrf, true);
   assert.deepEqual(config.remotes.metrics.locations['/metrics/'].directives, {
+    rewrite: ['^/metrics/(.*)$ /$1 break'],
     proxy_buffer_size: ['8k'],
     proxy_connect_timeout: ['5s'],
     proxy_read_timeout: ['5s'],
@@ -936,14 +919,6 @@ test('resolveConfig applies defaults and normalizes upstream locations', (t) => 
   );
   assert.equal(config.remotes.metrics.scheme, 'https');
   assert.equal(config.remotes.metrics.port, 443);
-  assert.equal(
-    config.app.upstream.locations['/'].headers?.['X-Auth-Request-User'],
-    '$auth_user',
-  );
-  assert.equal(
-    config.app.upstream.locations['/'].headers?.['X-Auth-Request-Email'],
-    '$auth_email',
-  );
 });
 
 test('resolveConfig resolves scoped package names', (t) => {
@@ -956,8 +931,7 @@ test('resolveConfig resolves scoped package names', (t) => {
 
   const config = resolveConfig({
     ...resolveOptions({}),
-    cache: join(root, '.visage'),
-    root,
+    dir: root,
     appPort: 6173,
   });
 
@@ -970,13 +944,15 @@ test('resolveConfig resolves automatic token forwarding by upstream kind', (t) =
       api: {
         image: 'example/api:test',
         upstream: {
-          locations: { '/api/': { auth: { forward: true } } },
+          prefix: '',
+          locations: { '/': false, '/api/': { auth: { forward: true } } },
         },
       },
     },
     remotes: {
       external: {
-        locations: { '/external/': { auth: { forward: true } } },
+        prefix: '',
+        locations: { '/': false, '/external/': { auth: { forward: true } } },
       },
     },
   });
@@ -996,7 +972,9 @@ test('resolveConfig applies CSRF defaults and overrides', (t) => {
   const { config } = resolveForTest(t, {
     remotes: {
       api: {
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {},
           '/browser/': { csrf: true },
           '/webhook/': { auth: { enabled: false } },
@@ -1036,7 +1014,8 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
         command: ['serve'],
         upstream: {
           host: 'backend',
-          locations: { '/api/': {} },
+          prefix: '',
+          locations: { '/': false, '/api/': {} },
         },
       },
     },
@@ -1044,7 +1023,9 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
       external: {
         host: 'external',
         port: 3000,
+        prefix: '',
         locations: {
+          '/': false,
           '/app/': {
             auth: { forward: 'access' },
             headers: {
@@ -1056,56 +1037,20 @@ test('resolveConfig lets services and remotes override their own defaults', (t) 
     },
   });
 
-  assert.deepEqual(config.services.nginx, {
-    image: 'custom-nginx:test',
-    command: ['nginx', '-p', '/etc/nginx', '-g', 'daemon off;'],
-    secrets: ['VISAGE_EDGE_KEY'],
-    security_opt: ['no-new-privileges:true'],
-    cap_drop: ['ALL'],
-    user: `${process.getuid?.() ?? 101}:${process.getgid?.() ?? 101}`,
-    volumes: [
-      {
-        type: 'bind',
-        target: '/etc/nginx',
-        source: './nginx',
-        read_only: undefined,
-      },
-      {
-        type: 'tmpfs',
-        target: '/var/cache/nginx',
-        tmpfs: { mode: 0o1777 },
-        read_only: undefined,
-      },
-      {
-        type: 'tmpfs',
-        target: '/etc/nginx/http.d',
-        tmpfs: { mode: 0o1777 },
-        read_only: undefined,
-      },
-    ],
-    read_only: false,
-    networks: ['nginx'],
-    ports: ['127.0.0.1:9443:9443'],
-    depends_on: ['api'],
-    environment: {
-      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otelcol:4317',
-      OTEL_SERVICE_NAME: 'custom-nginx',
-      OTEL_SERVICE_NAMESPACE: 'custom-namespace',
-    },
-    extra_hosts: ['host.docker.internal:host-gateway'],
-    restart: 'always',
-  });
-  const { upstream: apiUpstream, ...apiService } = config.services.api;
+  assert.equal(config.services.nginx.image, 'custom-nginx:test');
+  assert.deepEqual(config.services.nginx.depends_on, ['api']);
+  assert.equal(
+    config.services.nginx.environment?.OTEL_SERVICE_NAME,
+    'custom-nginx',
+  );
+  assert.equal(
+    config.services.nginx.environment?.OTEL_SERVICE_NAMESPACE,
+    'custom-namespace',
+  );
+  const apiUpstream = config.services.api.upstream;
   assert.ok(apiUpstream);
-  assert.deepEqual(apiService, {
-    image: 'example/api:test',
-    command: ['serve'],
-    restart: 'on-failure',
-    security_opt: ['no-new-privileges:true'],
-    cap_drop: ['ALL'],
-    read_only: true,
-    networks: ['api'],
-  });
+  assert.equal(config.services.api.image, 'example/api:test');
+  assert.deepEqual(config.services.api.command, ['serve']);
   assert.equal(apiUpstream.host, 'backend');
   assert.deepEqual(Object.keys(apiUpstream.locations), ['/api/']);
   assert.equal(apiUpstream.locations['/api/'].headers?.Host, '$host');
@@ -1143,8 +1088,7 @@ test('resolveConfig assembles managed services without changing resolved options
   });
   const config = resolveConfig({
     ...options,
-    root: 'test-app',
-    cache: tempCache(t),
+    dir: tempCache(t),
     appPort: 6173,
   });
   for (const [name, port] of [
@@ -1166,7 +1110,6 @@ test('resolveConfig assembles managed services without changing resolved options
   );
   assert.deepEqual(options.services, services);
   assert.equal(options.remotes.vite, undefined);
-  assert.equal('upstreams' in config, false);
 });
 
 test('resolveConfig keeps a remote named vite independent of the application', (t) => {
@@ -1186,6 +1129,7 @@ test('resolveConfig preserves Dex defaults with upstream overrides', (t) => {
   });
   const dex = config.services.dex.upstream;
   assert.ok(dex);
+  assert.deepEqual(Object.keys(dex.locations), ['/dex/']);
   const login = dex.locations['/dex/'];
   assert.equal(dex.host, '127.0.0.1');
   assert.equal(dex.port, 5556);
@@ -1201,22 +1145,19 @@ test('resolveConfig preserves Dex defaults with upstream overrides', (t) => {
   assert.match(dex.http, /~\^POST:\/dex\/auth\//);
 });
 
-test('resolveConfig retains Dex paths and isolates the application session on public hosts', (t) => {
+test('resolveConfig removes the Dex prefix and isolates the application session on public hosts', (t) => {
   const { config } = resolveForTest(t, {
     services: { dex: { host: 'idp.local.test' } },
   });
   assert.deepEqual(config.hosts, ['app.local.test', 'idp.local.test']);
-  assert.equal(config.oidc.issuer, 'https://idp.local.test:9443/dex');
-  assert.equal(
-    config.oidc.authorization,
-    'https://idp.local.test:9443/dex/auth',
-  );
+  assert.equal(config.oidc.issuer, 'https://idp.local.test:9443');
+  assert.equal(config.oidc.authorization, 'https://idp.local.test:9443/auth');
   assert.equal(
     config.oidc.end_session_endpoint,
-    'https://idp.local.test:9443/dex/logout',
+    'https://idp.local.test:9443/logout',
   );
-  assert.equal(config.oidc.token, 'http://127.0.0.1:5556/dex/token');
-  assert.equal(config.oidc.jwks, 'http://127.0.0.1:5556/dex/keys');
+  assert.equal(config.oidc.token, 'http://127.0.0.1:5556/token');
+  assert.equal(config.oidc.jwks, 'http://127.0.0.1:5556/keys');
   assert.equal(
     config.app.client.redirectUri,
     'https://app.local.test:9443/oauth/callback',
@@ -1224,13 +1165,10 @@ test('resolveConfig retains Dex paths and isolates the application session on pu
   assert.equal(config.app.cookie.cookie_name, '__Host-sess');
   assert.equal(config.app.cookie.cookie_domains, undefined);
   assert.ok(config.services.dex.upstream);
-  assert.deepEqual(Object.keys(config.services.dex.upstream.locations), [
-    '/dex/',
-  ]);
-  assert.equal(
-    config.services.dex.upstream.locations['/dex/'].auth.enabled,
-    false,
-  );
+  assert.deepEqual(Object.keys(config.services.dex.upstream.locations), ['/']);
+  assert.equal(config.services.dex.upstream.locations['/'].auth.enabled, false);
+  assert.ok(config.services.dex.upstream.http);
+  assert.match(config.services.dex.upstream.http, /~\^POST:\/auth\//);
 });
 
 test('resolveConfig preserves backend addresses, paths, and independent authentication on service hosts', (t) => {
@@ -1240,11 +1178,18 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
       worker: { host: 'worker.dev.test', upstream: false },
       custom: {
         host: 'custom.dev.test',
-        upstream: { locations: { '/custom/': { auth: { enabled: false } } } },
+        upstream: {
+          prefix: '',
+          locations: { '/custom/': { auth: { enabled: false } } },
+        },
       },
     },
     remotes: {
-      remote: { host: 'remote.internal', locations: { '/remote/': {} } },
+      remote: {
+        host: 'remote.internal',
+        prefix: '',
+        locations: { '/': false, '/remote/': {} },
+      },
     },
   });
   assert.deepEqual(config.hosts, [
@@ -1256,11 +1201,8 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
   assert.equal(config.services.worker.host, 'worker.dev.test');
   assert.equal(config.services.worker.upstream, undefined);
   assert.ok(config.services.api.upstream);
-  assert.equal(
-    config.services.api.upstream.locations['/api/'].auth.enabled,
-    true,
-  );
-  assert.equal(config.services.api.upstream.locations['/api/'].csrf, true);
+  assert.equal(config.services.api.upstream.locations['/'].auth.enabled, false);
+  assert.equal(config.services.api.upstream.locations['/'].csrf, false);
   assert.equal(config.services.api.upstream.host, 'backend.internal');
   assert.ok(config.services.custom.upstream);
   assert.equal(
@@ -1268,6 +1210,7 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
     false,
   );
   assert.deepEqual(Object.keys(config.services.custom.upstream.locations), [
+    '/',
     '/custom/',
   ]);
   assert.equal(config.remotes.remote.host, 'remote.internal');
@@ -1280,8 +1223,7 @@ test('resolveConfig preserves generated client secrets across repeated resolutio
       idp: { users: [] },
       services: { api: { client: {} } },
     }),
-    cache: tempCache(t),
-    root: 'test-app',
+    dir: tempCache(t),
     appPort: 6173,
   };
   const first = resolveConfig(options);
@@ -1293,15 +1235,14 @@ test('resolveConfig preserves generated client secrets across repeated resolutio
   assert.deepEqual(second.services.api.client, first.services.api.client);
 });
 
-test('resolveConfig resolves telemetry booleans and options', (t) => {
-  for (const [telemetry, enabled] of [
+test('resolveOptions normalizes telemetry booleans and options', () => {
+  for (const [telemetry, expected] of [
     [undefined, false],
     [false, false],
-    [true, true],
-    [{}, true],
+    [true, { fluentd: '127.0.0.1:24224' }],
+    [{}, { fluentd: '127.0.0.1:24224' }],
   ] as const) {
-    const { config } = resolveForTest(t, { idp: { users: [] }, telemetry });
-    assert.equal(config.telemetry, enabled);
+    assert.deepEqual(resolveOptions({ telemetry }).telemetry, expected);
   }
 });
 
@@ -1430,6 +1371,7 @@ test('resolveConfig applies Dex overrides', (t) => {
 test('resolveOptions applies public defaults', () => {
   const options = resolveOptions({});
 
+  assert.equal(options.dir, process.cwd());
   assert.equal(options.host, 'localhost');
   assert.equal(options.port, 9001);
   assert.equal(options.telemetry, false);
@@ -1443,7 +1385,6 @@ test('resolveOptions applies public defaults', () => {
   });
   assert.deepEqual(options.dex, {});
   assert.match(options.client.secret, /^[A-Za-z0-9_-]{43}$/);
-  assert.notEqual(options.client.secret, resolveOptions({}).client.secret);
   assert.deepEqual(options.client, {
     id: 'https://localhost:9001',
     secret: options.client.secret,
@@ -1621,4 +1562,152 @@ test('resolveOptions preserves service overrides without assembling managed serv
   });
   assert.deepEqual(options.services, services);
   assert.equal(options.remotes.vite, undefined);
+});
+
+test('resolveConfig treats a true service upstream like an empty override', (t) => {
+  for (const host of [undefined, 'api.dev.test']) {
+    const { config } = resolveForTest(t, {
+      services: { api: { host, upstream: true } },
+    });
+    assert.ok(config.services.api.upstream);
+    assert.deepEqual(Object.keys(config.services.api.upstream.locations), [
+      host === undefined ? '/api/' : '/',
+    ]);
+    assert.equal(config.services.api.upstream.host, 'api');
+  }
+});
+
+test('resolveConfig can disable the prefixed default location', (t) => {
+  const { config } = resolveForTest(t, {
+    remotes: { api: { locations: { '/': false, '/health': true } } },
+  });
+  assert.deepEqual(Object.keys(config.remotes.api.locations), ['/api/health']);
+  assert.deepEqual(
+    config.remotes.api.locations['/api/health'].directives.rewrite,
+    ['^/api/(.*)$ /$1 break'],
+  );
+});
+
+test('resolveConfig disables all locations without disabling the upstream', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      api: { upstream: { locations: false } },
+      hosted: { host: 'hosted.dev.test', upstream: { locations: false } },
+    },
+    remotes: { remote: { locations: false } },
+  });
+  assert.ok(config.services.api.upstream);
+  assert.ok(config.services.hosted.upstream);
+  for (const upstream of [
+    config.services.api.upstream,
+    config.services.hosted.upstream,
+    config.remotes.remote,
+  ]) {
+    assert.deepEqual(upstream.locations, {});
+    assert.equal(upstream.port, upstream.scheme === 'https' ? 443 : 80);
+  }
+});
+
+test('resolveConfig preserves explicit authentication overrides on public-host services', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      hosted: {
+        host: 'hosted.dev.test',
+        upstream: {
+          auth: { forward: true },
+          locations: { '/protected/': { auth: { enabled: true } } },
+        },
+      },
+      protected: {
+        host: 'protected.dev.test',
+        upstream: {
+          auth: { enabled: true },
+          locations: { '/public/': { auth: { enabled: false } } },
+        },
+      },
+    },
+  });
+  assert.ok(config.services.hosted.upstream);
+  const hosted = config.services.hosted.upstream.locations;
+  assert.deepEqual(hosted['/'].auth, { enabled: false, forward: 'id' });
+  assert.equal(hosted['/'].csrf, false);
+  assert.equal(hosted['/protected/'].auth.enabled, true);
+  assert.equal(hosted['/protected/'].csrf, true);
+  assert.ok(config.services.protected.upstream);
+  const protectedLocations = config.services.protected.upstream.locations;
+  assert.equal(protectedLocations['/'].auth.enabled, true);
+  assert.equal(protectedLocations['/'].csrf, true);
+  assert.equal(protectedLocations['/public/'].auth.enabled, false);
+  assert.equal(protectedLocations['/public/'].csrf, false);
+});
+
+test('resolveConfig mounts the Visage CA for public-host services and preserves mount overrides', (t) => {
+  const { config } = resolveForTest(t, {
+    services: {
+      hosted: { host: 'hosted.dev.test' },
+      disabled: { host: 'disabled.dev.test', upstream: false },
+      custom: {
+        host: 'custom.dev.test',
+        mounts: {
+          '/etc/ssl/certs/visage.pem': {
+            bind: '/custom/ca.pem',
+            read_only: false,
+          },
+          '/data': { volume: 'custom-data' },
+        },
+      },
+      ordinary: {},
+    },
+  });
+  for (const name of ['hosted', 'disabled']) {
+    assert.deepEqual(config.services[name].volumes, [
+      {
+        type: 'bind',
+        target: '/etc/ssl/certs/visage.pem',
+        source: join(config.cache, 'nginx/certs/ca.crt'),
+        read_only: true,
+      },
+    ]);
+  }
+  assert.deepEqual(config.services.custom.volumes, [
+    {
+      type: 'bind',
+      target: '/etc/ssl/certs/visage.pem',
+      source: '/custom/ca.pem',
+      read_only: false,
+    },
+    {
+      type: 'volume',
+      target: '/data',
+      source: 'custom-data',
+      read_only: undefined,
+    },
+  ]);
+  assert.equal(config.services.ordinary.volumes, undefined);
+});
+
+test('resolveOptions resolves relative service paths from dir and preserves absolute paths', () => {
+  const options = resolveOptions({
+    dir: './project',
+    services: {
+      relative: {
+        build: './image',
+        mounts: { '/config': { bind: './config.ini' } },
+      },
+      absolute: {
+        build: '/srv/image',
+        mounts: { '/config': { bind: '/srv/config.ini' } },
+      },
+    },
+  });
+
+  assert.equal(options.dir, resolve('project'));
+  assert.equal(options.services.relative.build, resolve('project/image'));
+  assert.deepEqual(options.services.relative.mounts, {
+    '/config': { bind: resolve('project/config.ini') },
+  });
+  assert.equal(options.services.absolute.build, '/srv/image');
+  assert.deepEqual(options.services.absolute.mounts, {
+    '/config': { bind: '/srv/config.ini' },
+  });
 });

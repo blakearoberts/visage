@@ -3,6 +3,13 @@
  */
 export type VisageOptions = {
   /**
+   * Project directory for relative bind sources, local build contexts, package
+   * identity, and generated files in `.visage`.
+   * Defaults to Vite's project root in the plugin, or the working directory in
+   * the standalone server. Relative values resolve from the working directory.
+   */
+  readonly dir?: string;
+  /**
    * Browser-facing hostname for the local Visage HTTPS origin.
    *
    * @defaultValue `'localhost'`
@@ -406,12 +413,8 @@ export type VisageService = {
   readonly restart?: 'always' | 'no' | 'on-failure' | 'unless-stopped';
   /** Mounts keyed by container target. Matching volume names share storage. */
   readonly mounts?: Readonly<Record<string, VisageMount>>;
-  /**
-   * Optional upstream override for this service. Omit this to create a default
-   * upstream from the service name. Set to false to disable automatic upstream
-   * creation.
-   */
-  readonly upstream?: VisageUpstream | false;
+  /** Upstream override for this service. */
+  readonly upstream?: VisageUpstream | boolean;
 };
 
 /**
@@ -437,11 +440,25 @@ export type VisageUpstream = VisageProxyPolicy & {
    */
   readonly port?: number;
   /**
-   * Path-location policies for this upstream, keyed by NGINX location path.
+   * Path prefix prepended to all upstream locations. The prefix is removed from
+   * requests passed to the upstream host.
    *
-   * @defaultValue `/{upstreamName}/`
+   * @defaultValue `/{name}`
    */
-  readonly locations?: { readonly [path: string]: VisageProxyPolicy };
+  readonly prefix?: string;
+  /**
+   * Per-path configuration on {@link VisageUpstream.host}.
+   *
+   * `true` uses the upstream defaults; `false` omits the location.
+   * The default location is included unless explicitly set to `false`.
+   *
+   * @defaultValue `{ '/': true }`
+   */
+  readonly locations?:
+    | {
+        readonly [path: string]: VisageProxyPolicy | boolean;
+      }
+    | false;
   /** Additional raw NGINX http context. */
   readonly http?: string;
 };
@@ -457,7 +474,7 @@ export type VisageProxyPolicy = {
     /**
      * Whether requests to this location require OAuth2 authentication.
      *
-     * @defaultValue `true`
+     * @defaultValue `true` for the app host, `false` otherwise.
      */
     readonly enabled?: boolean;
     /**

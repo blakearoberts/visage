@@ -14,3 +14,6 @@ curl --fail --silent --show-error --request PATCH --header 'Content-Type: applic
   --data-binary @/tmp/repository.yaml \
   'http://127.0.0.1:3000/apis/provisioning.grafana.app/v0alpha1/namespaces/default/repositories/repo?fieldManager=visage'
 SH
+
+# Let the mounted INI file control anonymous authentication at runtime.
+RUN sed -i '/^# Respect user-provided environment variables/,/^fi$/d' run-grafana.sh

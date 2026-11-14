@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -23,18 +29,22 @@ function resolvedConfig(
   t: TestContext,
   options: VisageOptions = {},
 ): VisageConfig {
-  const cache = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
-  t.after(() => rmSync(cache, { recursive: true, force: true }));
+  const dir = mkdtempSync(join(tmpdir(), 'visage-render-test-'));
+  mkdirSync(join(dir, '.visage'));
+  writeFileSync(
+    join(dir, 'package.json'),
+    JSON.stringify({ name: 'render-test' }),
+  );
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   return resolveConfig({
     ...resolveOptions({
+      dir,
       host: 'app.local.test',
       port: 9443,
       idp: { users: [] },
       ...options,
     }),
-    root: 'render-test',
-    cache,
     appPort: 6173,
   });
 }
@@ -172,7 +182,7 @@ test('writeComposeConfig preserves bind and tmpfs mounts without named declarati
   assert.deepEqual(compose.services.storage.volumes, [
     {
       type: 'bind',
-      source: 'config',
+      source: join(config.cache, '../config'),
       target: '/etc/config.json',
       read_only: true,
     },
@@ -218,7 +228,8 @@ test('writeComposeConfig renders base services and custom services', (t) => {
           '/etc/api/api.yml': { bind: './api.yml', read_only: true },
         },
         upstream: {
-          locations: { '/api/': {} },
+          prefix: '',
+          locations: { '/': false, '/api/': {} },
         },
       },
       db: {
@@ -246,7 +257,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.dex.volumes, [
     {
       type: 'bind',
-      source: './dex.yaml',
+      source: join(config.cache, 'dex.yaml'),
       target: '/etc/dex/dex.yaml',
       read_only: true,
     },
@@ -266,12 +277,12 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.equal(compose.services.nginx.depends_on, undefined);
   assert.deepEqual(compose.services.nginx.volumes, [
-    { type: 'bind', source: './nginx', target: '/etc/nginx' },
+    { type: 'bind', source: join(config.cache, 'nginx'), target: '/etc/nginx' },
     { type: 'tmpfs', target: '/var/cache/nginx', tmpfs: { mode: 0o1777 } },
     { type: 'tmpfs', target: '/etc/nginx/http.d', tmpfs: { mode: 0o1777 } },
     {
       type: 'bind',
-      source: './nginx-extra.conf',
+      source: join(config.cache, '../nginx-extra.conf'),
       target: '/etc/nginx/conf.d/extra.conf',
       read_only: true,
     },
@@ -284,13 +295,13 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     {
       type: 'bind',
-      source: './oauth2-proxy.yml',
+      source: join(config.cache, 'oauth2-proxy.yml'),
       target: '/etc/oauth2-proxy/config.yml',
       read_only: true,
     },
     {
       type: 'bind',
-      source: './oauth2-proxy-extra.yml',
+      source: join(config.cache, '../oauth2-proxy-extra.yml'),
       target: '/etc/oauth2-proxy/extra.yml',
       read_only: true,
     },
@@ -319,7 +330,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     volumes: [
       {
         type: 'bind',
-        source: './api.yml',
+        source: join(config.cache, '../api.yml'),
         target: '/etc/api/api.yml',
         read_only: true,
       },
@@ -543,6 +554,14 @@ test('writeComposeConfig omits public hosts, upstreams, and clients from service
   assert.equal(compose.services.api.host, undefined);
   assert.equal(compose.services.api.upstream, undefined);
   assert.equal(compose.services.api.client, undefined);
+  assert.deepEqual(compose.services.api.volumes, [
+    {
+      type: 'bind',
+      source: join(config.cache, 'nginx/certs/ca.crt'),
+      target: '/etc/ssl/certs/visage.pem',
+      read_only: true,
+    },
+  ]);
 });
 
 test('writeDexConfig renders default OIDC, client, and session settings', (t) => {
@@ -695,7 +714,7 @@ test('writeDexConfig uses the public IdP host and application callback', (t) => 
   });
   writeDexConfig(config);
   const dex = parse(readGenerated(config, './dex.yaml'));
-  assert.equal(dex.issuer, 'https://idp.local.test:9443/dex');
+  assert.equal(dex.issuer, 'https://idp.local.test:9443');
   assert.deepEqual(dex.staticClients[0].redirectURIs, [
     'https://app.local.test:9443/oauth/callback',
   ]);
@@ -708,7 +727,9 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
     remotes: {
       api: {
         port: 8080,
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {
             headers: {
               'X-Auth-Request-Groups': '$auth_groups',
@@ -926,9 +947,8 @@ test('writeNginxAssets redirects only document navigation auth failures', (t) =>
   const config = resolvedConfig(t, {
     remotes: {
       api: {
-        locations: {
-          '/api/': {},
-        },
+        prefix: '',
+        locations: { '/': false, '/api/': {} },
       },
     },
   });
@@ -958,7 +978,9 @@ test('writeNginxAssets renders WebSocket proxy policy only when enabled', (t) =>
     telemetry: {},
     remotes: {
       api: {
+        prefix: '',
         locations: {
+          '/': false,
           '/live/': { ws: true },
           '/plain/': {},
           '/disabled/': { ws: false },
@@ -1257,13 +1279,15 @@ test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t
       api: {
         image: 'example/api:test',
         upstream: {
-          locations: { '/api/': { auth: { forward: true } } },
+          prefix: '',
+          locations: { '/': false, '/api/': { auth: { forward: true } } },
         },
       },
     },
     remotes: {
       external: {
-        locations: { '/external/': { auth: { forward: true } } },
+        prefix: '',
+        locations: { '/': false, '/external/': { auth: { forward: true } } },
       },
     },
   });
@@ -1292,7 +1316,9 @@ test('writeNginxAssets supports explicit access-token forwarding', (t) => {
     remotes: {
       api: {
         port: 8080,
+        prefix: '',
         locations: {
+          '/': false,
           '/api/': {
             auth: { forward: 'access' },
           },
@@ -1403,7 +1429,7 @@ test('writeNginxAssets isolates Dex public-host routes from application authenti
   assert.match(app, /location = \/oauth\/auth/);
   assert.doesNotMatch(app, /location \/dex\//);
   assert.match(idp, /server_name idp\.local\.test;/);
-  assert.match(idp, /location \/dex\//);
+  assert.match(idp, /location \/ \{/);
   assert.match(idp, /proxy_pass http:\/\/dex;/);
   assert.match(
     idp,
@@ -1417,7 +1443,7 @@ test('writeNginxAssets isolates Dex public-host routes from application authenti
   assert.match(locationBlock(idp, '@auth_401'), /return 401;/);
   assert.match(
     locationBlock(nginx, '/oauth/sign_out'),
-    /idp\.local\.test:9443\/dex\/logout/,
+    /idp\.local\.test:9443\/logout/,
   );
 });
 
@@ -1437,10 +1463,11 @@ test('writeNginxAssets separates service public hosts from backend TLS names', (
     upstreamBlock(nginx, 'api'),
     /server backend\.internal:443 resolve;/,
   );
-  const api = locationBlock(nginx, '/api/');
+  const [, , server] = nginx.split('\n    server {');
+  const api = locationBlock(server, '/');
   assert.match(api, /proxy_ssl_name\s+backend\.internal;/);
   assert.match(api, /proxy_ssl_verify\s+on;/);
-  assert.match(api, /auth_request\s+\/oauth\/auth;/);
+  assert.doesNotMatch(api, /auth_request\s+\/oauth\/auth;/);
 });
 
 test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret', (t) => {
@@ -1660,10 +1687,7 @@ test('writeOauth2ProxyConfig uses the public IdP host with host-only application
   });
   writeOauth2ProxyConfig(config);
   const oauth2 = readGenerated(config, './oauth2-proxy.yml');
-  assert.match(
-    oauth2,
-    /login_url = "https:\/\/idp\.local\.test:9443\/dex\/auth"/,
-  );
+  assert.match(oauth2, /login_url = "https:\/\/idp\.local\.test:9443\/auth"/);
   assert.match(
     oauth2,
     /whitelist_domains = \["app\.local\.test", "app\.local\.test:9443", "idp\.local\.test:9443"\]/,

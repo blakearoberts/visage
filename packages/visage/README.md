@@ -86,8 +86,8 @@ visage({ host: 'localhost', port: 9001 });
 ### Services
 
 Services are Docker Compose services managed by the Vite dev-server lifecycle.
-Additional services automatically configure an upstream with the same name,
-host, and `/{name}/` location.
+Services automatically create upstream locations on the app host at `/{name}`
+which Visage removes before proxying the request to the service host.
 
 ```ts
 visage({
@@ -113,7 +113,8 @@ visage({
 ### Remotes
 
 Remotes are upstreams without a Visage managed Docker container process. Remotes
-automatically configure an upstream with the same host and `/{name}/` location.
+automatically create upstream locations on the app host behind at `/{name}`
+which Visage removes before proxying the request to the upstream host.
 
 ```ts
 visage({
@@ -137,9 +138,7 @@ visage({
   remotes: {
     api: {
       host: 'api.remote.test',
-      locations: {
-        '/api/v1': { auth: { forward: true } },
-      },
+      auth: { forward: true },
     },
   },
 });
@@ -153,19 +152,15 @@ automatically. Capture and forward optional identity values as needed:
 visage({
   remotes: {
     api: {
-      locations: {
-        '/api/': {
-          directives: {
-            auth_request_set: [
-              '$auth_groups $upstream_http_x_auth_request_groups',
-              '$auth_preferred_username $upstream_http_x_auth_request_preferred_username',
-            ],
-          },
-          headers: {
-            'X-Auth-Request-Groups': '$auth_groups',
-            'X-Auth-Request-Preferred-Username': '$auth_preferred_username',
-          },
-        },
+      directives: {
+        auth_request_set: [
+          '$auth_groups $upstream_http_x_auth_request_groups',
+          '$auth_preferred_username $upstream_http_x_auth_request_preferred_username',
+        ],
+      },
+      headers: {
+        'X-Auth-Request-Groups': '$auth_groups',
+        'X-Auth-Request-Preferred-Username': '$auth_preferred_username',
       },
     },
   },

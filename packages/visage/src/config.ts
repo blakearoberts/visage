@@ -11,6 +11,7 @@ import type {
   VisageDexSessions,
   VisageDexUser,
   VisageExternalIdpOptions,
+  VisageMount,
   VisageOAuth2Client,
   VisageOptions,
   VisageProxyPolicy,
@@ -56,6 +57,7 @@ type ResolvedDexConfig = {
 };
 
 type ResolvedVisageOptions = {
+  readonly dir: string;
   readonly host: string;
   readonly port: number;
   readonly telemetry: false | { readonly fluentd: string };
@@ -79,15 +81,15 @@ type ResolvedProxyPolicy = {
     readonly forward: false | 'id' | 'access';
   };
   readonly csrf: boolean;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly directives: Readonly<Record<string, readonly string[]>>;
+  readonly headers: { readonly [name: string]: string };
+  readonly directives: { readonly [name: string]: readonly string[] };
 };
 
 type ResolvedUpstream = {
   readonly scheme: 'http' | 'https';
   readonly host: string;
   readonly port: number;
-  readonly locations: Readonly<Record<string, ResolvedProxyPolicy>>;
+  readonly locations: { readonly [path: string]: ResolvedProxyPolicy };
   readonly http?: string;
 };
 
@@ -125,8 +127,8 @@ export type VisageConfig = {
   };
   readonly oidc: OIDCEndpoint;
   readonly dex?: ResolvedDexConfig;
-  readonly services: Readonly<Record<string, ResolvedService>>;
-  readonly remotes: Readonly<Record<string, ResolvedUpstream>>;
+  readonly services: { readonly [name: string]: ResolvedService };
+  readonly remotes: { readonly [name: string]: ResolvedUpstream };
 };
 
 export const VisageEdgeKeyHeader = 'X-Visage-Edge-Key';
@@ -136,24 +138,21 @@ export const DockerImages = parse(
     new URL('../docker-compose.images.yml', import.meta.url),
     'utf8',
   ),
-).services as Record<string, { image: string }>;
+).services as { readonly [name: string]: { readonly image: string } };
 
 const BaseAppUpstream = {
   host: 'host.docker.internal',
   scheme: 'http',
-  headers: { [VisageEdgeKeyHeader]: '$edge_key' },
-  locations: {
-    '/': {
-      ws: true,
-      auth: { enabled: true, forward: false },
-      csrf: true,
-      headers: {
-        Host: '$host',
-        'X-Auth-Request-User': '$auth_user',
-        'X-Auth-Request-Email': '$auth_email',
-      },
-    },
+  prefix: '',
+  headers: {
+    Host: '$host',
+    [VisageEdgeKeyHeader]: '$edge_key',
+    'X-Auth-Request-User': '$auth_user',
+    'X-Auth-Request-Email': '$auth_email',
   },
+  auth: { enabled: true, forward: false },
+  csrf: true,
+  ws: true,
 } as const satisfies VisageUpstream;
 
 const DexBindSource = './dex.yaml';
@@ -171,19 +170,14 @@ const BaseServiceDex = {
     host: '127.0.0.1',
     scheme: 'http',
     port: 5556,
+    prefix: '',
+    headers: { Cookie: 'dex_session=$cookie_dex_session' },
     auth: { enabled: false, forward: false },
     csrf: false,
-    headers: { Cookie: 'dex_session=$cookie_dex_session' },
     directives: {
       limit_req: ['zone=dex_password burst=5 nodelay'],
       limit_req_status: ['429'],
     },
-    http: `
-      map "$request_method:$uri" $dex_password_limit_key {
-          default "";
-          ~^POST:/dex/auth/[^/]+/login$ $binary_remote_addr;
-      }
-      limit_req_zone $dex_password_limit_key zone=dex_password:1m rate=1r/s;`,
   },
 } as const satisfies VisageService;
 
@@ -223,7 +217,9 @@ const BaseServiceOAuth2Proxy = {
     host: '127.0.0.1',
     scheme: 'http',
     port: 4180,
+    prefix: '',
     locations: {
+      '/': false,
       '/oauth/': {
         ws: false,
         auth: { enabled: false, forward: false },
@@ -281,19 +277,14 @@ const BaseServiceOTelCollector = {
   },
   upstream: {
     port: 4318,
-    locations: {
-      '/t/': {
-        auth: { enabled: true },
-        directives: { rewrite: '^/t/(.*)$ /$1 break' },
-      },
-    },
+    prefix: '/t',
   },
 } as const satisfies VisageService;
 
 const DefaultProxyPolicy = {
-  ws: false,
   auth: { enabled: true, forward: false },
   csrf: true,
+  ws: false,
   headers: {
     Host: '$host',
 
@@ -319,6 +310,7 @@ const DefaultProxyPolicy = {
 } as const satisfies ResolvedProxyPolicy;
 
 export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
+  const dir = resolve(options.dir ?? process.cwd());
   const { host = 'localhost', port = 9001, cookie = {}, idp = {} } = options;
   const cookieName = cookie.name ?? 'sess';
   const cookiePath = cookie.path ?? '/';
@@ -326,6 +318,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
   const oidc = resolveOidcOptions(
     `https://${options.services?.dex?.host ?? host}:${port}`,
     'issuer' in idp ? idp : undefined,
+    options.services?.dex?.host === undefined ? '/dex' : '',
   );
   const issuer = new URL(oidc.issuer);
   const client = {
@@ -345,6 +338,21 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
           name,
           {
             ...service,
+            ...(service.build === undefined
+              ? {}
+              : { build: resolve(dir, service.build) }),
+            ...(service.mounts === undefined
+              ? {}
+              : {
+                  mounts: Object.fromEntries(
+                    Object.entries(service.mounts).map(([target, mount]) => [
+                      target,
+                      'bind' in mount
+                        ? { ...mount, bind: resolve(dir, mount.bind) }
+                        : mount,
+                    ]),
+                  ),
+                }),
             ...(client === undefined
               ? {}
               : {
@@ -371,6 +379,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
     ),
   );
   return {
+    dir,
     host,
     port,
     secrets: {
@@ -417,7 +426,7 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
               scheme: issuer.protocol === 'https:' ? 'https' : 'http',
               host: issuer.hostname,
               port: Number(issuer.port) || undefined,
-              locations: {},
+              locations: false,
             },
           }
         : {}),
@@ -428,16 +437,17 @@ export function resolveOptions(options: VisageOptions): ResolvedVisageOptions {
 
 function resolveOidcOptions(
   origin: string,
-  idp?: VisageExternalIdpOptions,
+  idp: VisageExternalIdpOptions | undefined,
+  prefix: string,
 ): OIDCEndpoint {
   if (idp === undefined) {
     const { host, port } = BaseServiceDex.upstream;
     return {
-      issuer: `${origin}/dex`,
-      authorization: `${origin}/dex/auth`,
-      token: `http://${host}:${port}/dex/token`,
-      jwks: `http://${host}:${port}/dex/keys`,
-      end_session_endpoint: `${origin}/dex/logout`,
+      issuer: `${origin}${prefix}`,
+      authorization: `${origin}${prefix}/auth`,
+      token: `http://${host}:${port}${prefix}/token`,
+      jwks: `http://${host}:${port}${prefix}/keys`,
+      end_session_endpoint: `${origin}${prefix}/logout`,
     };
   }
   const { issuer, algs, end_session_endpoint, authorization, token, jwks } =
@@ -458,13 +468,15 @@ function resolveOidcOptions(
 
 export function resolveConfig(
   options: ResolvedVisageOptions & {
-    readonly root: string;
-    readonly cache: string;
     readonly appPort: number;
   },
 ): VisageConfig {
-  const packageName = resolvePackage(options.root);
-  const services = resolveServicesConfig(packageName, options.appPort, options);
+  const cache = join(options.dir, '.visage');
+  const packageName = resolvePackage(options.dir);
+  const services = resolveServicesConfig(packageName, options.appPort, {
+    ...options,
+    cache,
+  });
   for (const name of Object.keys(options.remotes)) {
     if (Object.hasOwn(services, name)) {
       throw new Error('Remote and service names must be distinct');
@@ -478,7 +490,7 @@ export function resolveConfig(
     upstream: resolveUpstreamConfig(
       'app',
       { ...BaseAppUpstream, port: options.appPort },
-      false,
+      'id',
     ),
   };
   return {
@@ -493,7 +505,7 @@ export function resolveConfig(
     package: packageName,
     telemetry: Boolean(options.telemetry),
     secrets: options.secrets,
-    cache: options.cache,
+    cache,
     files: {
       compose: './compose.yaml',
       dex: DexBindSource,
@@ -507,7 +519,15 @@ export function resolveConfig(
     remotes: Object.fromEntries(
       Object.entries(options.remotes).map(([name, upstream]) => [
         name,
-        resolveUpstreamConfig(name, upstream, true),
+        resolveUpstreamConfig(
+          name,
+          {
+            ...upstream,
+            scheme: upstream.scheme ?? 'https',
+            headers: { Host: upstream.host ?? name, ...upstream.headers },
+          },
+          'access',
+        ),
       ]),
     ),
   };
@@ -584,13 +604,14 @@ function resolvePackage(root: string): string {
 function resolveServicesConfig(
   packageName: string,
   appPort: number,
-  options: ResolvedVisageOptions,
-): Record<string, ResolvedService> {
+  options: ResolvedVisageOptions & { readonly cache: string },
+): { readonly [name: string]: ResolvedService } {
   const {
     oidc: { end_session_endpoint },
     services: { dex = {}, nginx = {}, oauth2_proxy = {} },
     telemetry,
   } = options;
+  const dexPrefix = dex.host === undefined ? '/dex' : '';
   const services: ResolvedVisageOptions['services'] = {
     ...options.services,
     ...(options.dex !== undefined
@@ -612,7 +633,17 @@ function resolveServicesConfig(
             upstream:
               dex.upstream === false
                 ? false
-                : { ...BaseServiceDex.upstream, ...dex.upstream },
+                : {
+                    ...BaseServiceDex.upstream,
+                    locations: { '/': false, [dexPrefix + '/']: true },
+                    http: `
+                      map "$request_method:$uri" $dex_password_limit_key {
+                          default "";
+                          ~^POST:${dexPrefix}/auth/[^/]+/login$ $binary_remote_addr;
+                      }
+                      limit_req_zone $dex_password_limit_key zone=dex_password:1m rate=1r/s;`,
+                    ...(typeof dex.upstream === 'object' ? dex.upstream : {}),
+                  },
             environment: { ...BaseServiceDex.environment, ...dex.environment },
           },
         }
@@ -697,50 +728,84 @@ function resolveServicesConfig(
   };
   return Object.fromEntries(
     Object.entries(services).map(
-      ([name, { upstream, networks, mounts, ...service }]) => [
-        name,
-        {
-          restart: 'on-failure',
-          security_opt: ['no-new-privileges:true'],
-          cap_drop: ['ALL'],
-          read_only: !service.secrets?.length,
-          ...(telemetry && telemetry.fluentd !== undefined
-            ? {
-                logging: {
-                  driver: 'fluentd',
-                  options: {
-                    'fluentd-address': telemetry.fluentd,
-                    'fluentd-async': 'true',
-                    'cache-disabled': 'true',
-                    tag: `${packageName}/${name}|{{.ImageName}}`,
+      ([name, { upstream: override, networks, mounts, ...service }]) => {
+        const upstream = typeof override === 'object' ? override : {};
+        return [
+          name,
+          {
+            restart: 'on-failure',
+            security_opt: ['no-new-privileges:true'],
+            cap_drop: ['ALL'],
+            read_only: !service.secrets?.length,
+            ...(telemetry && telemetry.fluentd !== undefined
+              ? {
+                  logging: {
+                    driver: 'fluentd',
+                    options: {
+                      'fluentd-address': telemetry.fluentd,
+                      'fluentd-async': 'true',
+                      'cache-disabled': 'true',
+                      tag: `${packageName}/${name}|{{.ImageName}}`,
+                    },
                   },
-                },
-              }
-            : {}),
-          ...service,
-          ...(mounts === undefined
-            ? {}
-            : {
-                volumes: Object.entries(mounts ?? {}).map(
-                  ([target, { read_only, ...mount }]) => ({
+                }
+              : {}),
+            ...service,
+            ...(mounts === undefined && service.host === undefined
+              ? {}
+              : {
+                  volumes: Object.entries<VisageMount>({
+                    ...(service.host === undefined
+                      ? {}
+                      : {
+                          '/etc/ssl/certs/visage.pem': {
+                            bind: resolve(
+                              options.cache,
+                              NginxBindSource,
+                              'certs/ca.crt',
+                            ),
+                            read_only: true,
+                          },
+                        }),
+                    ...mounts,
+                  }).map(([target, { read_only, ...mount }]) => ({
                     target,
                     read_only,
                     ...('bind' in mount
-                      ? { type: 'bind' as const, source: mount.bind }
+                      ? {
+                          type: 'bind' as const,
+                          source: resolve(options.cache, mount.bind),
+                        }
                       : 'volume' in mount
                         ? { type: 'volume' as const, source: mount.volume }
                         : { type: 'tmpfs' as const, tmpfs: mount }),
-                  }),
-                ),
-              }),
-          ...(service.network_mode === undefined
-            ? { networks: [...new Set([name, ...(networks ?? [])])] }
-            : {}),
-          ...(upstream === false
-            ? {}
-            : { upstream: resolveUpstreamConfig(name, upstream ?? {}, false) }),
-        } satisfies ResolvedService,
-      ],
+                  })),
+                }),
+            ...(service.network_mode === undefined
+              ? { networks: [...new Set([name, ...(networks ?? [])])] }
+              : {}),
+            ...(override === false
+              ? {}
+              : {
+                  upstream: resolveUpstreamConfig(
+                    name,
+                    {
+                      ...upstream,
+                      auth: {
+                        ...upstream.auth,
+                        enabled:
+                          upstream.auth?.enabled ?? service.host === undefined,
+                      },
+                      prefix:
+                        upstream.prefix ??
+                        (service.host === undefined ? `/${name}` : ''),
+                    },
+                    'id',
+                  ),
+                }),
+          } satisfies ResolvedService,
+        ];
+      },
     ),
   );
 }
@@ -748,9 +813,10 @@ function resolveServicesConfig(
 function resolveUpstreamConfig(
   name: string,
   upstream: VisageUpstream,
-  external: boolean,
+  defaultForward: 'id' | 'access',
 ): ResolvedUpstream {
-  const scheme = upstream.scheme ?? (external ? 'https' : 'http');
+  const prefix = upstream.prefix ?? `/${name}`;
+  const scheme = upstream.scheme ?? 'http';
   const host = upstream.host ?? name;
   return {
     ...upstream,
@@ -758,11 +824,20 @@ function resolveUpstreamConfig(
     host,
     port: upstream.port ?? (scheme === 'https' ? 443 : 80),
     locations: Object.fromEntries(
-      Object.entries(upstream.locations ?? { [`/${name}/`]: {} }).map(
-        ([path, policy]) => {
+      Object.entries<VisageProxyPolicy | boolean>(
+        upstream.locations === false
+          ? ({} as const)
+          : ({ '/': true, ...upstream.locations } as const),
+      )
+        .flatMap(([location, policy]) =>
+          policy === false
+            ? []
+            : [[location, policy === true ? {} : policy] as const],
+        )
+        .map(([location, policy]) => {
           const auth = { ...upstream.auth, ...policy.auth };
           return [
-            path,
+            prefix + location,
             resolveUpstreamLocationConfig({
               ...policy,
               ws: policy.ws ?? upstream.ws,
@@ -771,21 +846,21 @@ function resolveUpstreamConfig(
                 enabled: auth.enabled ?? true,
                 forward:
                   auth.forward === true
-                    ? external
-                      ? 'access'
-                      : 'id'
+                    ? defaultForward
                     : (auth.forward ?? false),
               },
               headers: {
-                ...(external ? { Host: host } : {}),
                 ...upstream.headers,
                 ...policy.headers,
               },
-              directives: { ...upstream.directives, ...policy.directives },
+              directives: {
+                ...(prefix ? { rewrite: `^${prefix}/(.*)$ /$1 break` } : {}),
+                ...upstream.directives,
+                ...policy.directives,
+              },
             }),
           ];
-        },
-      ),
+        }),
     ),
   };
 }

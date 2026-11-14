@@ -5,6 +5,7 @@
   "trailingComma": "all",
   "useTabs": false,
   "bracketSpacing": true,
+  "plugins": ["@blakearoberts/prettier-plugin-helm"],
   "overrides": [
     {
       "files": ["*.md", "**/*.md"],

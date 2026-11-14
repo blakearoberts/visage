@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/blakearoberts/visage/issues"
   },
-  "homepage": "https://github.com/blakearoberts/visage#readme",
+  "homepage": "https://github.com/blakearoberts/visage/tree/main/packages/visage#readme",
   "keywords": [
     "authentication",
     "hmr",
@@ -39,7 +39,7 @@
     "otelcol"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "publishConfig": {
     "access": "public",

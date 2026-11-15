@@ -1,5 +1,6 @@
 import type { Plugin, ViteDevServer } from 'vite';
 
+import { getComposeStatus } from './compose';
 import { resolveConfig, resolveOptions } from './config';
 import {
   createVisageMiddleware,
@@ -69,6 +70,16 @@ export function visage(options: VisageOptions = {}): Plugin {
         };
 
         stop = await startVisageServer(config);
+        vite.bindCLIShortcuts({
+          customShortcuts: [
+            {
+              key: 's',
+              description: 'show Visage service status',
+              action: () =>
+                getComposeStatus(config).then(vite.config.logger.info),
+            },
+          ],
+        });
         process.on('SIGINT', closeBundle);
         vite.httpServer?.once('close', closeBundle);
         return result;

@@ -17,3 +17,5 @@ SH
 
 # Let the mounted INI file control anonymous authentication at runtime.
 RUN sed -i '/^# Respect user-provided environment variables/,/^fi$/d' run-grafana.sh
+
+HEALTHCHECK --timeout=5s --start-period=5s --start-interval=1s CMD ["/otel-lgtm/docker/healthcheck.sh"]

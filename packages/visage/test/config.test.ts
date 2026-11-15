@@ -211,20 +211,26 @@ test('resolveConfig replaces managed mounts by target and preserves other defaul
   assert.deepEqual(config.services.nginx.volumes, [
     {
       type: 'bind',
-      target: '/etc/nginx',
-      source: join(config.cache, 'nginx'),
+      target: '/etc/nginx/certs',
+      source: join(config.cache, 'nginx/certs'),
+      read_only: true,
+    },
+    {
+      type: 'bind',
+      target: '/etc/nginx/nginx.conf',
+      source: join(config.cache, 'nginx/nginx.conf'),
+      read_only: true,
+    },
+    {
+      type: 'tmpfs',
+      target: '/etc/nginx/http.d',
+      tmpfs: { mode: 0o1777 },
       read_only: undefined,
     },
     {
       type: 'tmpfs',
       target: '/var/cache/nginx',
       tmpfs: { mode: 0o700 },
-      read_only: undefined,
-    },
-    {
-      type: 'tmpfs',
-      target: '/etc/nginx/http.d',
-      tmpfs: { mode: 0o1777 },
       read_only: undefined,
     },
   ]);

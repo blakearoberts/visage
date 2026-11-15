@@ -17,7 +17,9 @@ pid /tmp/nginx.pid;
 events {}
 
 http {
-    js_import edge_key from edge-key.js;
+    include /etc/nginx/conf.d/*.conf;
+
+    js_import edge_key from /etc/nginx/edge-key.js;
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 
@@ -202,43 +204,13 @@ http {
 }
 `;
 
-const edgeKeyScript = `import fs from 'fs';
-export default function value() {
-  let key = ngx.shared.edge_key.get('edge_key');
-  if (key === undefined) {
-    key = fs.readFileSync('/run/secrets/VISAGE_EDGE_KEY', 'utf8').trim();
-    ngx.shared.edge_key.set('edge_key', key);
-  }
-  return key;
-}
-`;
-
-const otelTemplate = `otel_exporter {
-    endpoint \${OTEL_EXPORTER_OTLP_ENDPOINT};
-}
-otel_service_name \${OTEL_SERVICE_NAME};
-otel_resource_attr service.namespace "\${OTEL_SERVICE_NAMESPACE}";
-otel_resource_attr service.instance.id "\${HOSTNAME}";
-otel_resource_attr service.version "\${NGINX_VERSION}";
-otel_trace on;
-otel_trace_context propagate;
-otel_span_name "$request_method";
-`;
-
 export function writeNginxAssets(config: VisageConfig): void {
   const directory = join(config.cache, config.files.nginx);
-  mkdirSync(join(directory, 'http.d'), { recursive: true });
-  mkdirSync(join(directory, 'templates'), { recursive: true });
+  mkdirSync(directory, { recursive: true });
 
   const file = join(directory, 'nginx.conf');
   const render = renderNginxConfig(config);
   writeFileSync(file, render, 'utf-8');
-
-  const edgeKeyFile = join(directory, 'edge-key.js');
-  writeFileSync(edgeKeyFile, edgeKeyScript, 'utf-8');
-
-  const otelFile = join(directory, 'templates', 'otel.conf.template');
-  writeFileSync(otelFile, otelTemplate, 'utf-8');
 }
 
 function indentHttp(http: string): string {

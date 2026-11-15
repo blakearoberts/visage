@@ -155,14 +155,11 @@ const BaseAppUpstream = {
   ws: true,
 } as const satisfies VisageUpstream;
 
-const DexBindSource = './dex.yaml';
 const BaseServiceDex = {
   secrets: ['VISAGE_APP_CLIENT_SECRET'],
   image: DockerImages.dex.image,
   command: ['dex', 'serve', '/etc/dex/dex.yaml'],
-  mounts: {
-    '/etc/dex/dex.yaml': { bind: DexBindSource, read_only: true },
-  },
+  mounts: { '/etc/dex/dex.yaml': { bind: './dex.yaml', read_only: true } },
   environment: { DEX_SESSIONS_ENABLED: 'true' },
   network_mode: 'service:nginx',
   restart: 'always',
@@ -181,7 +178,6 @@ const BaseServiceDex = {
   },
 } as const satisfies VisageService;
 
-const NginxBindSource = './nginx';
 const BaseServiceNginx = {
   secrets: ['VISAGE_EDGE_KEY'],
   image: DockerImages.nginx.image,
@@ -194,20 +190,20 @@ const BaseServiceNginx = {
     OTEL_SERVICE_NAME: 'nginx',
   },
   mounts: {
-    '/etc/nginx': { bind: NginxBindSource },
-    '/var/cache/nginx': { mode: 0o1777 },
+    '/etc/nginx/certs': { bind: './nginx/certs', read_only: true },
+    '/etc/nginx/nginx.conf': { bind: './nginx/nginx.conf', read_only: true },
     '/etc/nginx/http.d': { mode: 0o1777 },
+    '/var/cache/nginx': { mode: 0o1777 },
   },
 } as const satisfies VisageService;
 
-const OAuth2ProxyBindSource = './oauth2-proxy.yml';
 const BaseServiceOAuth2Proxy = {
   secrets: ['OAUTH2_PROXY_COOKIE_SECRET', 'VISAGE_APP_CLIENT_SECRET'],
   image: DockerImages.oauth2_proxy.image,
   command: ['--config', '/etc/oauth2-proxy/config.yml'],
   mounts: {
     '/etc/oauth2-proxy/config.yml': {
-      bind: OAuth2ProxyBindSource,
+      bind: './oauth2-proxy.yml',
       read_only: true,
     },
   },
@@ -508,9 +504,9 @@ export function resolveConfig(
     cache,
     files: {
       compose: './compose.yaml',
-      dex: DexBindSource,
-      oauth2Proxy: OAuth2ProxyBindSource,
-      nginx: NginxBindSource,
+      dex: './dex.yaml',
+      oauth2Proxy: './oauth2-proxy.yml',
+      nginx: './nginx',
     },
     app,
     oidc: options.oidc,
@@ -761,8 +757,7 @@ function resolveServicesConfig(
                           '/etc/ssl/certs/visage.pem': {
                             bind: resolve(
                               options.cache,
-                              NginxBindSource,
-                              'certs/ca.crt',
+                              './nginx/certs/ca.crt',
                             ),
                             read_only: true,
                           },

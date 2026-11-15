@@ -1,6 +1,7 @@
 services:
   dex:
-    image: ghcr.io/dexidp/dex:v2.46.1
+    # TODO: Remove the digest pin on the next Dex release.
+    image: ghcr.io/dexidp/dex@sha256:95d0bdf941d112a1e26d52b457e99158d6bef0a505106856efc2ab51b75c0dcb
   nginx:
     image: ghcr.io/blakearoberts/visage-nginx:next
   oauth2_proxy:

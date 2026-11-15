@@ -1,0 +1,7 @@
+{
+  "extends": "../visage/tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true
+  },
+  "include": ["index.ts", "test/**/*.ts"]
+}

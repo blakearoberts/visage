@@ -30,7 +30,7 @@ jobs:
           retention-days: 1
 
   e2e:
-    name: E2E
+    name: Visage E2E
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -54,7 +54,8 @@ jobs:
           docker pull traefik/whoami
 
       - run: npm ci
-      - run: npm run test:e2e
+      - run: npm run build --workspace @blakearoberts/visage
+      - run: npm run test:e2e --workspace @blakearoberts/visage
         timeout-minutes: 3
 
       - if: always()
@@ -68,6 +69,21 @@ jobs:
             examples/external-idp/node_modules/.vite/visage/logs/**
           include-hidden-files: true
           retention-days: 1
+
+  operator-e2e:
+    name: Operator E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          cache: npm
+          node-version: 26
+
+      - run: npm ci
+      - run: npm run test:e2e --workspace @blakearoberts/oauth2-proxy-operator
+        timeout-minutes: 3
 
   docker:
     name: Docker Image

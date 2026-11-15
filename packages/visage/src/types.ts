@@ -62,7 +62,7 @@ export type VisageOptions = {
 export type VisageMount = { readonly read_only?: boolean } & (
   | { readonly bind: string }
   | { readonly volume: string }
-  | { readonly mode?: number }
+  | { readonly mode?: number } // tmpfs
 );
 
 /**

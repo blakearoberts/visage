@@ -277,9 +277,24 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   ]);
   assert.equal(compose.services.nginx.depends_on, undefined);
   assert.deepEqual(compose.services.nginx.volumes, [
-    { type: 'bind', source: join(config.cache, 'nginx'), target: '/etc/nginx' },
+    {
+      type: 'bind',
+      source: join(config.cache, 'nginx/certs'),
+      target: '/etc/nginx/certs',
+      read_only: true,
+    },
+    {
+      type: 'bind',
+      source: join(config.cache, 'nginx/nginx.conf'),
+      target: '/etc/nginx/nginx.conf',
+      read_only: true,
+    },
+    {
+      type: 'tmpfs',
+      target: '/etc/nginx/http.d',
+      tmpfs: { mode: 0o1777 },
+    },
     { type: 'tmpfs', target: '/var/cache/nginx', tmpfs: { mode: 0o1777 } },
-    { type: 'tmpfs', target: '/etc/nginx/http.d', tmpfs: { mode: 0o1777 } },
     {
       type: 'bind',
       source: join(config.cache, '../nginx-extra.conf'),
@@ -777,7 +792,10 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
     /otel_span_name "\$request_method \/oauth\/auth";/,
   );
 
-  const otel = readGeneratedNginx(config, 'templates/otel.conf.template');
+  const otel = readFileSync(
+    new URL('../nginx/otel.conf.template', import.meta.url),
+    'utf8',
+  );
   assert.equal(
     otel,
     `otel_exporter {
@@ -916,7 +934,10 @@ test('writeNginxAssets omits OpenTelemetry config when telemetry is disabled', (
   assert.doesNotMatch(nginx, /otel_span_attr/);
   assert.doesNotMatch(nginx, /otel_trace/);
   assert.match(
-    readGeneratedNginx(config, 'templates/otel.conf.template'),
+    readFileSync(
+      new URL('../nginx/otel.conf.template', import.meta.url),
+      'utf8',
+    ),
     /otel_trace on;/,
   );
 });
@@ -1216,7 +1237,7 @@ test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
     nginx,
     /load_module \/usr\/lib\/nginx\/modules\/ngx_http_js_module\.so;/,
   );
-  assert.match(nginx, /js_import edge_key from edge-key\.js;/);
+  assert.match(nginx, /js_import edge_key from \/etc\/nginx\/edge-key\.js;/);
   assert.match(nginx, /js_shared_dict_zone zone=edge_key:32k;/);
   assert.match(nginx, /js_set \$edge_key edge_key;/);
   assert.doesNotMatch(nginx, /csrf_referer_origin/);
@@ -1226,8 +1247,9 @@ test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
   );
   assert.doesNotMatch(root, /edge-key/);
   assert.equal(
-    readGeneratedNginx(config, 'edge-key.js'),
+    readFileSync(new URL('../nginx/edge-key.js', import.meta.url), 'utf8'),
     `import fs from 'fs';
+
 export default function value() {
   let key = ngx.shared.edge_key.get('edge_key');
   if (key === undefined) {

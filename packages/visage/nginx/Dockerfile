@@ -15,3 +15,6 @@ RUN set -eux; \
       --repository "https://nginx.org/packages/mainline/alpine/v${alpine_version}/main" \
       "nginx-module-otel=${NGINX_VERSION}.${OTEL_MODULE_VERSION}-r${DYNPKG_RELEASE}"; \
     mkdir -p "$NGINX_ENVSUBST_OUTPUT_DIR"
+
+HEALTHCHECK --interval=1s --timeout=1s \
+    CMD ["curl", "--fail", "--silent", "--show-error", "http://localhost"]

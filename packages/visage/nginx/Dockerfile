@@ -4,7 +4,12 @@ ARG OTEL_MODULE_VERSION=0.1.2
 
 ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/http.d
 
+COPY health.conf /etc/nginx/conf.d/health.conf
+COPY edge-key.js /etc/nginx/edge-key.js
+COPY otel.conf.template /etc/nginx/templates/otel.conf.template
+
 RUN set -eux; \
+    rm /etc/nginx/conf.d/default.conf; \
     alpine_version="$(cut -d. -f1,2 /etc/alpine-release)"; \
     apk add --no-cache \
       --repository "https://nginx.org/packages/mainline/alpine/v${alpine_version}/main" \

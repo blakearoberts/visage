@@ -1,0 +1,10 @@
+otel_exporter {
+    endpoint ${OTEL_EXPORTER_OTLP_ENDPOINT};
+}
+otel_service_name ${OTEL_SERVICE_NAME};
+otel_resource_attr service.namespace "${OTEL_SERVICE_NAMESPACE}";
+otel_resource_attr service.instance.id "${HOSTNAME}";
+otel_resource_attr service.version "${NGINX_VERSION}";
+otel_trace on;
+otel_trace_context propagate;
+otel_span_name "$request_method";

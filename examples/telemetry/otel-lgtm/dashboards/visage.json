@@ -2620,25 +2620,15 @@
       {
         "kind": "QueryVariable",
         "spec": {
-          "allValue": ".*",
+          "allValue": ".+",
           "allowCustomValue": false,
           "current": {
-            "text": [
-              "grafana",
-              "otelcol",
-              "oauth2_proxy",
-              "dex"
-            ],
-            "value": [
-              "grafana",
-              "otelcol",
-              "oauth2_proxy",
-              "dex"
-            ]
+            "text": "All",
+            "value": "$__all"
           },
           "definition": "label_values(http_server_request_calls_total,service_peer_name)",
           "hide": "dontHide",
-          "includeAll": false,
+          "includeAll": true,
           "multi": true,
           "name": "service",
           "options": [],

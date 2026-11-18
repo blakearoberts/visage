@@ -26,7 +26,7 @@ app.use(ssrHandler(vite));
 async function shutdown() {
   await vite.close();
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  visage.close();
+  await visage.close();
   process.exit(0);
 }
 process.on('SIGINT', shutdown);

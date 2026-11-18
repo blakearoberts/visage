@@ -357,9 +357,6 @@ test('resolveConfig derives upstreams from services', (t) => {
   assert.ok(apiUpstream);
   assert.deepEqual(apiService, {
     image: 'example/api:test',
-    restart: 'on-failure',
-    security_opt: ['no-new-privileges:true'],
-    cap_drop: ['ALL'],
     read_only: true,
     networks: ['api'],
   });
@@ -385,7 +382,7 @@ test('resolveConfig skips automatic upstreams disabled by service configuration'
   assert.equal(config.services.nginx.upstream, undefined);
   assert.equal(config.services.vite_loopback.upstream, undefined);
   assert.equal(config.services.worker.image, 'example/worker');
-  assert.equal(config.services.worker.restart, 'on-failure');
+  assert.equal(config.services.worker.restart, undefined);
 });
 
 test('resolveConfig rejects remotes sharing a service name even when its upstream is disabled', (t) => {

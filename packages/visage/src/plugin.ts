@@ -1,6 +1,10 @@
 import type { Plugin, ViteDevServer } from 'vite';
 
-import { getComposeStatus } from './compose';
+import {
+  formatComposeStatus,
+  getComposeStatus,
+  withComposeStatus,
+} from './compose';
 import { resolveConfig, resolveOptions } from './config';
 import {
   createVisageMiddleware,
@@ -11,10 +15,11 @@ import type { VisageOptions } from './types';
 
 export function visage(options: VisageOptions = {}): Plugin {
   const { host = 'localhost', port: clientPort = 9001 } = options;
-  let stop: (() => void) | undefined;
+  let stop: (() => Promise<void>) | undefined;
   const closeBundle = () => {
-    stop?.();
+    const result = stop?.();
     stop = undefined;
+    return result?.finally(() => process.off('SIGINT', closeBundle));
   };
 
   return {
@@ -69,19 +74,24 @@ export function visage(options: VisageOptions = {}): Plugin {
           network: [],
         };
 
-        stop = await startVisageServer(config);
+        stop = withComposeStatus(
+          config,
+          await startVisageServer(config),
+          vite.config,
+        );
         vite.bindCLIShortcuts({
           customShortcuts: [
             {
               key: 's',
-              description: 'show Visage service status',
+              description: 'show compose status',
               action: () =>
-                getComposeStatus(config).then(vite.config.logger.info),
+                getComposeStatus(config)
+                  .then(formatComposeStatus)
+                  .then(vite.config.logger.info),
             },
           ],
         });
         process.on('SIGINT', closeBundle);
-        vite.httpServer?.once('close', closeBundle);
         return result;
       };
     },

@@ -242,7 +242,9 @@ test('writeComposeConfig renders base services and custom services', (t) => {
 
   writeComposeConfig(config);
 
-  const compose = parse(readGenerated(config, config.files.compose));
+  const compose = parse(readGenerated(config, config.files.compose), {
+    merge: true,
+  });
   for (const name of Object.keys(compose.services)) {
     assert.equal(compose.services[name].logging, undefined);
   }
@@ -342,6 +344,7 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     environment: { API_MODE: 'test' },
     depends_on: ['nginx'],
     restart: 'on-failure',
+    stop_grace_period: '10s',
     volumes: [
       {
         type: 'bind',
@@ -359,11 +362,11 @@ test('writeComposeConfig renders base services and custom services', (t) => {
     assert.equal(compose.services[name].upstream, undefined);
     assert.deepEqual(
       compose.services[name].security_opt,
-      config.services[name].security_opt,
+      config.services[name].security_opt ?? ['no-new-privileges:true'],
     );
     assert.deepEqual(
       compose.services[name].cap_drop,
-      config.services[name].cap_drop,
+      config.services[name].cap_drop ?? ['ALL'],
     );
     assert.equal(
       compose.services[name].read_only,

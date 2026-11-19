@@ -729,9 +729,6 @@ function resolveServicesConfig(
         return [
           name,
           {
-            restart: 'on-failure',
-            security_opt: ['no-new-privileges:true'],
-            cap_drop: ['ALL'],
             read_only: !service.secrets?.length,
             ...(telemetry && telemetry.fluentd !== undefined
               ? {

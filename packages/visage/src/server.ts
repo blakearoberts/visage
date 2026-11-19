@@ -50,13 +50,13 @@ export type VisageServer = {
   /**
    * Stop Visage managed services.
    */
-  close(): void;
+  close(): Promise<void>;
 };
 
 export function createVisageServer(options: VisageOptions): VisageServer {
   const resolvedOptions = resolveOptions(options);
   const edgeKey = resolvedOptions.secrets.VISAGE_EDGE_KEY;
-  let stop: (() => void) | undefined;
+  let stop: ReturnType<typeof startCompose> | undefined;
   return {
     middleware: createVisageMiddleware(edgeKey),
     upgrade: createVisageUpgradeHandler(edgeKey),
@@ -74,8 +74,10 @@ export function createVisageServer(options: VisageOptions): VisageServer {
       });
       stop ??= await startVisageServer(config);
     },
-    close() {
-      stop?.();
+    async close() {
+      const result = stop?.();
+      if (result) stop = () => result;
+      await result;
       stop = undefined;
     },
   };
@@ -83,7 +85,7 @@ export function createVisageServer(options: VisageOptions): VisageServer {
 
 export async function startVisageServer(
   config: VisageConfig,
-): Promise<() => void> {
+): Promise<ReturnType<typeof startCompose>> {
   const logs = join(config.cache, 'logs');
   rmSync(logs, { recursive: true, force: true });
   mkdirSync(logs, { recursive: true, mode: 0o700 });

@@ -215,7 +215,6 @@ const BaseServiceOAuth2Proxy = {
     port: 4180,
     prefix: '',
     locations: {
-      '/': false,
       '/oauth/': {
         ws: false,
         auth: { enabled: false, forward: false },
@@ -520,6 +519,7 @@ export function resolveConfig(
           name,
           {
             ...upstream,
+            prefix: upstream.prefix ?? `/${name}`,
             scheme: upstream.scheme ?? 'https',
             headers: { Host: upstream.host ?? name, ...upstream.headers },
           },
@@ -632,7 +632,7 @@ function resolveServicesConfig(
                 ? false
                 : {
                     ...BaseServiceDex.upstream,
-                    locations: { '/': false, [dexPrefix + '/']: true },
+                    locations: { [dexPrefix + '/']: true },
                     http: `
                       map "$request_method:$uri" $dex_password_limit_key {
                           default "";
@@ -805,10 +805,10 @@ function resolveServicesConfig(
 
 function resolveUpstreamConfig(
   name: string,
-  upstream: VisageUpstream,
+  upstream: VisageUpstream & { readonly prefix: string },
   defaultForward: 'id' | 'access',
 ): ResolvedUpstream {
-  const prefix = upstream.prefix ?? `/${name}`;
+  const { prefix, locations = { '/': true } } = upstream;
   const scheme = upstream.scheme ?? 'http';
   const host = upstream.host ?? name;
   return {
@@ -818,9 +818,7 @@ function resolveUpstreamConfig(
     port: upstream.port ?? (scheme === 'https' ? 443 : 80),
     locations: Object.fromEntries(
       Object.entries<VisageProxyPolicy | boolean>(
-        upstream.locations === false
-          ? ({} as const)
-          : ({ '/': true, ...upstream.locations } as const),
+        locations === false ? {} : locations,
       )
         .flatMap(([location, policy]) =>
           policy === false

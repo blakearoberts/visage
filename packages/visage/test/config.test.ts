@@ -619,14 +619,12 @@ test('resolveConfig treats true locations as default policies and omits false lo
   }
 });
 
-test('resolveConfig includes the default for explicit empty service locations', (t) => {
+test('resolveConfig mounts no routes for explicit empty service locations', (t) => {
   const { config } = resolveForTest(t, {
     services: { api: { image: 'example/api', upstream: { locations: {} } } },
   });
   assert.ok(config.services.api.upstream);
-  assert.deepEqual(Object.keys(config.services.api.upstream.locations), [
-    '/api/',
-  ]);
+  assert.deepEqual(config.services.api.upstream.locations, {});
 });
 
 test('resolveConfig applies WebSocket proxy policy and explicit overrides', (t) => {
@@ -1212,7 +1210,6 @@ test('resolveConfig preserves backend addresses, paths, and independent authenti
     false,
   );
   assert.deepEqual(Object.keys(config.services.custom.upstream.locations), [
-    '/',
     '/custom/',
   ]);
   assert.equal(config.remotes.remote.host, 'remote.internal');
@@ -1579,13 +1576,24 @@ test('resolveConfig treats a true service upstream like an empty override', (t) 
   }
 });
 
-test('resolveConfig can disable the prefixed default location', (t) => {
+test('resolveConfig applies remote prefixes to listed locations and defaults to a root mount', (t) => {
   const { config } = resolveForTest(t, {
-    remotes: { api: { locations: { '/': false, '/health': true } } },
+    remotes: {
+      api: { locations: { '/v1/': true } },
+      root: { prefix: '/custom', locations: { '/': true, '/health': true } },
+      mount: { prefix: '/mount' },
+      empty: { prefix: '/empty', locations: {} },
+    },
   });
-  assert.deepEqual(Object.keys(config.remotes.api.locations), ['/api/health']);
+  assert.deepEqual(Object.keys(config.remotes.api.locations), ['/api/v1/']);
+  assert.deepEqual(Object.keys(config.remotes.root.locations), [
+    '/custom/',
+    '/custom/health',
+  ]);
+  assert.deepEqual(Object.keys(config.remotes.mount.locations), ['/mount/']);
+  assert.deepEqual(Object.keys(config.remotes.empty.locations), []);
   assert.equal(
-    config.remotes.api.locations['/api/health'].directives.rewrite,
+    config.remotes.api.locations['/api/v1/'].directives.rewrite,
     undefined,
   );
 });
@@ -1617,14 +1625,14 @@ test('resolveConfig preserves explicit authentication overrides on public-host s
         host: 'hosted.dev.test',
         upstream: {
           auth: { forward: true },
-          locations: { '/protected/': { auth: { enabled: true } } },
+          locations: { '/': true, '/protected/': { auth: { enabled: true } } },
         },
       },
       protected: {
         host: 'protected.dev.test',
         upstream: {
           auth: { enabled: true },
-          locations: { '/public/': { auth: { enabled: false } } },
+          locations: { '/': true, '/public/': { auth: { enabled: false } } },
         },
       },
     },

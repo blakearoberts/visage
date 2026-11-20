@@ -86,8 +86,13 @@ visage({ host: 'localhost', port: 9001 });
 ### Services
 
 Services are Docker Compose services managed by the Vite dev-server lifecycle.
-Services automatically create upstream locations on the app host at `/{name}`
-which Visage removes before proxying the request to the service host.
+Additional services automatically configure an upstream with the same name,
+host, and `/{name}/` location.
+
+For example, a vite app that performs, `fetch('/whoami/')`, would result in a
+URL, `https://localhost:9001/whoami/`, and with the following configuration,
+Visage will proxy the request to `http://whoami/whoami/` within a Docker network
+shared by NGINX and the service container.
 
 ```ts
 visage({
@@ -112,9 +117,13 @@ visage({
 
 ### Remotes
 
-Remotes are upstreams without a Visage managed Docker container process. Remotes
-automatically create upstream locations on the app host behind at `/{name}`
-which Visage removes before proxying the request to the upstream host.
+Remotes proxy to upstreams outside the Visage-managed Compose stack. By default,
+the remote name is used as a path prefix mounting at `/{name}/` on the app host.
+
+For example, a vite app that performs, `fetch('/api/v1/res/123')`, would result
+in a URL, `https://localhost:9001/api/v1/res/123`, and with the following
+configuration, Visage will proxy the request to
+`https://api.remote.test/api/v1/res/123`.
 
 ```ts
 visage({
@@ -123,6 +132,26 @@ visage({
   },
 });
 ```
+
+When `locations` is omitted, the remote mounts at the prefix followed by `/`.
+Configure a path rewrite directive to strip the `/api` prefix.
+
+For example, a client-side `fetch('/api/v1/res/123')` with the following
+configuration would have Visage proxy the request to
+`https://api.remote.test/v1/res/123`.
+
+```ts
+visage({
+  remotes: {
+    api: {
+      host: 'api.remote.test',
+      directives: { rewrite: '^/api/(.*)$ /$1 break' },
+    },
+  },
+});
+```
+
+### Forwarding Credentials
 
 Service and remote locations do not forward bearer tokens by default. Set
 `auth.forward` to `true` to forward the default bearer token for the upstream

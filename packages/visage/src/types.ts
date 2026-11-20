@@ -436,7 +436,7 @@ export type VisageUpstream = VisageProxyPolicy & {
   /**
    * Port NGINX should proxy to on {@link VisageUpstream.host}.
    *
-   * @defaultValue `80`, or `443` when {@link VisageUpstream.scheme} is `'https'`.
+   * @defaultValue `80`, or `443` when {@link VisageUpstream.scheme} is `https`.
    */
   readonly port?: number;
   /**
@@ -448,10 +448,8 @@ export type VisageUpstream = VisageProxyPolicy & {
   /**
    * Per-path configuration on {@link VisageUpstream.host}.
    *
-   * `true` uses the upstream defaults; `false` omits the location.
-   * The default location is included unless explicitly set to `false`.
-   *
-   * @defaultValue `{ '/': true }`
+   * A location set to `true` uses the upstream defaults; `false` omits it.
+   * Omitting `locations` mounts `/` under the resolved prefix.
    */
   readonly locations?:
     | {

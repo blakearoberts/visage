@@ -20,6 +20,6 @@
     "test:e2e": "npm run test:e2e --workspaces --if-present"
   },
   "devDependencies": {
-    "prettier": "^3.9.10"
+    "prettier": "^3.10.1"
   }
 }

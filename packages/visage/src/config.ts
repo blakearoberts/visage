@@ -274,6 +274,7 @@ const BaseServiceOTelCollector = {
   upstream: {
     port: 4318,
     prefix: '/t',
+    directives: { rewrite: '^/t/(.*)$ /$1 break' },
   },
 } as const satisfies VisageService;
 
@@ -846,7 +847,6 @@ function resolveUpstreamConfig(
                 ...policy.headers,
               },
               directives: {
-                ...(prefix ? { rewrite: `^${prefix}/(.*)$ /$1 break` } : {}),
                 ...upstream.directives,
                 ...policy.directives,
               },

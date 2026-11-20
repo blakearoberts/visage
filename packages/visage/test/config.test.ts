@@ -910,7 +910,6 @@ test('resolveConfig normalizes remote location policies', (t) => {
   });
   assert.equal(config.remotes.metrics.locations['/metrics/'].csrf, true);
   assert.deepEqual(config.remotes.metrics.locations['/metrics/'].directives, {
-    rewrite: ['^/metrics/(.*)$ /$1 break'],
     proxy_buffer_size: ['8k'],
     proxy_connect_timeout: ['5s'],
     proxy_read_timeout: ['5s'],
@@ -1585,9 +1584,9 @@ test('resolveConfig can disable the prefixed default location', (t) => {
     remotes: { api: { locations: { '/': false, '/health': true } } },
   });
   assert.deepEqual(Object.keys(config.remotes.api.locations), ['/api/health']);
-  assert.deepEqual(
+  assert.equal(
     config.remotes.api.locations['/api/health'].directives.rewrite,
-    ['^/api/(.*)$ /$1 break'],
+    undefined,
   );
 });
 

@@ -440,8 +440,7 @@ export type VisageUpstream = VisageProxyPolicy & {
    */
   readonly port?: number;
   /**
-   * Path prefix prepended to all upstream locations. The prefix is removed from
-   * requests passed to the upstream host.
+   * Path prefix prepended to all upstream locations.
    *
    * @defaultValue `/{name}`
    */

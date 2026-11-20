@@ -1298,6 +1298,29 @@ test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate
   assert.match(api, /proxy_pass https:\/\/api;/);
 });
 
+test('writeNginxAssets renders explicit remote locations as written with an empty prefix', (t) => {
+  const config = resolvedConfig(t, {
+    remotes: {
+      'example.test': {
+        prefix: '',
+        locations: { '/path/': true, '= /path': true },
+      },
+    },
+  });
+
+  writeNginxAssets(config);
+
+  const nginx = readGeneratedNginx(config, 'nginx.conf');
+  for (const path of ['/path/', '= /path']) {
+    assert.match(
+      locationBlock(nginx, path),
+      /proxy_pass https:\/\/example\.test;/,
+    );
+  }
+  assert.doesNotMatch(nginx, /location \/example\.test/);
+  assert.equal(locationCount(nginx, '/'), 1);
+});
+
 test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t) => {
   const config = resolvedConfig(t, {
     services: {

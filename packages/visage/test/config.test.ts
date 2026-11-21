@@ -848,7 +848,7 @@ test('resolveConfig preserves managed service defaults for partial service overr
   assert.equal(config.files.nginx, './nginx');
   assert.deepEqual(config.services.oauth2_proxy.command, [
     '--config',
-    '/etc/oauth2-proxy/config.yml',
+    '/etc/oauth2-proxy/config.toml',
   ]);
   assert.equal(config.services.oauth2_proxy.depends_on, undefined);
   assert.equal(config.services.oauth2_proxy.extra_hosts, undefined);

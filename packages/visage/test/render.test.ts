@@ -312,8 +312,8 @@ test('writeComposeConfig renders base services and custom services', (t) => {
   assert.deepEqual(compose.services.oauth2_proxy.volumes, [
     {
       type: 'bind',
-      source: join(config.cache, 'oauth2-proxy.yml'),
-      target: '/etc/oauth2-proxy/config.yml',
+      source: join(config.cache, 'oauth2-proxy.toml'),
+      target: '/etc/oauth2-proxy/config.toml',
       read_only: true,
     },
     {
@@ -1551,7 +1551,7 @@ test('writeOauth2ProxyConfig renders proxy settings with Compose cookie secret',
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(oauth2Proxy.http_address, '127.0.0.1:4180');
   assert.equal(oauth2Proxy.proxy_prefix, '/oauth');
@@ -1609,7 +1609,7 @@ test('writeOauth2ProxyConfig exposes telemetry metrics to the collector', (t) =>
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(oauth2Proxy.metrics_address, '0.0.0.0:4181');
 });
@@ -1626,7 +1626,7 @@ test('writeOauth2ProxyConfig renders configured OAuth2 public client', (t) => {
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(oauth2Proxy.client_id, 'local-app');
   assert.equal(oauth2Proxy.client_secret, undefined);
@@ -1647,7 +1647,7 @@ test('writeOauth2ProxyConfig enables discovery for external IdPs by default', (t
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
   assert.equal(oauth2Proxy.skip_oidc_discovery, undefined);
@@ -1668,7 +1668,7 @@ test('writeOauth2ProxyConfig whitelists external IdP end-session redirects', (t)
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.deepEqual(oauth2Proxy.whitelist_domains, [
     'app.local.test',
@@ -1689,7 +1689,7 @@ test('writeOauth2ProxyConfig renders configured external IdP endpoints', (t) => 
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(oauth2Proxy.oidc_issuer_url, 'http://idp.localhost:5557/idp');
   assert.equal(oauth2Proxy.skip_oidc_discovery, true);
@@ -1716,7 +1716,7 @@ test('writeOauth2ProxyConfig renders configured cookie policy', (t) => {
   writeOauth2ProxyConfig(config);
 
   const oauth2Proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(oauth2Proxy.cookie_name, 'custom');
   assert.equal(oauth2Proxy.cookie_expire, '30m');
@@ -1734,7 +1734,7 @@ test('writeOauth2ProxyConfig retains its listener when the upstream is disabled'
   });
   writeOauth2ProxyConfig(config);
   const proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(proxy.http_address, '127.0.0.1:4180');
 });
@@ -1751,7 +1751,7 @@ test('writeOauth2ProxyConfig uses the resolved callback URL', (t) => {
   };
   writeOauth2ProxyConfig(resolved);
   const proxy = parseKeyValueConfig(
-    readGenerated(config, './oauth2-proxy.yml'),
+    readGenerated(config, './oauth2-proxy.toml'),
   );
   assert.equal(proxy.redirect_url, callback);
 });
@@ -1761,7 +1761,7 @@ test('writeOauth2ProxyConfig uses the public IdP host with host-only application
     services: { dex: { host: 'idp.local.test' } },
   });
   writeOauth2ProxyConfig(config);
-  const oauth2 = readGenerated(config, './oauth2-proxy.yml');
+  const oauth2 = readGenerated(config, './oauth2-proxy.toml');
   assert.match(oauth2, /login_url = "https:\/\/idp\.local\.test:9443\/auth"/);
   assert.match(
     oauth2,

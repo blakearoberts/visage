@@ -62,13 +62,14 @@ visage({ host: 'localhost', port: 9001 });
 ### Services
 
 Services are Docker Compose services managed by the Vite dev-server lifecycle.
-Additional services automatically configure an upstream with the same name,
-host, and `/{name}/` location.
+By default, a service is configured with:
 
-For example, a vite app that performs, `fetch('/whoami/')`, would result in a
-URL, `https://localhost:9001/whoami/`, and with the following configuration,
-Visage will proxy the request to `http://whoami/whoami/` within a Docker network
-shared by NGINX and the service container.
+- an NGINX upstream with matching name and host; and,
+- NGINX locations matching `/{name}` and paths under `/{name}/`.
+
+For example, a vite app that performs, `fetch('/whoami')`, would result in a
+URL, `https://localhost:9001/whoami`, and with the following configuration,
+Visage will proxy the request to `http://whoami/whoami`.
 
 ```ts
 visage({
@@ -79,7 +80,10 @@ visage({
 ### Remotes
 
 Remotes proxy to upstreams outside the Visage-managed Compose stack. By default,
-the remote name is used as a path prefix mounting at `/{name}/` on the app host.
+a remote is configured with:
+
+- an NGINX upstream with matching name and host; and,
+- NGINX locations matching `/{name}` and paths under `/{name}/`.
 
 For example, a vite app that performs, `fetch('/api/v1/res/123')`, would result
 in a URL, `https://localhost:9001/api/v1/res/123`, and with the following
@@ -88,9 +92,7 @@ configuration, Visage will proxy the request to,
 
 ```ts
 visage({
-  remotes: {
-    api: { host: 'api.remote.test' },
-  },
+  remotes: { api: { host: 'api.remote.test' } },
 });
 ```
 

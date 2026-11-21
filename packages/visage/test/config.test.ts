@@ -120,6 +120,14 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
   assert.ok(config.services.otelcol.upstream);
   assert.equal(config.services.otelcol.upstream.host, 'otelcol');
   assert.equal(config.services.otelcol.upstream.port, 4318);
+  assert.deepEqual(Object.keys(config.services.otelcol.upstream.locations), [
+    '/t/',
+    '= /t',
+  ]);
+  assert.deepEqual(
+    config.services.otelcol.upstream.locations['= /t'],
+    config.services.otelcol.upstream.locations['/t/'],
+  );
   assert.deepEqual(config.services.otelcol.upstream.locations['/t/'].auth, {
     enabled: true,
     forward: false,
@@ -131,7 +139,7 @@ test('resolveConfig enables the managed OpenTelemetry Collector', (t) => {
       proxy_connect_timeout: ['5s'],
       proxy_read_timeout: ['5s'],
       proxy_send_timeout: ['5s'],
-      rewrite: ['^/t/(.*)$ /$1 break'],
+      rewrite: ['^/t(?:/(.*))?$ /$1 break'],
     },
   );
 });
@@ -1569,18 +1577,20 @@ test('resolveConfig treats a true service upstream like an empty override', (t) 
       services: { api: { host, upstream: true } },
     });
     assert.ok(config.services.api.upstream);
-    assert.deepEqual(Object.keys(config.services.api.upstream.locations), [
-      host === undefined ? '/api/' : '/',
-    ]);
+    assert.deepEqual(
+      Object.keys(config.services.api.upstream.locations),
+      host === undefined ? ['/api/', '= /api'] : ['/'],
+    );
     assert.equal(config.services.api.upstream.host, 'api');
   }
 });
 
-test('resolveConfig applies remote prefixes to listed locations and defaults to a root mount', (t) => {
+test('resolveConfig applies upstream prefixes to listed locations and defaults to a root mount', (t) => {
   const { config } = resolveForTest(t, {
+    services: { backend: { upstream: { prefix: '/backend/' } } },
     remotes: {
       api: { locations: { '/v1/': true } },
-      root: { prefix: '/custom', locations: { '/': true, '/health': true } },
+      root: { prefix: '/custom/', locations: { '/': true, '/health': true } },
       mount: { prefix: '/mount' },
       empty: { prefix: '/empty', locations: {} },
     },
@@ -1588,9 +1598,18 @@ test('resolveConfig applies remote prefixes to listed locations and defaults to 
   assert.deepEqual(Object.keys(config.remotes.api.locations), ['/api/v1/']);
   assert.deepEqual(Object.keys(config.remotes.root.locations), [
     '/custom/',
+    '= /custom',
     '/custom/health',
   ]);
-  assert.deepEqual(Object.keys(config.remotes.mount.locations), ['/mount/']);
+  assert.deepEqual(Object.keys(config.remotes.mount.locations), [
+    '/mount/',
+    '= /mount',
+  ]);
+  assert.ok(config.services.backend.upstream);
+  assert.deepEqual(Object.keys(config.services.backend.upstream.locations), [
+    '/backend/',
+    '= /backend',
+  ]);
   assert.deepEqual(Object.keys(config.remotes.empty.locations), []);
   assert.equal(
     config.remotes.api.locations['/api/v1/'].directives.rewrite,

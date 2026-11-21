@@ -16,7 +16,7 @@ On config change, rebuild the resolved Visage config and generated files:
 
 - `compose.yaml`
 - `nginx.conf`
-- `oauth2-proxy.yml`
+- `oauth2-proxy.toml`
 - `dex.yaml`, when using managed Dex
 
 Then restart/recreate the managed Compose project using the current startup
@@ -28,7 +28,7 @@ After each config change, compare the rendered outputs with the previous render
 and apply the smallest safe action:
 
 - `nginx.conf` changed: write the file, run `nginx -t`, then reload NGINX.
-- `oauth2-proxy.yml` changed: restart `oauth2_proxy`.
+- `oauth2-proxy.toml` changed: restart `oauth2_proxy`.
 - `dex.yaml` changed: restart `dex`.
 - `compose.yaml` service shape changed: run
   `docker compose up --force-recreate`.

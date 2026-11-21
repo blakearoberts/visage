@@ -200,10 +200,10 @@ const BaseServiceNginx = {
 const BaseServiceOAuth2Proxy = {
   secrets: ['OAUTH2_PROXY_COOKIE_SECRET', 'VISAGE_APP_CLIENT_SECRET'],
   image: DockerImages.oauth2_proxy.image,
-  command: ['--config', '/etc/oauth2-proxy/config.yml'],
+  command: ['--config', '/etc/oauth2-proxy/config.toml'],
   mounts: {
-    '/etc/oauth2-proxy/config.yml': {
-      bind: './oauth2-proxy.yml',
+    '/etc/oauth2-proxy/config.toml': {
+      bind: './oauth2-proxy.toml',
       read_only: true,
     },
   },
@@ -505,7 +505,7 @@ export function resolveConfig(
     files: {
       compose: './compose.yaml',
       dex: './dex.yaml',
-      oauth2Proxy: './oauth2-proxy.yml',
+      oauth2Proxy: './oauth2-proxy.toml',
       nginx: './nginx',
     },
     app,

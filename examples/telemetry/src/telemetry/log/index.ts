@@ -1,7 +1,7 @@
-export { OTLPHTTPJSONExporter } from './LogRecordExporter';
-export { BatchLogRecordProcessor } from './LogRecordProcessor';
+export { OTLPHTTPJSONExporter } from './LogRecordExporter.ts';
+export { BatchLogRecordProcessor } from './LogRecordProcessor.ts';
 export {
   createLoggerProvider,
   getGlobalLoggerProvider,
   setGlobalLoggerProvider,
-} from './LoggerProvider';
+} from './LoggerProvider.ts';

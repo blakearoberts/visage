@@ -18,9 +18,10 @@ jobs:
           node-version: 26
 
       - run: npm ci
-      - run: npm run check
-      - run: npm test
+      - run: npm run check:format
       - run: npm run build
+      - run: npm run typecheck --workspaces
+      - run: npm test
       - run: npm pack --workspace @blakearoberts/visage
 
       - uses: actions/upload-artifact@v7
@@ -38,7 +39,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           cache: npm
-          node-version: 26
+          node-version: 22.18.0
 
       - name: Install mkcert and local CA
         run: |

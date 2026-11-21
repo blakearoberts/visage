@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { stringify } from 'yaml';
 
-import type { VisageConfig } from '../config';
+import type { VisageConfig } from '../config.ts';
 
 export function writeComposeConfig(config: VisageConfig): void {
   const file = join(config.cache, config.files.compose);

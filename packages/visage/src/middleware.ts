@@ -1,6 +1,6 @@
 import type { IncomingMessage } from 'node:http';
 
-import type { VisageMiddleware, VisageUpgradeHandler } from './server';
+import type { VisageMiddleware, VisageUpgradeHandler } from './server.ts';
 
 const VisageEdgeKeyHeader = 'X-Visage-Edge-Key';
 

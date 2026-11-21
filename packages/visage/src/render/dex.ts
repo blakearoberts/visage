@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { hashSync, truncates } from 'bcryptjs';
 import { stringify } from 'yaml';
 
-import type { VisageConfig } from '../config';
+import type { VisageConfig } from '../config.ts';
 
 export function writeDexConfig(config: VisageConfig): void {
   if (config.dex === undefined) throw new Error('Dex config missing');

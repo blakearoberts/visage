@@ -42,7 +42,7 @@ function ssrHandler(vite: ViteDevServer): connect.SimpleHandleFunction {
       } satisfies Identity;
 
       // load app module
-      type Module = typeof import('./src/entry-server');
+      type Module = typeof import('./src/entry-server.tsx');
       const { render } = (await vite.ssrLoadModule(
         '/src/entry-server.tsx',
       )) as Module;

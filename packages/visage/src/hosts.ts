@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { appendFileSync, readFileSync } from 'node:fs';
 
-import type { VisageConfig } from './config';
+import type { VisageConfig } from './config.ts';
 
 const HOSTS_FILE = '/etc/hosts';
 

@@ -3,8 +3,8 @@ import type {
   InstrumentationScope,
   ReadWriteLogRecord,
   Resource,
-} from '../types';
-import type { LogRecordProcessor } from './LogRecordProcessor';
+} from '../types.ts';
+import type { LogRecordProcessor } from './LogRecordProcessor.ts';
 
 /**
  * A log record accepted by a Logger's emit operation.

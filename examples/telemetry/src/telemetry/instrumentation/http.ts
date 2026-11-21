@@ -1,5 +1,5 @@
-import { getGlobalLoggerProvider } from '../log';
-import type { Instrumentation } from './instrumentation';
+import { getGlobalLoggerProvider } from '../log/index.ts';
+import type { Instrumentation } from './instrumentation.ts';
 
 /**
  * Instruments fetch and XMLHttpRequest to emit HTTP request logs.

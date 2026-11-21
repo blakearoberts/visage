@@ -10,7 +10,7 @@ import {
 
 import type { Logger, LogLevel } from 'vite';
 
-import type { VisageConfig } from './config';
+import type { VisageConfig } from './config.ts';
 
 const Colors: Record<string, InspectColor> = {
   '-': 'dim',

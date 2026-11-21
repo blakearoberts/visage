@@ -1,5 +1,8 @@
-import type { ReadWriteLogRecord } from '../types';
-import type { LogRecordExporter, ReadableLogRecord } from './LogRecordExporter';
+import type { ReadWriteLogRecord } from '../types.ts';
+import type {
+  LogRecordExporter,
+  ReadableLogRecord,
+} from './LogRecordExporter.ts';
 
 /**
  * Hooks invoked while log records pass through a logging pipeline.
@@ -56,6 +59,7 @@ export interface BatchLogRecordProcessorOptions {
  * @see {@link https://opentelemetry.io/docs/specs/otel/logs/sdk/#batching-processor | Batching processor}
  */
 export class BatchLogRecordProcessor implements LogRecordProcessor {
+  private readonly exporter: LogRecordExporter;
   readonly #queue: ReadableLogRecord[] = [];
   readonly #flushInterval: number;
   readonly #maxQueueSize: number;
@@ -65,9 +69,10 @@ export class BatchLogRecordProcessor implements LogRecordProcessor {
   readonly #visibilityChangeListener?: () => void;
 
   constructor(
-    private readonly exporter: LogRecordExporter,
+    exporter: LogRecordExporter,
     options: BatchLogRecordProcessorOptions = {},
   ) {
+    this.exporter = exporter;
     this.#maxQueueSize = options.maxQueueSize ?? 2048;
     this.#exportTimeoutMillis = options.exportTimeoutMillis ?? 30_000;
     this.#maxExportBatchSize = options.maxExportBatchSize ?? 512;

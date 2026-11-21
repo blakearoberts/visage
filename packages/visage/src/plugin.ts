@@ -4,14 +4,14 @@ import {
   formatComposeStatus,
   getComposeStatus,
   withComposeStatus,
-} from './compose';
-import { resolveConfig, resolveOptions } from './config';
+} from './compose.ts';
+import { resolveConfig, resolveOptions } from './config.ts';
 import {
   createVisageMiddleware,
   createVisageUpgradeHandler,
-} from './middleware';
-import { startVisageServer } from './server';
-import type { VisageOptions } from './types';
+} from './middleware.ts';
+import { startVisageServer } from './server.ts';
+import type { VisageOptions } from './types.ts';
 
 export function visage(options: VisageOptions = {}): Plugin {
   const { host = 'localhost', port: clientPort = 9001 } = options;

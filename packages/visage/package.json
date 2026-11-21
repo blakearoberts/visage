@@ -39,16 +39,16 @@
     "otelcol"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18.0"
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
   "scripts": {
-    "build": "rollup -c",
+    "build": "tsc -p tsconfig.build.json",
     "pretest:e2e": "npm run build",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node --test test/*.test.ts",
     "test:e2e": "playwright test",
     "typecheck": "tsc && tsc -p nginx"
   },
@@ -62,12 +62,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
-    "@rollup/plugin-typescript": "^12.3.1",
     "@types/node": "^26.6.6",
     "njs-types": "^1.0.0",
-    "rollup": "^4.68.4",
-    "tslib": "^2.9.1",
-    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vite": "^8.3.8"
   }

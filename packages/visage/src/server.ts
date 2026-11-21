@@ -4,21 +4,21 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Server, Socket } from 'node:net';
 import { join } from 'node:path';
 
-import { ensureCerts } from './certs';
-import { startCompose } from './compose';
-import { resolveConfig, resolveOptions, type VisageConfig } from './config';
-import { ensureHostEntry } from './hosts';
+import { ensureCerts } from './certs.ts';
+import { startCompose } from './compose.ts';
+import { resolveConfig, resolveOptions, type VisageConfig } from './config.ts';
+import { ensureHostEntry } from './hosts.ts';
 import {
   createVisageMiddleware,
   createVisageUpgradeHandler,
-} from './middleware';
+} from './middleware.ts';
 import {
   writeComposeConfig,
   writeDexConfig,
   writeNginxAssets,
   writeOauth2ProxyConfig,
-} from './render';
-import type { VisageOptions } from './types';
+} from './render/index.ts';
+import type { VisageOptions } from './types.ts';
 
 export type VisageMiddleware = (
   request: IncomingMessage,

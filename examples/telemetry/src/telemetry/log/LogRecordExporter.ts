@@ -3,7 +3,7 @@ import type {
   InstrumentationScope,
   ReadWriteLogRecord,
   Resource,
-} from '../types';
+} from '../types.ts';
 
 /**
  * An immutable view of a complete log record.
@@ -34,7 +34,11 @@ export interface LogRecordExporter {
  * @see {@link https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding | OTLP JSON encoding}
  */
 export class OTLPHTTPJSONExporter implements LogRecordExporter {
-  constructor(private readonly endpoint: string) {}
+  private readonly endpoint: string;
+
+  constructor(endpoint: string) {
+    this.endpoint = endpoint;
+  }
 
   async export(records: readonly ReadableLogRecord[]): Promise<boolean> {
     if (records.length === 0) return true;

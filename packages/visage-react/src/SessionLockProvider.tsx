@@ -2,11 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { SWRConfig, mutate } from 'swr';
 
 class FetchError extends Error {
-  constructor(
-    readonly response: Response,
-    readonly epoch: number,
-  ) {
+  readonly response: Response;
+  readonly epoch: number;
+
+  constructor(response: Response, epoch: number) {
     super(`HTTP ${response.status} ${response.statusText}`);
+    this.response = response;
+    this.epoch = epoch;
   }
 }
 

@@ -11,7 +11,7 @@ export type {
   VisageProxyPolicy,
   VisageService,
   VisageUpstream,
-} from './types';
+} from './types.ts';
 
-export { default, visage } from './plugin';
-export { createVisageServer, type VisageServer } from './server';
+export { default, visage } from './plugin.ts';
+export { createVisageServer, type VisageServer } from './server.ts';

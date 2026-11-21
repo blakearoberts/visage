@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { VisageConfig } from '../config';
+import type { VisageConfig } from '../config.ts';
 
 const LogTimestamp =
   'timestamp="{{slice .Timestamp 0 4}}-{{slice .Timestamp 5 7}}-{{slice .Timestamp 8 10}}T{{slice .Timestamp 11}}Z"';

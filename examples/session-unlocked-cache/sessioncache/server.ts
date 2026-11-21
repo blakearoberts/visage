@@ -6,7 +6,7 @@ import {
   cacheKeyCookie,
   type CacheKeyCookiePayload,
   type CookieCacheKey,
-} from './cookie';
+} from './cookie.ts';
 
 type Keyring = {
   readonly current: CookieCacheKey;

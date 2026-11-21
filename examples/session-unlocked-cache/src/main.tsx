@@ -2,8 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { mutate, SWRConfig } from 'swr';
 
-import { App } from './App';
-import { EncryptedStore } from '../sessioncache/store';
+import { App } from './App.tsx';
+import { EncryptedStore } from '../sessioncache/store.ts';
 
 const store = new EncryptedStore();
 

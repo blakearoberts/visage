@@ -5,7 +5,11 @@ import { stripVTControlCharacters } from 'node:util';
 import type { Reporter, TestCase } from '@playwright/test/reporter';
 
 export default class LogReporter implements Reporter {
-  constructor(private readonly options: { outputFile: string }) {}
+  private readonly options: { outputFile: string };
+
+  constructor(options: { outputFile: string }) {
+    this.options = options;
+  }
 
   onBegin(): void {
     mkdirSync(dirname(this.options.outputFile), { recursive: true });

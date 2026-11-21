@@ -1,1 +1,1 @@
-export { SessionLockProvider } from './SessionLockProvider';
+export { SessionLockProvider } from './SessionLockProvider.tsx';

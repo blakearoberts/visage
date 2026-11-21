@@ -3,7 +3,7 @@ import {
   clearCacheKeyCookie,
   type CacheKeyCookiePayload,
   type CookieCacheKey,
-} from './cookie';
+} from './cookie.ts';
 
 export type CacheKey = {
   readonly kid: string;

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { test } from 'node:test';
 
-import { resolveConfig, resolveOptions } from '../src/config';
+import { resolveConfig, resolveOptions } from '../src/config.ts';
 
 type SpawnCall = {
   readonly command: string;
@@ -18,7 +18,7 @@ type SpawnCall = {
 };
 
 test('startCompose reuses generated secrets and honors environment overrides', async (t) => {
-  const { startCompose } = await import('../src/compose');
+  const { startCompose } = await import('../src/compose.ts');
   const config = resolveConfig({
     ...resolveOptions({
       services: { worker: { client: { secret: 'worker-secret' } } },
@@ -116,7 +116,7 @@ test('startCompose cleans up failed detached startup', async (t) => {
   }) as typeof childProcess.spawn);
   syncBuiltinESMExports();
 
-  const { startCompose } = await import('../src/compose');
+  const { startCompose } = await import('../src/compose.ts');
   const openSyncMock = t.mock.method(fs, 'openSync', () => 2);
   syncBuiltinESMExports();
   try {

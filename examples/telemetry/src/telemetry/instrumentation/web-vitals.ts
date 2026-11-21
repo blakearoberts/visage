@@ -1,6 +1,6 @@
 import { onCLS, onFCP, onINP, onLCP, onTTFB, type Metric } from 'web-vitals';
 
-import { getGlobalLoggerProvider } from '../log';
+import { getGlobalLoggerProvider } from '../log/index.ts';
 
 export function createWebVitalsInstrumentation(): void {
   const logger = getGlobalLoggerProvider().logger('web-vitals');

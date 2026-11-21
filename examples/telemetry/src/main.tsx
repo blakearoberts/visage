@@ -2,16 +2,16 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SessionLockProvider } from '@blakearoberts/visage-react';
 
-import { App } from './App';
-import { createConsoleInstrumentation } from './telemetry/instrumentation/console';
-import { createHTTPInstrumentation } from './telemetry/instrumentation/http';
-import { createWebVitalsInstrumentation } from './telemetry/instrumentation/web-vitals';
+import { App } from './App.tsx';
+import { createConsoleInstrumentation } from './telemetry/instrumentation/console.ts';
+import { createHTTPInstrumentation } from './telemetry/instrumentation/http.ts';
+import { createWebVitalsInstrumentation } from './telemetry/instrumentation/web-vitals.ts';
 import {
   BatchLogRecordProcessor,
   createLoggerProvider,
   OTLPHTTPJSONExporter,
   setGlobalLoggerProvider,
-} from './telemetry/log';
+} from './telemetry/log/index.ts';
 
 setGlobalLoggerProvider(
   createLoggerProvider(

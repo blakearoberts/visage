@@ -2,7 +2,7 @@ import { createVisageServer } from '@blakearoberts/visage';
 import connect from 'connect';
 import { createServer as createViteServer } from 'vite';
 
-import { createSessionCacheMiddleware } from './sessioncache/server';
+import { createSessionCacheMiddleware } from './sessioncache/server.ts';
 
 const app = connect();
 const server = app.listen(6176);

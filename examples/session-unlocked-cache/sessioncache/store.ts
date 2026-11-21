@@ -2,7 +2,7 @@ import {
   base64UrlToArrayBuffer,
   importKeyringFromCookie,
   type Keyring,
-} from './keyring';
+} from './keyring.ts';
 
 const StoreName = 'records';
 const encoder = new TextEncoder();

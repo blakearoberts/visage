@@ -1,4 +1,4 @@
-export { writeComposeConfig } from './compose';
-export { writeDexConfig } from './dex';
-export { writeNginxAssets } from './nginx';
-export { writeOauth2ProxyConfig } from './oauth2-proxy';
+export { writeComposeConfig } from './compose.ts';
+export { writeDexConfig } from './dex.ts';
+export { writeNginxAssets } from './nginx.ts';
+export { writeOauth2ProxyConfig } from './oauth2-proxy.ts';

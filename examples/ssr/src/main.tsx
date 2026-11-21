@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 
-import { App } from './App';
+import { App } from './App.tsx';
 
 const identity = JSON.parse(
   document.getElementById('identity')?.textContent ?? '{}',

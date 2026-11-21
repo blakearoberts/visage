@@ -17,7 +17,7 @@ import type {
   VisageProxyPolicy,
   VisageService,
   VisageUpstream,
-} from './types';
+} from './types.ts';
 
 type ResolvedCookiePolicy = {
   readonly cookie_name: string;

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { Eta } from 'eta';
 
-import type { VisageConfig } from '../config';
+import type { VisageConfig } from '../config.ts';
 
 const template = `
 load_module /usr/lib/nginx/modules/ngx_http_js_module.so;

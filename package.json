@@ -7,6 +7,9 @@
     "packages/*",
     "examples/*"
   ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "check": "npm run check:format && npm run check:type",

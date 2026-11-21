@@ -2,7 +2,7 @@ import { spawnSync, type StdioOptions } from 'node:child_process';
 import { chmodSync, copyFileSync, mkdirSync, openSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { VisageConfig } from './config';
+import type { VisageConfig } from './config.ts';
 
 export async function ensureCerts(config: VisageConfig): Promise<void> {
   const mkcert = resolveMkcert();

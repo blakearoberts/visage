@@ -1284,6 +1284,7 @@ test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate
   );
 
   const api = locationBlock(nginx, '/api/');
+  assert.match(locationBlock(nginx, '= /api'), /proxy_pass https:\/\/api;/);
   assert.match(api, /auth_request\s+\/oauth\/auth;/);
   assert.match(api, /proxy_set_header Host api\.example\.test;/);
   assert.match(api, /proxy_set_header Authorization "";/);
@@ -1319,6 +1320,32 @@ test('writeNginxAssets renders explicit remote locations as written with an empt
   }
   assert.doesNotMatch(nginx, /location \/example\.test/);
   assert.equal(locationCount(nginx, '/'), 1);
+});
+
+test('writeNginxAssets proxies the bare remote prefix and its subtree', (t) => {
+  for (const route of [
+    { prefix: '/path' },
+    { prefix: '/path/' },
+    { prefix: '/path/', locations: { '/': true } },
+  ]) {
+    const config = resolvedConfig(t, {
+      remotes: { 'example.test': { ...route, auth: { forward: 'access' } } },
+    });
+
+    writeNginxAssets(config);
+
+    const nginx = readGeneratedNginx(config, 'nginx.conf');
+    assert.equal(locationCount(nginx, '/path//'), 0);
+    for (const path of ['= /path', '/path/']) {
+      const location = locationBlock(nginx, path);
+      assert.match(location, /proxy_pass https:\/\/example\.test;/);
+      assert.match(
+        location,
+        /proxy_set_header Authorization "Bearer \$access_token";/,
+      );
+      assert.doesNotMatch(location, /\brewrite\b/);
+    }
+  }
 });
 
 test('writeNginxAssets resolves automatic token forwarding by upstream kind', (t) => {

@@ -273,7 +273,7 @@ const BaseServiceOTelCollector = {
   upstream: {
     port: 4318,
     prefix: '/t',
-    directives: { rewrite: '^/t/(.*)$ /$1 break' },
+    directives: { rewrite: '^/t(?:/(.*))?$ /$1 break' },
   },
 } as const satisfies VisageService;
 
@@ -519,7 +519,6 @@ export function resolveConfig(
           name,
           {
             ...upstream,
-            prefix: upstream.prefix ?? `/${name}`,
             scheme: upstream.scheme ?? 'https',
             headers: { Host: upstream.host ?? name, ...upstream.headers },
           },
@@ -791,7 +790,7 @@ function resolveServicesConfig(
                       },
                       prefix:
                         upstream.prefix ??
-                        (service.host === undefined ? `/${name}` : ''),
+                        (service.host === undefined ? undefined : ''),
                     },
                     'id',
                   ),
@@ -805,10 +804,11 @@ function resolveServicesConfig(
 
 function resolveUpstreamConfig(
   name: string,
-  upstream: VisageUpstream & { readonly prefix: string },
+  upstream: VisageUpstream,
   defaultForward: 'id' | 'access',
 ): ResolvedUpstream {
-  const { prefix, locations = { '/': true } } = upstream;
+  const { locations = { '/': true } } = upstream;
+  const prefix = upstream.prefix?.replace(/\/+$/, '') ?? `/${name}`;
   const scheme = upstream.scheme ?? 'http';
   const host = upstream.host ?? name;
   return {
@@ -819,38 +819,27 @@ function resolveUpstreamConfig(
     locations: Object.fromEntries(
       Object.entries<VisageProxyPolicy | boolean>(
         locations === false ? {} : locations,
-      )
-        .flatMap(([location, policy]) =>
-          policy === false
-            ? []
-            : [[location, policy === true ? {} : policy] as const],
-        )
-        .map(([location, policy]) => {
-          const auth = { ...upstream.auth, ...policy.auth };
-          return [
-            prefix + location,
-            resolveUpstreamLocationConfig({
-              ...policy,
-              ws: policy.ws ?? upstream.ws,
-              csrf: policy.csrf ?? upstream.csrf,
-              auth: {
-                enabled: auth.enabled ?? true,
-                forward:
-                  auth.forward === true
-                    ? defaultForward
-                    : (auth.forward ?? false),
-              },
-              headers: {
-                ...upstream.headers,
-                ...policy.headers,
-              },
-              directives: {
-                ...upstream.directives,
-                ...policy.directives,
-              },
-            }),
-          ];
-        }),
+      ).flatMap(([location, override]) => {
+        if (override === false) return [];
+        const policy = override === true ? {} : override;
+        const auth = { ...upstream.auth, ...policy.auth };
+        const resolved = resolveUpstreamLocationConfig({
+          ...policy,
+          ws: policy.ws ?? upstream.ws,
+          csrf: policy.csrf ?? upstream.csrf,
+          auth: {
+            enabled: auth.enabled ?? true,
+            forward:
+              auth.forward === true ? defaultForward : (auth.forward ?? false),
+          },
+          headers: { ...upstream.headers, ...policy.headers },
+          directives: { ...upstream.directives, ...policy.directives },
+        });
+        const route = [prefix + location, resolved] as const;
+        return prefix && location === '/'
+          ? [route, [`= ${prefix}`, resolved] as const]
+          : [route];
+      }),
     ),
   };
 }

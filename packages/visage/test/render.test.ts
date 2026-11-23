@@ -795,24 +795,6 @@ test('writeNginxAssets renders upstreams, auth, redirects, and headers', (t) => 
     /otel_span_name "\$request_method \/oauth\/auth";/,
   );
 
-  const otel = readFileSync(
-    new URL('../nginx/otel.conf.template', import.meta.url),
-    'utf8',
-  );
-  assert.equal(
-    otel,
-    `otel_exporter {
-    endpoint \${OTEL_EXPORTER_OTLP_ENDPOINT};
-}
-otel_service_name \${OTEL_SERVICE_NAME};
-otel_resource_attr service.namespace "\${OTEL_SERVICE_NAMESPACE}";
-otel_resource_attr service.instance.id "\${HOSTNAME}";
-otel_resource_attr service.version "\${NGINX_VERSION}";
-otel_trace on;
-otel_trace_context propagate;
-otel_span_name "$request_method";
-`,
-  );
   assert.match(nginx, /error_page 497 = @https_redirect;/);
   assert.match(nginx, /resolver 127\.0\.0\.11 ipv6=off;/);
   assert.match(nginx, /log_format access_log_format escape=json/);
@@ -936,13 +918,6 @@ test('writeNginxAssets omits OpenTelemetry config when telemetry is disabled', (
   assert.doesNotMatch(nginx, /otel_span_name/);
   assert.doesNotMatch(nginx, /otel_span_attr/);
   assert.doesNotMatch(nginx, /otel_trace/);
-  assert.match(
-    readFileSync(
-      new URL('../nginx/otel.conf.template', import.meta.url),
-      'utf8',
-    ),
-    /otel_trace on;/,
-  );
 });
 
 test('writeNginxAssets rejects host mismatches before proxying or HTTPS redirects', (t) => {
@@ -1249,20 +1224,6 @@ test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
     new RegExp(`proxy_set_header ${VisageEdgeKeyHeader} \\$edge_key;`),
   );
   assert.doesNotMatch(root, /edge-key/);
-  assert.equal(
-    readFileSync(new URL('../nginx/edge-key.js', import.meta.url), 'utf8'),
-    `import fs from 'fs';
-
-export default function value() {
-  let key = ngx.shared.edge_key.get('edge_key');
-  if (key === undefined) {
-    key = fs.readFileSync('/run/secrets/VISAGE_EDGE_KEY', 'utf8').trim();
-    ngx.shared.edge_key.set('edge_key', key);
-  }
-  return key;
-}
-`,
-  );
 });
 
 test('writeNginxAssets renders external HTTPS upstreams with SNI and certificate verification', (t) => {

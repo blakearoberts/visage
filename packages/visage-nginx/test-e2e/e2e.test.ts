@@ -53,7 +53,7 @@ describe('oauth2-proxy sessions and Dex token exchange', () => {
   const log = openSync(join(results, 'compose.log'), 'w');
 
   before(() => {
-    execFileSync('docker', ['compose', 'up', '-d'], {
+    execFileSync('docker', ['compose', 'up', '-d', '--build'], {
       env,
       stdio: ['ignore', log, log],
     });

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "noEmitOnError": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["njs-types/ngx_http_js_module"]
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,39 @@
+issuer: http://dex:5556
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+connectors:
+  - type: mockCallback
+    id: test
+    name: Test login
+  - type: oidc
+    id: session-issuer
+    name: Session issuer
+    config:
+      issuer: http://dex:5556
+      clientID: http://edge
+      userNameKey: sub
+  - type: oidc
+    id: access-issuer
+    name: Session access token issuer
+    config:
+      issuer: http://dex:5556
+      clientID: http://edge
+      getUserInfo: true
+      userNameKey: sub
+staticClients:
+  - id: http://edge
+    name: Edge
+    secret: test-secret
+    redirectURIs: [http://edge/oauth/callback]
+  - id: http://resource
+    name: Resource
+    public: true
+    trustedPeers: [http://edge]
+  - id: http://reports
+    name: Reports
+    public: true
+    trustedPeers: [http://edge]

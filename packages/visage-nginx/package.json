@@ -1,0 +1,24 @@
+{
+  "name": "@blakearoberts/visage-nginx",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Composable njs middleware for OAuth and OIDC flows.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc",
+    "pretest:e2e": "npm run build",
+    "test:e2e": "node --test test-e2e/e2e.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "njs-types": "^1.0.0",
+    "typescript": "^7.0.2"
+  }
+}

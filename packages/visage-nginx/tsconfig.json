@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "njs-types/ngx_http_js_module"]
+  },
+  "include": ["src/**/*.ts", "test-e2e/**/*.ts"]
+}

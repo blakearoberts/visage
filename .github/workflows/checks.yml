@@ -64,9 +64,8 @@ jobs:
           name: e2e-logs
           path: |
             packages/visage/test-results
-            examples/simple/node_modules/.vite/visage/logs/**
-            examples/ssr/.visage/logs/**
-            examples/external-idp/node_modules/.vite/visage/logs/**
+            packages/visage-nginx/test-results
+            examples/*/.visage/logs/**
           include-hidden-files: true
           retention-days: 1
 

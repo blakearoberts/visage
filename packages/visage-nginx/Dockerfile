@@ -1,15 +1,11 @@
-FROM --platform=$BUILDPLATFORM node:26-bookworm AS build
+FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 
 COPY package.json package-lock.json tsconfig.base.json /workspace/
 COPY packages/visage-nginx/package.json /workspace/packages/visage-nginx/
 RUN npm --prefix /workspace ci --workspace packages/visage-nginx --include=dev
 
 COPY packages/visage-nginx/tsconfig.json packages/visage-nginx/tsconfig.build.json /workspace/packages/visage-nginx/
-COPY packages/visage-nginx/src/auth.ts \
-     packages/visage-nginx/src/exchange.ts \
-     packages/visage-nginx/src/index.ts \
-     packages/visage-nginx/src/session.ts \
-     /workspace/packages/visage-nginx/src/
+COPY packages/visage-nginx/src/ /workspace/packages/visage-nginx/src/
 RUN npm --prefix /workspace run build --workspace packages/visage-nginx
 
 FROM nginx:1.31.8-alpine
@@ -20,7 +16,8 @@ ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/http.d
 
 COPY --from=build /workspace/packages/visage-nginx/dist/ /etc/nginx/visage/
 COPY packages/visage-nginx/nginx/health.conf /etc/nginx/conf.d/health.conf
-COPY packages/visage-nginx/nginx/edge-key.js /etc/nginx/edge-key.js
+# TODO: Remove this copy after the first release with the updated Visage import.
+COPY --from=build /workspace/packages/visage-nginx/dist/edge-key.js /etc/nginx/edge-key.js
 COPY packages/visage-nginx/nginx/otel.conf.template /etc/nginx/templates/otel.conf.template
 
 RUN set -eux; \

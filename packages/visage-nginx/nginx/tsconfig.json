@@ -1,8 +1,0 @@
-{
-  "extends": "../../../tsconfig.base.json",
-  "compilerOptions": {
-    "checkJs": true,
-    "types": ["njs-types/ngx_http_js_module"]
-  },
-  "include": ["*.js"]
-}

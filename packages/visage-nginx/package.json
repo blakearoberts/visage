@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc && tsc -p nginx",
+    "typecheck": "tsc",
     "test:e2e": "node --test test-e2e/e2e.test.ts"
   },
   "devDependencies": {

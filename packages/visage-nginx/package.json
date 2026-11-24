@@ -13,6 +13,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc",
+    "test": "node --test test/*.test.ts",
     "test:e2e": "node --test test-e2e/e2e.test.ts"
   },
   "devDependencies": {

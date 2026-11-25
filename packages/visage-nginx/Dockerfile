@@ -8,7 +8,7 @@ COPY packages/visage-nginx/tsconfig.json packages/visage-nginx/tsconfig.build.js
 COPY packages/visage-nginx/src/ /workspace/packages/visage-nginx/src/
 RUN npm --prefix /workspace run build --workspace packages/visage-nginx
 
-FROM nginx:1.31.8-alpine
+FROM nginx:1.31.9-alpine
 
 ARG OTEL_MODULE_VERSION=0.1.2
 

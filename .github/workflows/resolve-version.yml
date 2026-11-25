@@ -72,9 +72,12 @@ jobs:
           release_branch="release/$component_name/v$current_version"
 
           merge_pr="$(
-            gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/pulls" \
-              --jq '.[] | select(.base.ref == "main") | .head.ref' |
-              head -n 1
+            gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/pulls" |
+              jq -r --arg repo "$GITHUB_REPOSITORY" --arg sha "$HEAD_SHA" '
+                first(.[] | select(.base.ref == "main")) |
+                select(.head.repo.full_name == $repo and .merge_commit_sha == $sha) |
+                .head.ref
+              '
           )"
 
           if [[ "$HEAD_BRANCH" == "main" && "$merge_pr" == "$release_branch" && "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

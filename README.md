@@ -139,6 +139,10 @@ flowchart LR
 - [`mkcert`](https://github.com/FiloSottile/mkcert#installation) installed on
   `PATH`, or configured with `VISAGE_MKCERT=/path/to/mkcert`.
 
+## Contributing
+
+Contributions are welcome.
+
 ## Security Notes
 
 Visage is local-development tooling. It starts local auth infrastructure,

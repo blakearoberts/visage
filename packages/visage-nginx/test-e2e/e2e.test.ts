@@ -73,7 +73,7 @@ describe('sessions and exchange', () => {
       '--retry-all-errors',
       '--retry-delay',
       '1',
-      edge + '/oauth/start',
+      edge + '/session/login',
     );
     ({ keys } = JSON.parse(curl(issuer + '/keys')));
   });
@@ -100,7 +100,7 @@ describe('sessions and exchange', () => {
         '/dev/null',
         '--write-out',
         '%{redirect_url}',
-        edge + '/oauth/start?rd=/session',
+        edge + '/session/login?rd=/profile',
       ),
     );
     assert.equal(login.origin, issuer);
@@ -160,7 +160,7 @@ describe('sessions and exchange', () => {
   }
 
   test('forwards the signed session ID token and identity', () => {
-    assert.equal(claims('/session').aud, edge);
+    assert.equal(claims('/profile').aud, edge);
   });
 
   test('exchanges for the audience of the routed upstream', () => {
@@ -180,7 +180,7 @@ describe('sessions and exchange', () => {
       cookieFile,
       '--cookie-jar',
       cookieFile,
-      edge + '/oauth/sign_out',
+      edge + '/session/logout',
     );
     assert.equal(
       curl(
@@ -191,7 +191,7 @@ describe('sessions and exchange', () => {
         '/dev/null',
         '--write-out',
         '%{http_code}',
-        edge + '/session',
+        edge + '/profile',
       ),
       '401',
     );

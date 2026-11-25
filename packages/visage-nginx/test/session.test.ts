@@ -173,7 +173,7 @@ describe('session', () => {
       assert.equal(next.mock.callCount(), 0);
       assert.deepEqual(respond.mock.calls[0]?.arguments, [
         302,
-        'https://example.org/oauth/start?rd=' +
+        'https://example.org/session/login?rd=' +
           encodeURIComponent('https://example.org' + request_uri),
       ]);
     });

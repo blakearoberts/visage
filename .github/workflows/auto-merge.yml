@@ -21,6 +21,7 @@ jobs:
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.actor.login == 'dependabot[bot]'
     steps:
       - id: app-token
@@ -35,24 +36,27 @@ jobs:
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          CI_ACTOR: ${{ github.event.workflow_run.actor.login }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
 
           pr_url="$(
-            gh pr list \
-              --base main \
-              --head "$HEAD_BRANCH" \
-              --json url \
-              --jq '.[0].url // empty'
+            gh api --method GET "repos/$GH_REPO/pulls" \
+              -f state=open -f base=main -f head="$GITHUB_REPOSITORY_OWNER:$HEAD_BRANCH" |
+              jq -r --arg repo "$GH_REPO" --arg author "$CI_ACTOR" --arg sha "$HEAD_SHA" '
+                first(.[] | select(.head.repo.full_name == $repo and .user.login == $author and .head.sha == $sha)) |
+                .html_url
+              '
           )"
 
           if [ -z "$pr_url" ]; then
-            echo "No open pull request found for $HEAD_BRANCH."
+            echo "No open pull request matches the completed CI run."
             exit 0
           fi
 
-          gh pr merge --auto --merge --delete-branch "$pr_url"
+          gh pr merge --auto --merge --delete-branch --match-head-commit "$HEAD_SHA" "$pr_url"
 
   update:
     name: Update Dependabot Branches

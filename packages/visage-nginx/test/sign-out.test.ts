@@ -13,7 +13,7 @@ describe('sign_out', () => {
       ...overrides,
     }) as Context;
 
-  test('removes outgoing cookies with the session cookie name before continuing sign-out', async (t) => {
+  test('removes Set-Cookie for session before sign-out', async (t) => {
     const request = TestRequestContext({
       headersOut: {
         'Set-Cookie': [

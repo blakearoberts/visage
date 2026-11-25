@@ -41,6 +41,10 @@ export async function session(ctx: Context, next: () => Promise<void>) {
     const [, token_type, id_token] = bearer;
     ctx.user = response.headers.get('X-Auth-Request-User');
     ctx.email = response.headers.get('X-Auth-Request-Email');
+    ctx.preferred_username = response.headers.get(
+      'X-Auth-Request-Preferred-Username',
+    );
+    ctx.groups = response.headers.get('X-Auth-Request-Groups');
     ctx.credential = {
       token_type,
       id_token,

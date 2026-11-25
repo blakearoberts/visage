@@ -14,6 +14,8 @@ export type Context = Omit<NginxHTTPRequest, 'rawVariables' | 'variables'> & {
   credential?: Credential;
   user?: string;
   email?: string;
+  preferred_username?: string;
+  groups?: string;
   session?: { cookie?: string };
 };
 

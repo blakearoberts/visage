@@ -1,11 +1,11 @@
 import type { Context } from './types.ts';
 
 export async function session(ctx: Context, next: () => Promise<void>) {
-  const { public_origin, session_cookie_name, session_endpoint } =
+  const { public_origin, session_cookie_name, oauth2_proxy_origin } =
     ctx.variables;
   if (!public_origin) throw new Error('Missing public origin');
   if (!session_cookie_name) throw new Error('Missing session cookie name');
-  if (!session_endpoint) throw new Error('Missing session endpoint');
+  if (!oauth2_proxy_origin) throw new Error('Missing OAuth2 Proxy origin');
 
   const session_cookie = ctx.variables['cookie_' + session_cookie_name];
   ctx.session = {
@@ -14,7 +14,7 @@ export async function session(ctx: Context, next: () => Promise<void>) {
       : undefined,
   };
 
-  const response = await ngx.fetch(session_endpoint, {
+  const response = await ngx.fetch(oauth2_proxy_origin + '/oauth/auth', {
     headers: {
       ...(ctx.session.cookie && { Cookie: ctx.session.cookie }),
       'X-Forwarded-Uri': ctx.variables.request_uri,
@@ -41,6 +41,10 @@ export async function session(ctx: Context, next: () => Promise<void>) {
     const [, token_type, id_token] = bearer;
     ctx.user = response.headers.get('X-Auth-Request-User');
     ctx.email = response.headers.get('X-Auth-Request-Email');
+    ctx.preferred_username = response.headers.get(
+      'X-Auth-Request-Preferred-Username',
+    );
+    ctx.groups = response.headers.get('X-Auth-Request-Groups');
     ctx.credential = {
       token_type,
       id_token,

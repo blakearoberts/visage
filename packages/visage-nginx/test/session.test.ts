@@ -11,7 +11,7 @@ describe('session', () => {
       cookie_sess: 'current',
       public_origin: 'https://example.org',
       session_cookie_name,
-      session_endpoint: 'https://example.org/oauth/auth',
+      oauth2_proxy_origin: 'https://example.org',
       ...overrides,
     }) as NginxVariables;
   const TestRequestContext = (overrides: Partial<Context> = {}) =>
@@ -68,7 +68,7 @@ describe('session', () => {
     Reflect.deleteProperty(globalThis, 'ngx');
   });
 
-  test('continues with the current session after a successful auth check', async (t) => {
+  test('continues the session after successful auth check', async (t) => {
     const request = TestRequestContext();
     const next = t.mock.fn(async () => {});
     await session(request, next);
@@ -137,7 +137,7 @@ describe('session', () => {
     assert.equal(next.mock.callCount(), 0);
   });
 
-  test('retains the renewed cookie pair and forwards its Set-Cookie header', async (t) => {
+  test('retains a renewed cookie and forwards Set-Cookie header', async (t) => {
     const request = TestRequestContext({
       variables: Variables({ cookie_sess: 'old' }),
     });
@@ -155,7 +155,7 @@ describe('session', () => {
     ['GET', '/res/3?a=1&b=2'],
     ['HEAD', '/?'],
   ]) {
-    test(`redirects unauthenticated ${method} document navigation with its return URL`, async (t) => {
+    test(`redirects unauthenticated ${method} document navigation`, async (t) => {
       const respond = t.mock.fn<Context['return']>();
       const request = TestRequestContext({
         return: respond,

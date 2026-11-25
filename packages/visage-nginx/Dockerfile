@@ -15,6 +15,7 @@ ARG OTEL_MODULE_VERSION=0.1.2
 ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/http.d
 
 COPY --from=build /workspace/packages/visage-nginx/dist/ /etc/nginx/visage/
+COPY packages/visage-nginx/nginx/session.conf /etc/nginx/visage/session.conf
 COPY packages/visage-nginx/nginx/health.conf /etc/nginx/conf.d/health.conf
 COPY packages/visage-nginx/nginx/otel.conf.template /etc/nginx/templates/otel.conf.template
 

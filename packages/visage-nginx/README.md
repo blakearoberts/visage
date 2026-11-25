@@ -3,53 +3,43 @@
 Composable NGINX JavaScript (njs) middleware for OAuth and OIDC authentication
 and authorization flows.
 
-## Policies
-
-Set `$visage_exchange` to the subject token kind and `$visage_forward` to the
-requested token kind (`id` or `access`). Set `$visage_exchange off` to skip
-exchange.
-
-```nginx
-set $visage_session on;
-set $visage_exchange id;
-set $visage_forward access;
-```
-
 ## Getting Started
 
 ```nginx
-js_import visage from /etc/nginx/visage/index.js;
+http {
+    resolver 127.0.0.11 ipv6=off; # Docker DNS
+    js_engine qjs;
+    js_import visage from /etc/nginx/visage/index.js;
 
-server {
-    set $public_origin https://localhost:9001;
-    set $session_cookie_name __Host-sess;
+    server {
+        listen 80;
 
-    js_var $visage_authorization;
-    js_var $visage_user;
-    js_var $visage_email;
-    js_var $visage_session_cookie;
+        include /etc/nginx/visage/session.conf;
 
-    location / {
-        proxy_set_header Cookie "";
-        proxy_set_header Authorization $visage_authorization;
-        proxy_set_header X-Auth-Request-User $visage_user;
-        proxy_set_header X-Auth-Request-Email $visage_email;
+        js_var $visage_authorization;
 
-        location = /oauth/sign_out {
-            js_access visage.sign_out;
-            proxy_set_header Cookie $visage_session_cookie;
-            proxy_pass http://sessions:4180;
+        location / {
+            js_access        visage.session;
+            proxy_set_header Cookie "";
+            proxy_pass       http://resource;
         }
 
         location /public/ {
-            proxy_pass http://assets;
+            proxy_set_header Cookie "";
+            proxy_pass       http://assets;
         }
 
-        location /resources/ {
+        location /api/ {
             js_access visage.exchange;
+
+            set $exchange_endpoint  http://dex.localhost:5556/token;
+            set $exchange_connector session-issuer;
+
             set $visage_exchange id;
             set $visage_forward  access;
-            set $upstream_origin http://resources;
+            set $upstream_origin http://resources.localhost;
+            proxy_set_header     Cookie "";
+            proxy_set_header     Authorization $visage_authorization;
             proxy_pass           $upstream_origin;
         }
     }
@@ -57,3 +47,41 @@ server {
 ```
 
 See the [E2E harness](./test-e2e/nginx.conf) for the full NGINX configuration.
+
+## Policies
+
+### OIDC Application Cookie Session (oauth2-proxy)
+
+```nginx
+include /etc/nginx/visage/session.conf;
+
+location / {
+    js_access        visage.session;
+    proxy_set_header Cookie "";
+    proxy_pass       http://app;
+}
+```
+
+### Token Exchange
+
+Set `$visage_exchange` to the subject token kind and `$visage_forward` to the
+requested token kind (`id` or `access`). Mount the client secret for
+`$public_origin` at `/run/secrets/VISAGE_APP_CLIENT_SECRET`.
+
+```nginx
+js_var $visage_authorization;
+
+location /api/ {
+    js_access visage.exchange;
+
+    set $exchange_endpoint  http://dex.localhost:5556/token;
+    set $exchange_connector session-issuer;
+
+    set $visage_exchange id;
+    set $visage_forward  access;
+    set $upstream_origin http://resources.localhost;
+    proxy_set_header     Cookie "";
+    proxy_set_header     Authorization $visage_authorization;
+    proxy_pass           $upstream_origin;
+}
+```

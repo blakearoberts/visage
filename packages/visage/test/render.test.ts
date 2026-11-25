@@ -1215,7 +1215,10 @@ test('writeNginxAssets forwards the Vite edge key from njs', (t) => {
     nginx,
     /load_module \/usr\/lib\/nginx\/modules\/ngx_http_js_module\.so;/,
   );
-  assert.match(nginx, /js_import edge_key from \/etc\/nginx\/edge-key\.js;/);
+  assert.match(
+    nginx,
+    /js_import edge_key from \/etc\/nginx\/visage\/edge-key\.js;/,
+  );
   assert.match(nginx, /js_shared_dict_zone zone=edge_key:32k;/);
   assert.match(nginx, /js_set \$edge_key edge_key;/);
   assert.doesNotMatch(nginx, /csrf_referer_origin/);

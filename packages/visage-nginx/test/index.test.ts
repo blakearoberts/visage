@@ -7,7 +7,7 @@ describe('js_access', () => {
   const Variables = (overrides: Partial<NginxVariables> = {}) =>
     ({
       public_origin: 'https://example.org',
-      session_endpoint: 'https://example.org/oauth/auth',
+      oauth2_proxy_origin: 'https://example.org',
       session_cookie_name: 'sess',
       cookie_sess: 'current',
       visage_exchange: 'off',
@@ -56,7 +56,7 @@ describe('js_access', () => {
   test('accepts a session without optional variables', async (t) => {
     const variables = {
       public_origin: 'https://example.org',
-      session_endpoint: 'https://example.org/oauth/auth',
+      oauth2_proxy_origin: 'https://example.org',
       session_cookie_name: 'sess',
       cookie_sess: 'current',
     };

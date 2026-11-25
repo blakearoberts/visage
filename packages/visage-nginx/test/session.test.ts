@@ -11,7 +11,7 @@ describe('session', () => {
       cookie_sess: 'current',
       public_origin: 'https://example.org',
       session_cookie_name,
-      session_endpoint: 'https://example.org/oauth/auth',
+      oauth2_proxy_origin: 'https://example.org',
       ...overrides,
     }) as NginxVariables;
   const TestRequestContext = (overrides: Partial<Context> = {}) =>

@@ -14,26 +14,9 @@ http {
     server {
         listen 80;
 
-        set $public_origin       https://localhost:9001;
-        set $session_cookie_name __Host-sess;
-        set $session_endpoint    http://sessions:4180/oauth/auth;
+        include /etc/nginx/visage/session.conf;
 
         js_var $visage_authorization;
-        js_var $visage_session_cookie;
-
-        location = /oauth/sign_out {
-            js_access        visage.sign_out;
-            proxy_set_header Cookie $visage_session_cookie;
-            proxy_pass       http://sessions:4180;
-        }
-
-        location = /oauth/start {
-            proxy_pass http://sessions:4180;
-        }
-
-        location = /oauth/callback {
-            proxy_pass http://sessions:4180;
-        }
 
         location / {
             js_access        visage.session;
@@ -70,17 +53,12 @@ See the [E2E harness](./test-e2e/nginx.conf) for the full NGINX configuration.
 ### OIDC Application Cookie Session (oauth2-proxy)
 
 ```nginx
-js_var $visage_session_cookie;
+include /etc/nginx/visage/session.conf;
 
 location / {
     js_access        visage.session;
     proxy_set_header Cookie "";
     proxy_pass       http://app;
-}
-location = /oauth/sign_out {
-    js_access        visage.sign_out;
-    proxy_set_header Cookie $visage_session_cookie;
-    proxy_pass       http://sessions:4180;
 }
 ```
 

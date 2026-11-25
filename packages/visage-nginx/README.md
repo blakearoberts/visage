@@ -18,28 +18,35 @@ set $visage_forward access;
 ## Getting Started
 
 ```nginx
+js_import visage from /etc/nginx/visage/index.js;
+
 server {
     set $public_origin https://localhost:9001;
+    set $session_cookie_name __Host-sess;
 
     js_var $visage_authorization;
     js_var $visage_user;
     js_var $visage_email;
+    js_var $visage_session_cookie;
 
     location / {
-        js_access visage;
         proxy_set_header Cookie "";
         proxy_set_header Authorization $visage_authorization;
         proxy_set_header X-Auth-Request-User $visage_user;
         proxy_set_header X-Auth-Request-Email $visage_email;
 
+        location = /oauth/sign_out {
+            js_access visage.sign_out;
+            proxy_set_header Cookie $visage_session_cookie;
+            proxy_pass http://sessions:4180;
+        }
+
         location /public/ {
-          set $visage_session  off;
-          set $visage_exchange off;
-          set $upstream_origin http://assets;
-          proxy_pass           $upstream_origin;
+            proxy_pass http://assets;
         }
 
         location /resources/ {
+            js_access visage.exchange;
             set $visage_exchange id;
             set $visage_forward  access;
             set $upstream_origin http://resources;
@@ -50,22 +57,3 @@ server {
 ```
 
 See the [E2E harness](./test-e2e/nginx.conf) for the full NGINX configuration.
-
-## Custom njs handlers
-
-Compose steps in execution order in a consumer-owned njs module. Import that
-module with `js_import` and use it as the location's access handler.
-
-```js
-import { compose, session, exchange } from './visage/index.js';
-
-async function requireEmail(ctx, next) {
-  if (!ctx.email) return ctx.return(403);
-  return next();
-}
-
-export default compose(session, requireEmail, exchange);
-```
-
-This handler checks the session, enforces the email requirement, and then
-exchanges the configured subject token for an audience specific token.

@@ -29,6 +29,6 @@ updates:
         patterns:
           - '*'
   - package-ecosystem: 'docker'
-    directory: '/packages/visage/nginx'
+    directory: '/packages/visage-nginx'
     schedule:
       interval: 'weekly'

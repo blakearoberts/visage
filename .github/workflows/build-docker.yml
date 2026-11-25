@@ -44,7 +44,7 @@ jobs:
 
       - uses: docker/build-push-action@v7
         with:
-          context: packages/${{ inputs.context }}
+          context: .
           file: packages/${{ inputs.context }}/Dockerfile
           labels: |
             org.opencontainers.image.revision=${{ inputs.head-sha }}

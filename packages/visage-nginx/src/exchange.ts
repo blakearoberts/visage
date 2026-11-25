@@ -1,7 +1,7 @@
 import fs from 'fs';
 import querystring from 'querystring';
 
-import type { Context, Credential } from './auth.ts';
+import type { Context, Credential } from './types.ts';
 
 export async function exchange(ctx: Context, next: () => Promise<void>) {
   const { credential = {}, variables } = ctx;
@@ -39,7 +39,8 @@ export async function exchange(ctx: Context, next: () => Promise<void>) {
       subject_token_type: `urn:ietf:params:oauth:token-type:${variables.visage_exchange}_token`,
     }),
   });
-  if (!response.ok) throw new Error('Token exchange failed');
+  if (response.status !== 200) return ctx.return(response.status ?? 500);
+
   const issued: Credential = await response.json();
   if (
     issued.issued_token_type === 'urn:ietf:params:oauth:token-type:id_token'

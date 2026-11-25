@@ -14,26 +14,26 @@ connectors:
     name: Session issuer
     config:
       issuer: http://dex:5556
-      clientID: http://edge
+      clientID: http://localhost
       userNameKey: sub
   - type: oidc
     id: access-issuer
     name: Session access token issuer
     config:
       issuer: http://dex:5556
-      clientID: http://edge
+      clientID: http://localhost
       getUserInfo: true
       userNameKey: sub
 staticClients:
-  - id: http://edge
+  - id: http://localhost
     name: Edge
     secret: test-secret
-    redirectURIs: [http://edge/oauth/callback]
+    redirectURIs: [http://localhost/oauth/callback]
   - id: http://resource
     name: Resource
     public: true
-    trustedPeers: [http://edge]
-  - id: http://reports
-    name: Reports
+    trustedPeers: [http://localhost]
+  - id: http://exchange
+    name: Exchange
     public: true
-    trustedPeers: [http://edge]
+    trustedPeers: [http://localhost]

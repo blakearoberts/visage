@@ -50,7 +50,7 @@
     "pretest:e2e": "npm run build",
     "test": "node --test test/*.test.ts",
     "test:e2e": "playwright test",
-    "typecheck": "tsc && tsc -p nginx"
+    "typecheck": "tsc"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

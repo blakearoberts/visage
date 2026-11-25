@@ -1,21 +1,35 @@
-import type { Context } from './auth.ts';
+import type { Context } from './types.ts';
 
 export async function session(ctx: Context, next: () => Promise<void>) {
-  const { public_origin, session_endpoint } = ctx.variables;
+  const { public_origin, session_cookie_name, session_endpoint } =
+    ctx.variables;
   if (!public_origin) throw new Error('Missing public origin');
+  if (!session_cookie_name) throw new Error('Missing session cookie name');
   if (!session_endpoint) throw new Error('Missing session endpoint');
+
+  const session_cookie = ctx.variables['cookie_' + session_cookie_name];
+  ctx.session = {
+    cookie: session_cookie
+      ? `${session_cookie_name}=${session_cookie}`
+      : undefined,
+  };
 
   const response = await ngx.fetch(session_endpoint, {
     headers: {
-      Cookie: ctx.headersIn.Cookie ?? '',
+      ...(ctx.session.cookie && { Cookie: ctx.session.cookie }),
       'X-Forwarded-Uri': ctx.variables.request_uri,
     },
   });
 
   if (response.headers.has('Set-Cookie')) {
+    const cookies = response.headers.getAll('Set-Cookie');
+    const renewal = cookies.find((value) =>
+      value.startsWith(session_cookie_name + '='),
+    );
+    if (renewal) ctx.session.cookie = renewal.split(';', 1)[0];
     ctx.headersOut['Set-Cookie'] = [
       ...(ctx.headersOut['Set-Cookie'] ?? []),
-      ...response.headers.getAll('Set-Cookie'),
+      ...cookies,
     ];
   }
 

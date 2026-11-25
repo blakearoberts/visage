@@ -28,7 +28,7 @@ staticClients:
   - id: http://localhost
     name: Edge
     secret: test-secret
-    redirectURIs: [http://localhost/oauth/callback]
+    redirectURIs: [http://localhost/session/callback]
   - id: http://resource
     name: Resource
     public: true

@@ -14,7 +14,7 @@ export async function session(ctx: Context, next: () => Promise<void>) {
       : undefined,
   };
 
-  const response = await ngx.fetch(oauth2_proxy_origin + '/oauth/auth', {
+  const response = await ngx.fetch(oauth2_proxy_origin + '/oauth2/auth', {
     headers: {
       ...(ctx.session.cookie && { Cookie: ctx.session.cookie }),
       'X-Forwarded-Uri': ctx.variables.request_uri,
@@ -70,7 +70,7 @@ export async function session(ctx: Context, next: () => Promise<void>) {
   return ctx.return(
     302,
     public_origin +
-      '/oauth/start?rd=' +
+      '/session/login?rd=' +
       encodeURIComponent(public_origin + ctx.variables.request_uri),
   );
 }

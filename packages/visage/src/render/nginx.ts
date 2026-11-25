@@ -19,7 +19,7 @@ events {}
 http {
     include /etc/nginx/conf.d/*.conf;
 
-    js_import edge_key from /etc/nginx/edge-key.js;
+    js_import edge_key from /etc/nginx/visage/edge-key.js;
     js_shared_dict_zone zone=edge_key:32k;
     js_set $edge_key edge_key;
 

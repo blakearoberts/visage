@@ -16,8 +16,6 @@ ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx/http.d
 
 COPY --from=build /workspace/packages/visage-nginx/dist/ /etc/nginx/visage/
 COPY packages/visage-nginx/nginx/health.conf /etc/nginx/conf.d/health.conf
-# TODO: Remove this copy after the first release with the updated Visage import.
-COPY --from=build /workspace/packages/visage-nginx/dist/edge-key.js /etc/nginx/edge-key.js
 COPY packages/visage-nginx/nginx/otel.conf.template /etc/nginx/templates/otel.conf.template
 
 RUN set -eux; \

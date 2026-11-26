@@ -16,8 +16,6 @@ http {
 
         include /etc/nginx/visage/session.conf;
 
-        js_var $visage_authorization;
-
         location / {
             js_access        visage.session;
             proxy_set_header Cookie "";
@@ -69,7 +67,7 @@ requested token kind (`id` or `access`). Mount the client secret for
 `$public_origin` at `/run/secrets/VISAGE_APP_CLIENT_SECRET`.
 
 ```nginx
-js_var $visage_authorization;
+include /etc/nginx/visage/session.conf;
 
 location /api/ {
     js_access visage.exchange;
